@@ -1,0 +1,3 @@
+mutation RevokeMagicLink($token: String!) {
+  revokeMagicLink(token: $token)
+}

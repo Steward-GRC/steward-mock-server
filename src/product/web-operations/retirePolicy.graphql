@@ -1,0 +1,5 @@
+mutation RetirePolicy($id: ID!) {
+  retirePolicy(id: $id) {
+    id
+  }
+}

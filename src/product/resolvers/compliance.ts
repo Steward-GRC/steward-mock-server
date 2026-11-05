@@ -136,6 +136,27 @@ const ackAudience = (policyId: string): StewardPerson[] => {
   );
 };
 
+/**
+ * steward-obligations' CompletionMetrics: the people in the version's acknowledgement audience who
+ * ever viewed it and haven't acknowledged it. The group is ignored, as obligations ignores it.
+ */
+const viewedNotAcked = (policyVersionId: string): number => {
+  const version = data().versions.find((v) => v.id === policyVersionId);
+  if (!version) return 0;
+  const audience = new Set(ackAudience(version.policyId).map((p) => p.id));
+  const acked = new Set(
+    data()
+      .acknowledgements.filter((a) => a.policyVersionId === policyVersionId)
+      .map((a) => a.userId),
+  );
+  const viewers = new Set(
+    data()
+      .policyViews.filter((v) => v.policyVersionId === policyVersionId)
+      .map((v) => v.userId),
+  );
+  return [...viewers].filter((id) => audience.has(id) && !acked.has(id)).length;
+};
+
 const utcDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /**
@@ -319,7 +340,7 @@ export const complianceResolvers: Resolvers = {
           : [],
         totalAcked: acked.length,
         totalAudience: total,
-        viewedNotAckedCount: 0,
+        viewedNotAckedCount: viewedNotAcked(version.id),
       };
     },
     exportAcks: (
