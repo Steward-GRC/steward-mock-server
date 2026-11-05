@@ -91,6 +91,18 @@ subscription. Replace it; don't build around it.
    npm test
    ```
 
+## 🏷️ The mock's own version
+
+A product's mock is versioned with the product's web app, not with this template. It carries the
+web app's version, and it's released only in the same release as the web app, never on its own, so
+a web app and the mock it was tested against always ship as a pair.
+
+- The template release a product synced from (`v1.2.0`, say) is sync metadata: name it in the sync
+  PR and in the product's AGENTS.md, and never use it as the mock's version.
+- The release-drafter workflow that comes with the template drafts in a product and never
+  publishes on its own. Set its version to the web app's (the action's `version` input, or
+  `first-version` for the first release), or replace it with the product's own release workflow.
+
 ## 🔁 Taking later template fixes
 
 A fix to the core lands here first; each product then takes it in its own PR, commit by commit.
