@@ -425,7 +425,7 @@ const page = (saved: null | Theme) => {
         <span class="label nav__label">Gateway</span>
         <a class="nav-item" href="/_mock/state" title="State"><span class="nav-item__icon">{}</span><span class="nav-item__label">State</span><span class="nav-item__meta">JSON</span></a>
         <a class="nav-item" href="/_mock/people" title="People"><span class="nav-item__icon">@</span><span class="nav-item__label">People</span><span class="nav-item__meta">JSON</span></a>
-        <a class="nav-item" href="/readyz" title="Health"><span class="nav-item__icon">♥</span><span class="nav-item__label">Health</span><span class="nav-item__meta">/readyz</span></a>
+        <a class="nav-item" href="/readyz" title="Health"><span class="nav-item__icon">◉</span><span class="nav-item__label">Health</span><span class="nav-item__meta">/readyz</span></a>
         <span class="nav-item" title="GraphQL ${escape(graphqlPath)}"><span class="nav-item__icon">◆</span><span class="nav-item__label">GraphQL</span><span class="nav-item__meta">${escape(graphqlPath)}</span></span>
       </nav>
     </aside>
