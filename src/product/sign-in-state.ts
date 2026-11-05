@@ -16,6 +16,7 @@ import {
   personById,
   type Session,
 } from "#core/state.ts";
+import { rememberHost } from "#product/passkeys.ts";
 
 /** How long a session lasts, in seconds: the gateway's default SESSION_TTL of 168h. */
 export const SESSION_SECONDS = 604_800;
@@ -57,8 +58,13 @@ export const newSession = (person: Person): Session => {
 };
 
 /** The gateway's issueSession: the cookie, and the CSRF token (and a bearer token if asked). */
-export const startSession = (person: Person, token = false): Response => {
+export const startSession = (
+  person: Person,
+  token = false,
+  request?: Request,
+): Response => {
   const session = newSession(person);
+  if (request) rememberHost(session.id, request);
   const body: Record<string, unknown> = { csrfToken: session.csrf };
   if (token) {
     const accessToken = newId("token");

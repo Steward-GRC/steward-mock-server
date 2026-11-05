@@ -12,6 +12,17 @@ export interface Membership {
   source: string;
 }
 
+/** One registered passkey, as identity's webauthn_credentials row keeps it. */
+export interface Passkey {
+  /** RFC 3339. */
+  createdAt: string;
+  /** The base64url credential id the authenticator gave it. */
+  id: string;
+  label: null | string;
+  lastUsedAt: null | string;
+  transports: string[];
+}
+
 /** A per-person exception to the rules for one policy, as identity keeps it. */
 export interface PolicyOverride {
   effect: "ALLOW" | "DENY";
@@ -41,9 +52,11 @@ export interface StewardPerson extends Person {
    * factor beside the authenticator app and the emailed code.
    */
   passkey?: boolean;
-  /** When the passkey was registered, and its name; RFC 3339. */
+  /** When the seeded passkey was registered, and its name; RFC 3339. */
   passkeyCreatedAt?: string;
   passkeyLabel?: null | string;
+  /** identity's WebAuthn credentials, oldest first, once a passkey has been read or added. */
+  passkeys?: Passkey[];
   policyOverrides: PolicyOverride[];
   /** identity's read-sensitive claim: may read SENSITIVE policies the RACI rules let them read. */
   readSensitive: boolean;

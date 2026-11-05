@@ -6,17 +6,23 @@
 // passkeys, and removing a factor. The gateway relays identity's InvalidArgument and NotFound,
 // and turns AlreadyExists and FailedPrecondition into plain errors, which it presents as a fault.
 //
-// The mock holds one passkey per person (src/product/passkeys.ts). There's no authenticator
-// behind it, so a registration takes any well-formed credential as the person's mock passkey,
-// and a second one is refused as already registered. The creation options leave rp.id out, so
-// the browser takes the page's own host where identity sends its configured one.
+// A person keeps several passkeys (src/product/passkeys.ts). There's no authenticator behind the
+// mock, so a registration takes any well-formed credential and stores it under the id it
+// carries; an id anyone already registered is refused, as identity's unique credential id is.
+// The relying-party id is the configured public host, else the host the session signed in on.
 
 import { randomBytes, randomUUID } from "node:crypto";
 
 import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
-import { passkeyCredentialId } from "#product/passkeys.ts";
+import {
+  addPasskey,
+  credentialIds,
+  passkeysOf,
+  rpIdForSession,
+  setPasskeys,
+} from "#product/passkeys.ts";
 import { caller, data, record, refuse } from "#product/resolvers/shared.ts";
 import { goodCode } from "#product/sign-in-state.ts";
 
@@ -43,6 +49,15 @@ const fault = () =>
 const rfc3339 = (ms: number) =>
   new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 
+/** The authenticator hints a registration answer carries in response.transports. */
+const transportsOf = (credential: object): string[] => {
+  const { response } = credential as { response?: { transports?: unknown } };
+  const given = response?.transports;
+  return Array.isArray(given)
+    ? given.filter((t): t is string => typeof t === "string")
+    : [];
+};
+
 const userSubject = (person: StewardPerson) => ({
   id: person.id,
   kind: "user",
@@ -61,14 +76,9 @@ const ownPasskey = (
   credentialId: string,
   what: string,
 ) => {
-  if (!person.passkey || credentialId !== passkeyCredentialId(person.username))
-    throw refuse("NOT_FOUND", what);
-};
-
-const dropPasskey = (person: StewardPerson) => {
-  person.passkey = false;
-  person.passkeyCreatedAt = undefined;
-  person.passkeyLabel = null;
+  const passkey = passkeysOf(person).find((p) => p.id === credentialId);
+  if (!passkey) throw refuse("NOT_FOUND", what);
+  return passkey;
 };
 
 export const factorResolvers: Resolvers = {
@@ -115,9 +125,9 @@ export const factorResolvers: Resolvers = {
           throw fault();
         }
         case "passkey": {
-          if (!person.passkey)
+          if (passkeysOf(person).length === 0)
             throw refuse("NOT_FOUND", "no passkeys to remove");
-          dropPasskey(person);
+          setPasskeys(person, []);
           break;
         }
         case "totp": {
@@ -148,7 +158,10 @@ export const factorResolvers: Resolvers = {
       if (!given.credentialId)
         throw refuse("BAD_USER_INPUT", "credential_id required");
       ownPasskey(person, given.credentialId, "no such credential");
-      dropPasskey(person);
+      setPasskeys(
+        person,
+        passkeysOf(person).filter((p) => p.id !== given.credentialId),
+      );
       record("user.mfa_factor_removed", person, userSubject(person));
       return true;
     },
@@ -171,8 +184,8 @@ export const factorResolvers: Resolvers = {
           throw refuse("NOT_FOUND", "no totp enrollment to rename");
         person.totpLabel = given.label || null;
       } else {
-        ownPasskey(person, given.methodId, "no such passkey to rename");
-        person.passkeyLabel = given.label || null;
+        ownPasskey(person, given.methodId, "no such passkey to rename").label =
+          given.label || null;
       }
       record("user.mfa_factor_relabeled", person, userSubject(person));
       return true;
@@ -189,21 +202,19 @@ export const factorResolvers: Resolvers = {
           alg,
           type: "public-key",
         })),
-        rp: { name: ISSUER },
+        rp: { id: rpIdForSession(context.session?.id), name: ISSUER },
         timeout: TIMEOUT_MS,
         user: {
           displayName: person.name || name,
           id: Buffer.from(person.id).toString("base64url"),
           name,
         },
-        ...(person.passkey
+        ...(passkeysOf(person).length > 0
           ? {
-              excludeCredentials: [
-                {
-                  id: passkeyCredentialId(person.username),
-                  type: "public-key",
-                },
-              ],
+              excludeCredentials: passkeysOf(person).map(({ id }) => ({
+                id,
+                type: "public-key",
+              })),
             }
           : {}),
         authenticatorSelection: { userVerification: "preferred" },
@@ -245,35 +256,25 @@ export const factorResolvers: Resolvers = {
       } catch {
         credential = undefined;
       }
-      if (typeof credential !== "object" || credential === null)
+      const [id] = credentialIds(given.credentialJson);
+      if (typeof credential !== "object" || credential === null || !id)
         throw refuse("BAD_USER_INPUT", "malformed webauthn credential");
-      if (person.passkey) throw fault();
-      person.passkey = true;
-      person.passkeyCreatedAt = rfc3339(Date.now());
-      person.passkeyLabel =
-        (given.label ?? "").trim().slice(0, LABEL_MAX) || null;
+      const taken = data().people.some((p) =>
+        passkeysOf(p).some((passkey) => passkey.id === id),
+      );
+      if (taken) throw fault();
+      addPasskey(person, {
+        id,
+        label: (given.label ?? "").trim().slice(0, LABEL_MAX) || null,
+        transports: transportsOf(credential),
+      });
       record("user.mfa_factor_enrolled", person, userSubject(person));
       return true;
     },
   },
   Query: {
-    /**
-     * identity's ListWebauthnCredentials: the caller's passkeys. A seeded passkey is a platform
-     * authenticator that was never used to sign in; one the controls gave dates from first sight.
-     */
-    myWebauthnCredentials: (_root, _given, context: Context) => {
-      const person = caller(context);
-      if (!person.passkey) return [];
-      person.passkeyCreatedAt ??= rfc3339(Date.now());
-      return [
-        {
-          createdAt: person.passkeyCreatedAt,
-          id: passkeyCredentialId(person.username),
-          label: person.passkeyLabel || null,
-          lastUsedAt: null,
-          transports: ["internal", "hybrid"],
-        },
-      ];
-    },
+    /** identity's ListWebauthnCredentials: the caller's passkeys, oldest first. */
+    myWebauthnCredentials: (_root, _given, context: Context) =>
+      passkeysOf(caller(context)),
   },
 };

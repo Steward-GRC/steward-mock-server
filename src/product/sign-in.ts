@@ -15,7 +15,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { stewardData } from "#product/data.ts";
-import { passkeyOwner, requestOptions } from "#product/passkeys.ts";
+import { passkeyOwner, requestOptions, stampUse } from "#product/passkeys.ts";
 import { goodCode, startSession } from "#product/sign-in-state.ts";
 import { ssoAvailable } from "#product/sso.ts";
 
@@ -148,7 +148,8 @@ const passkeyFinish = async (request: Request) => {
     return refuse(400, "invalid_request");
   const person = passkeyOwner(credentialJson);
   if (!person || person.disabled) return refuse(401, "invalid_credentials");
-  return startSession(person);
+  stampUse(credentialJson);
+  return startSession(person, false, request);
 };
 
 /** The reset package's routes, answered as unmounted while password reset is off. */
