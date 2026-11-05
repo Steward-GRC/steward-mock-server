@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 
+import type { AuditAction } from "#product/audit-actions.ts";
 import type { Membership, StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
@@ -105,8 +106,11 @@ export const asUser = (person: StewardPerson) => ({
 });
 
 /** Audit a change to a person's account. */
-const audit = (action: string, actor: StewardPerson, person: StewardPerson) =>
-  record(action, actor, { id: person.id, kind: "user", label: person.name });
+const audit = (
+  action: AuditAction,
+  actor: StewardPerson,
+  person: StewardPerson,
+) => record(action, actor, { id: person.id, kind: "user", label: person.name });
 
 const personFor = (userId: string): StewardPerson =>
   found(
@@ -366,7 +370,7 @@ export const userResolvers: Resolvers = {
       source.disabled = true;
       source.mergedIntoUserId = target.id;
       revokeAll(source.id);
-      audit("user.merged", actor, source);
+      audit("user.accounts_merged", actor, source);
       return {
         counts: preview.counts,
         mergeOperationId: newId("merge"),
@@ -441,7 +445,7 @@ export const userResolvers: Resolvers = {
       const last = (given.lastName ?? current.lastName).trim();
       person.name = [first, last].filter(Boolean).join(" ") || person.name;
       if (given.locale) person.locale = given.locale;
-      audit("user.profile_updated", person, person);
+      audit("user.profile.updated", person, person);
       return asUser(person);
     },
     updateUserProfile: (
@@ -458,7 +462,7 @@ export const userResolvers: Resolvers = {
         );
       person.name = given.name.trim();
       person.email = given.email.trim().toLowerCase();
-      audit("user.profile_updated", actor, person);
+      audit("user.profile.updated", actor, person);
       return asUser(person);
     },
   },

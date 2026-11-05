@@ -5,6 +5,8 @@
 
 import { GraphQLError } from "graphql";
 
+import type { AuditAction } from "#product/audit-actions.ts";
+
 import { publish } from "#core/events.ts";
 import { type Context, signedIn } from "#core/graphql.ts";
 import { stewardData } from "#product/data.ts";
@@ -122,9 +124,9 @@ export interface Subject {
   label: null | string;
 }
 
-/** Write an audit entry with the gateway's action name, and announce it. */
+/** Write an audit entry with the action name its service writes, and announce it. */
 export const record = (
-  action: string,
+  action: AuditAction,
   actor: StewardPerson,
   subject: Subject,
 ): void => {

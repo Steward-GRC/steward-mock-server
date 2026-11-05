@@ -330,7 +330,7 @@ export const policyResolvers: Resolvers = {
         until,
         userId: person.id,
       });
-      record("policy.break_glass_granted", person, policySubject(policy));
+      record("policy.break_glass_revealed", person, policySubject(policy));
       return { grantedUntil: new Date(until).toISOString() };
     },
     createPolicy: (
