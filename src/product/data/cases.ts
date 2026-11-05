@@ -110,7 +110,7 @@ export const reportCases = (): ReportCase[] => [
   },
   {
     ...blank(),
-    assigneeUserId: "user-mhamilton",
+    assigneeUserId: "user-dave",
     caseCode: "P3D8-W6N1",
     details: {
       informationKinds: ["HEALTH"],
@@ -125,14 +125,14 @@ export const reportCases = (): ReportCase[] => [
     kind: "NAMED",
     notes: [
       {
-        authorUserId: "user-mhamilton",
+        authorUserId: "user-dave",
         body: "The email reached 14 people; asking IT whether it can still be recalled.",
         createdAt: "2026-04-05T10:05:00Z",
         id: "case-note-1",
       },
     ],
     receivedAt: "2026-04-05T09:40:00Z",
-    reporterUserId: "user-ghopper",
+    reporterUserId: "user-charlie",
     status: "IN_REVIEW",
     thread: [
       {
@@ -140,7 +140,7 @@ export const reportCases = (): ReportCase[] => [
         body: "Thank you for the report. Roughly how many people received the email?",
         createdAt: "2026-04-05T10:00:00Z",
         id: "case-message-1",
-        officerUserId: "user-mhamilton",
+        officerUserId: "user-dave",
       },
     ],
   },
@@ -148,7 +148,7 @@ export const reportCases = (): ReportCase[] => [
     ...blank(),
     assessment: {
       decidedAt: "2026-03-21T11:00:00Z",
-      decidedByUserId: "user-mhamilton",
+      decidedByUserId: "user-dave",
       decision: "REPORTABLE",
       factors: {
         information: ["FINANCIAL", "CONTACT"],
@@ -160,7 +160,7 @@ export const reportCases = (): ReportCase[] => [
         "The laptop was unencrypted and not recovered; a vendor payment list is sensitive.",
       suggestion: "NOTIFICATION_LIKELY_REQUIRED",
     },
-    assigneeUserId: "user-mhamilton",
+    assigneeUserId: "user-dave",
     caseCode: "F5T2-H8R4",
     details: {
       informationKinds: ["FINANCIAL", "CONTACT"],

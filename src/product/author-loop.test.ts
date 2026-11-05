@@ -131,7 +131,7 @@ const createTravel = async (author: Signed, documentType = "POLICY") =>
 
 describe("the reader follows the author's writes", () => {
   it("numbers a new policy and procedure the way steward-core does", async () => {
-    const author = await as("user-alovelace");
+    const author = await as("user-bob");
     assert.equal((await createTravel(author)).number, "POL-REIMBU-000002");
     assert.equal(
       (await createTravel(author, "PROCEDURE")).number,
@@ -140,8 +140,8 @@ describe("the reader follows the author's writes", () => {
   });
 
   it("shows a new draft to its author only, then the published policy to everyone", async () => {
-    const author = await as("user-alovelace");
-    const reader = await as("user-kjohnson");
+    const author = await as("user-bob");
+    const reader = await as("user-erin");
     const created = await createTravel(author);
     const draft = await byNumber(author, created.number);
     assert.equal(draft.policy.currentVersionStatus, "DRAFT");
@@ -169,8 +169,8 @@ describe("the reader follows the author's writes", () => {
   });
 
   it("keeps the published version in the reader while a new draft is saved and discarded", async () => {
-    const author = await as("user-alovelace");
-    const reader = await as("user-kjohnson");
+    const author = await as("user-bob");
+    const reader = await as("user-erin");
     const saved = ok(
       await call(base, author, "SaveDraft", {
         contentJson: LEXICAL,
@@ -192,8 +192,8 @@ describe("the reader follows the author's writes", () => {
 
 describe("submitting a draft for review", () => {
   it("starts a run on the home category's workflow and gives the approver a task", async () => {
-    const author = await as("user-alovelace");
-    const approver = await as("user-ghopper");
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
     const created = await createTravel(author);
     const draftId = created.currentDraftVersionId ?? "";
     const { refused, runId } = await submit(author, created, draftId);
@@ -204,7 +204,7 @@ describe("submitting a draft for review", () => {
     assert.equal(run.status, "APPROVAL_STATUS_IN_REVIEW");
     assert.deepEqual(
       run.stageAssignees.map((seats) => seats.map((s) => s.userId)),
-      [["user-ghopper"]],
+      [["user-charlie"]],
     );
     const row = await byNumber(author, created.number);
     assert.equal(row.policy.currentVersionStatus, "IN_REVIEW");
@@ -214,7 +214,7 @@ describe("submitting a draft for review", () => {
   });
 
   it("refuses someone who can't edit the policy", async () => {
-    const reader = await as("user-kjohnson");
+    const reader = await as("user-erin");
     const { refused } = await submit(
       reader,
       { homeCategoryId: "category-usage", id: "policy-2" },
@@ -224,7 +224,7 @@ describe("submitting a draft for review", () => {
   });
 
   it("refuses a policy whose category has no workflow", async () => {
-    const admin = await as("user-demo-admin");
+    const admin = await as("user-alice");
     const { refused } = await submit(
       admin,
       { homeCategoryId: "category-due-diligence", id: "policy-5" },
@@ -236,9 +236,9 @@ describe("submitting a draft for review", () => {
 
 describe("deciding an approval", () => {
   it("publishes the policy on the last approval", async () => {
-    const author = await as("user-alovelace");
-    const approver = await as("user-ghopper");
-    const reader = await as("user-kjohnson");
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const reader = await as("user-erin");
     ok(
       await call(base, author, "SaveDraft", {
         contentJson: LEXICAL,
@@ -272,9 +272,9 @@ describe("deciding an approval", () => {
   });
 
   it("moves a multi-stage run on stage by stage", async () => {
-    const author = await as("user-alovelace");
-    const approver = await as("user-ghopper");
-    const admin = await as("user-demo-admin");
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
     const first = { policyVersionId: "version-4", runId: "run-1" };
 
     // Board review wants a majority of its two approvers.
@@ -319,9 +319,9 @@ describe("deciding an approval", () => {
   });
 
   it("marks the run and the policy rejected on a rejection", async () => {
-    const author = await as("user-alovelace");
-    const approver = await as("user-ghopper");
-    const admin = await as("user-demo-admin");
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
     ok(
       await decide(
         approver,
@@ -342,7 +342,7 @@ describe("deciding an approval", () => {
   });
 
   it("refuses to decide a task twice", async () => {
-    const approver = await as("user-ghopper");
+    const approver = await as("user-charlie");
     const task = {
       policyVersionId: "version-4",
       runId: "run-1",
@@ -354,7 +354,7 @@ describe("deciding an approval", () => {
   });
 
   it("refuses a decision on a run that has ended", async () => {
-    const approver = await as("user-ghopper");
+    const approver = await as("user-charlie");
     const decided = await decide(
       approver,
       { policyVersionId: "version-8", runId: "run-2", taskId: "task-4" },
@@ -364,7 +364,7 @@ describe("deciding an approval", () => {
   });
 
   it("wants a comment with an approval", async () => {
-    const approver = await as("user-ghopper");
+    const approver = await as("user-charlie");
     const answer = await decide(
       approver,
       { policyVersionId: "version-4", runId: "run-1", taskId: "task-1" },

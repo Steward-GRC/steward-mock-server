@@ -81,7 +81,7 @@ describe("the IdP test link", () => {
   });
 
   it("refuses a cookie without its CSRF token", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const answer = await post(
       base,
       "/admin/sso/test-link",
@@ -93,14 +93,14 @@ describe("the IdP test link", () => {
   });
 
   it("refuses someone who isn't a site admin", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const { body, status } = await mintPartner(reader);
     assert.equal(status, 403);
     assert.deepEqual(body, { error: "site-admin role required" });
   });
 
   it("asks for both the connection and its alias", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const { body, status } = await mint(admin, {
       alias: "  ",
       connectionId: PARTNER.connectionId,
@@ -110,7 +110,7 @@ describe("the IdP test link", () => {
   });
 
   it("answers a start link on the mock's own origin, valid for 30 minutes", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const before = Date.now();
     const { body, status } = await mintPartner(admin);
     assert.equal(status, 200);
@@ -130,7 +130,7 @@ describe("the IdP test link", () => {
   });
 
   it("passes the test, and activation then succeeds", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     assert.equal((await activate(admin)).refused, "FailedPrecondition");
     const { body } = await mintPartner(admin);
     const { answer, text } = await open(body.url ?? "");
@@ -154,7 +154,7 @@ describe("the IdP test link", () => {
   });
 
   it("fails the test when the controls say so, and activation stays refused", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const state = await control(base, {
       kind: "idp-test-outcome",
       outcome: "fail",
@@ -188,7 +188,7 @@ describe("the IdP test link", () => {
   });
 
   it("sends a return path outside /admin/ to the organisations page", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const { body } = await mint(admin, {
       alias: PARTNER.alias,
       connectionId: PARTNER.connectionId,
@@ -209,7 +209,7 @@ describe("the IdP test link", () => {
   });
 
   it("answers 410 for an expired link, and records nothing", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const { body } = await mintPartner(admin);
     await control(base, { kind: "expire-test-links" });
     const { answer, text } = await open(body.url ?? "");
@@ -236,7 +236,7 @@ describe("the IdP import routes", () => {
       "/admin/idp/parse-metadata",
     ]) {
       assert.equal((await send(undefined, path)).status, 401, path);
-      const reader = await signIn(base, "kjohnson");
+      const reader = await signIn(base, "erin");
       assert.deepEqual(await send(reader, path), {
         body: { error: "site-admin role required" },
         status: 403,
@@ -245,7 +245,7 @@ describe("the IdP import routes", () => {
   });
 
   it("fetches an invented certificate", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const { body, status } = await send(admin, "/admin/idp/fetch-cert", {
       url: "https://idp.example.org/cert.pem",
     });
@@ -257,7 +257,7 @@ describe("the IdP import routes", () => {
   });
 
   it("refuses a missing or non-https url the way the gateway does", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     for (const path of [
       "/admin/idp/fetch-cert",
       "/admin/idp/import-metadata",
@@ -274,7 +274,7 @@ describe("the IdP import routes", () => {
   });
 
   it("imports invented metadata from a url", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const { body, status } = await send(admin, "/admin/idp/import-metadata", {
       url: "https://idp.example.org/metadata",
     });
@@ -291,7 +291,7 @@ describe("the IdP import routes", () => {
   });
 
   it("parses uploaded metadata, and asks for it when it's missing", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     assert.deepEqual(
       await send(admin, "/admin/idp/parse-metadata", { metadata: "" }),
       {

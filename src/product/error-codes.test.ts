@@ -44,7 +44,7 @@ describe("error codes", () => {
   });
 
   it("refuses a reader the audit log with PermissionDenied", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const { body } = await query(
       base,
       'query { auditLog(subject: "policy:any") { records { id } } }',

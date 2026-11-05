@@ -151,7 +151,7 @@ const policy = (
   currentDraftVersionId: null,
   currentPublishedVersionId: null,
   documentType: "POLICY",
-  ownerUserId: "user-alovelace",
+  ownerUserId: "user-bob",
   retiredAt: null,
   sensitivity: "STANDARD",
   templateId: null,
@@ -209,7 +209,7 @@ export const policies = (): Policy[] => [
     homeCategoryId: "category-due-diligence",
     id: "policy-5",
     number: "POL-DUEDIL-000001",
-    ownerUserId: "user-demo-admin",
+    ownerUserId: "user-alice",
     title: "Vendor Onboarding",
     updatedAt: "2026-03-18T00:00:00Z",
   }),
@@ -469,20 +469,17 @@ export const runs = (): Run[] => [
       {
         name: "Board review",
         quorum: "majority",
-        seats: [
-          seat("task-1", "user-ghopper"),
-          seat("task-2", "user-demo-admin"),
-        ],
+        seats: [seat("task-1", "user-charlie"), seat("task-2", "user-alice")],
       },
       {
         name: "Final sign-off",
         quorum: "one",
-        seats: [seat("task-3", "user-demo-admin")],
+        seats: [seat("task-3", "user-alice")],
       },
     ],
     status: "APPROVAL_STATUS_IN_REVIEW",
     submittedAt: "2026-09-20T00:00:00Z",
-    submittedBy: "user-alovelace",
+    submittedBy: "user-bob",
     workflowDefId: "workflow-2",
   },
   {
@@ -495,7 +492,7 @@ export const runs = (): Run[] => [
         name: "Approval",
         quorum: "one",
         seats: [
-          seat("task-4", "user-ghopper", {
+          seat("task-4", "user-charlie", {
             at: "2026-07-09T00:00:00Z",
             comment: "Needs the disclosure threshold spelled out.",
             state: "rejected",
@@ -505,7 +502,7 @@ export const runs = (): Run[] => [
     ],
     status: "APPROVAL_STATUS_REJECTED",
     submittedAt: "2026-06-25T09:15:00Z",
-    submittedBy: "user-alovelace",
+    submittedBy: "user-bob",
     workflowDefId: "workflow-1",
   },
 ];
@@ -514,16 +511,16 @@ export const acknowledgements = (): Acknowledgement[] => [
   {
     ackedAt: "2026-08-14T10:00:00Z",
     policyVersionId: "version-2",
-    userId: "user-ghopper",
+    userId: "user-charlie",
   },
   {
     ackedAt: "2026-08-15T09:30:00Z",
     policyVersionId: "version-2",
-    userId: "user-alovelace",
+    userId: "user-bob",
   },
   {
     ackedAt: "2026-05-03T10:00:00Z",
     policyVersionId: "version-5",
-    userId: "user-kjohnson",
+    userId: "user-erin",
   },
 ];

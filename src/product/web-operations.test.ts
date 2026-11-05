@@ -30,11 +30,11 @@ interface Case {
   variables?: Record<string, unknown>;
 }
 
-const ADMIN = "user-demo-admin";
-const AUTHOR = "user-alovelace";
-const APPROVER = "user-ghopper";
-const OFFICER = "user-mhamilton";
-const READER = "user-kjohnson";
+const ADMIN = "user-alice";
+const AUTHOR = "user-bob";
+const APPROVER = "user-charlie";
+const OFFICER = "user-dave";
+const READER = "user-erin";
 /** The AI service isn't part of the mock: the gateway answers its calls as when it's down. */
 const AI_DOWN = "INTERNAL";
 
@@ -212,7 +212,7 @@ const cases: Record<string, Case> = {
   },
   DeleteReference: { as: ADMIN, variables: { id: "reference-2" } },
   DeleteTemplate: { as: ADMIN, variables: { id: "template-3" } },
-  DeleteUser: { as: ADMIN, variables: { userId: "user-hlamarr" } },
+  DeleteUser: { as: ADMIN, variables: { userId: "user-frank" } },
   Diagnostics: { as: ADMIN },
   DiffVersions: {
     as: READER,
@@ -229,7 +229,7 @@ const cases: Record<string, Case> = {
     variables: { id: "template-version-3" },
   },
   EmailServiceConfig: { as: ADMIN },
-  EnableUser: { as: ADMIN, variables: { userId: "user-hlamarr" } },
+  EnableUser: { as: ADMIN, variables: { userId: "user-frank" } },
   ExportAcks: {
     as: ADMIN,
     variables: { format: "csv", policyVersionId: "version-2" },
@@ -253,8 +253,8 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: {
       confirmPrivileged: false,
-      idempotencyKey: "merge-hlamarr",
-      sourceUserId: "user-hlamarr",
+      idempotencyKey: "merge-frank",
+      sourceUserId: "user-frank",
       targetUserId: READER,
     },
   },
@@ -285,7 +285,7 @@ const cases: Record<string, Case> = {
   },
   PreviewAccountMerge: {
     as: ADMIN,
-    variables: { sourceUserId: "user-hlamarr", targetUserId: READER },
+    variables: { sourceUserId: "user-frank", targetUserId: READER },
   },
   PreviewUserDeletion: { as: ADMIN, variables: { userId: APPROVER } },
   PublishDraft: { as: AUTHOR, variables: { policyId: "policy-2" } },
@@ -347,7 +347,7 @@ const cases: Record<string, Case> = {
       policyId: "policy-2",
     },
   },
-  SearchUsers: { as: AUTHOR, variables: { limit: 5, query: "grace" } },
+  SearchUsers: { as: AUTHOR, variables: { limit: 5, query: "charlie" } },
   SetCaseDiscoveryDate: {
     as: OFFICER,
     variables: { caseId: "case-1", discoveredOn: "2026-04-01" },
@@ -495,7 +495,7 @@ const cases: Record<string, Case> = {
   },
   UpdateMyProfile: {
     as: READER,
-    variables: { firstName: "Katherine", lastName: "Johnson" },
+    variables: { firstName: "Erin", lastName: "Reader" },
   },
   UpdateReference: {
     as: ADMIN,
@@ -511,8 +511,8 @@ const cases: Record<string, Case> = {
   UpdateUserProfile: {
     as: ADMIN,
     variables: {
-      email: "katherine.johnson@example.org",
-      name: "Katherine Johnson",
+      email: "erin@example.org",
+      name: "Erin Reader",
       userId: READER,
     },
   },
