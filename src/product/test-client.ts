@@ -29,14 +29,18 @@ export { SETUP_TOKEN } from "#product/routes.ts";
 /** Start the mock on a free port serving Steward. */
 export const startForTests = (product: Product = steward) => startCore(product);
 
-/** Sign in with a password and, when asked, the TOTP second factor, as steward-web does. */
+/**
+ * Sign in with a password and, when asked, the TOTP second factor, as steward-web does. The seed
+ * gives each person the password `<username>-password`.
+ */
 export const signIn = async (
   base: string,
   username: string,
   token = false,
+  password = `${username}-password`,
 ): Promise<Signed> => {
   let answer = await post(base, "/auth/login", {
-    password: "any password",
+    password,
     token,
     username,
   });

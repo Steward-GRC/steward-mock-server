@@ -26,6 +26,7 @@ const complete = async (request: Request) => {
     email: email.trim().toLowerCase(),
     id: newId("person"),
     name: name.trim(),
+    password,
     roles: ["ADMIN", "STAFF"],
     secondFactor: false,
     username: username.trim().toLowerCase(),

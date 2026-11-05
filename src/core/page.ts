@@ -190,6 +190,16 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
   background: var(--bg); color: var(--ink); font: 400 15px/1 var(--font-ui);
 }
 .window { margin: 0; font: 400 15px/22px var(--font-ui); }
+.result { margin: 0; min-height: 22px; font: 700 15px/22px var(--font-ui); }
+.result--ok { color: var(--ok); }
+.result--bad { color: var(--danger); }
+.check { display: inline-flex; align-items: center; gap: 8px; font: 400 15px/22px var(--font-ui); }
+.check input { width: 18px; height: 18px; accent-color: var(--primary); }
+.table-wrap { overflow-x: auto; }
+.people { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-ui); }
+.people th { text-align: left; padding: 8px 10px; font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--border); }
+.people td { padding: 8px 10px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.people td:last-child { white-space: nowrap; }
 .window strong { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; margin-right: 6px; }
 .legal { margin: 0; font: 400 13px/18px var(--font-ui); color: var(--muted); }
 .scrim { display: none; }
@@ -310,13 +320,94 @@ const SCRIPT = `
       draw(state.actions);
       showTiles(state.summary);
       showWindow(state.maintenance);
+      await people();
     } catch { fail("The mock server isn't answering."); }
   };
-  const people = async () => {
-    const list = await (await fetch("/_mock/people")).json();
-    $("person").replaceChildren(...list.filter((p) => !p.disabled).map((p) => { const o = el("option", "", p.name + " (" + p.username + ")"); o.value = p.id; return o; }));
+  // A control whose answer the page shows itself: the reason when it's refused.
+  const ask = async (body) => {
+    const answer = await fetch("/_mock/controls", { body: JSON.stringify(body), headers: { "content-type": "application/json" }, method: "POST" });
+    const data = await answer.json().catch(() => ({}));
+    return answer.ok ? { data, ok: true } : { ok: false, reason: data.message ?? data.error ?? "the mock answered " + answer.status };
   };
-  $("sign-in").addEventListener("click", () => send({ kind: "sign-in", personId: $("person").value }));
+  const say = (id, ok, text) => { const node = $(id); node.className = "result " + (ok ? "result--ok" : "result--bad"); node.textContent = text; };
+
+  // The people who can sign in: the "Sign in as" choice and the users table, redrawn when they change.
+  let everyone = [];
+  let peopleDrawn = "";
+  let editing = null;
+  const people = async () => {
+    everyone = await (await fetch("/_mock/people")).json();
+    const key = JSON.stringify(everyone);
+    if (key === peopleDrawn) return;
+    peopleDrawn = key;
+    const chosen = $("person").value;
+    $("person").replaceChildren(...everyone.filter((p) => !p.disabled).map((p) => { const o = el("option", "", p.name + " (" + p.username + ")"); o.value = p.id; return o; }));
+    if (chosen) $("person").value = chosen;
+    $("people-rows").replaceChildren(...everyone.map((p) => {
+      const row = el("tr");
+      const edit = el("button", "button button--small", "Edit");
+      edit.type = "button";
+      edit.addEventListener("click", () => startEdit(p));
+      const remove = el("button", "button button--small", "Remove");
+      remove.type = "button";
+      remove.addEventListener("click", async () => {
+        const done = await ask({ kind: "person-remove", personId: p.id });
+        say("users-result", done.ok, done.ok ? "Removed " + p.name + "." : "Couldn't remove " + p.name + ": " + done.reason);
+        if (editing === p.id) clearForm();
+        await people();
+      });
+      const actions = el("td");
+      actions.append(edit, " ", remove);
+      row.append(el("td", "", p.name), el("td", "", p.username), el("td", "", p.roles.join(", ") || "none"), el("td", "", p.hasPassword ? "set" : "not set"), el("td", "", (p.disabled ? "disabled" : "active") + (p.secondFactor ? ", second factor" : "")), actions);
+      return row;
+    }));
+  };
+
+  $("sign-in").addEventListener("click", async () => {
+    const person = everyone.find((p) => p.id === $("person").value);
+    if (!person) return say("sign-in-result", false, "Choose someone to sign in as.");
+    const done = await ask({ kind: "sign-in", personId: person.id });
+    say("sign-in-result", done.ok, done.ok ? "Signed in as " + person.name + ". Refresh this page." : "Couldn't sign in as " + person.name + ": " + done.reason);
+    await refresh();
+  });
+
+  const form = () => ({ disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: $("user-roles").value, secondFactor: $("user-second-factor").checked, username: $("user-username").value });
+  const clearForm = () => {
+    editing = null;
+    for (const id of ["user-name", "user-username", "user-email", "user-roles", "user-password"]) $(id).value = "";
+    $("user-second-factor").checked = false;
+    $("user-disabled").checked = false;
+    $("user-password").placeholder = "The password they sign in with";
+    $("user-save").hidden = true;
+    $("user-add").hidden = false;
+  };
+  const startEdit = (p) => {
+    editing = p.id;
+    $("user-name").value = p.name;
+    $("user-username").value = p.username;
+    $("user-email").value = p.email;
+    $("user-roles").value = p.roles.join(", ");
+    $("user-password").value = "";
+    $("user-password").placeholder = p.hasPassword ? "Leave empty to keep the password" : "No password yet: set one";
+    $("user-second-factor").checked = p.secondFactor;
+    $("user-disabled").checked = p.disabled;
+    $("user-save").hidden = false;
+    $("user-add").hidden = true;
+    $("user-name").focus();
+  };
+  $("user-add").addEventListener("click", async () => {
+    const done = await ask({ ...form(), kind: "person-add" });
+    say("users-result", done.ok, done.ok ? "Added " + done.data.result.name + "." : "Couldn't add the user: " + done.reason);
+    if (done.ok) clearForm();
+    await people();
+  });
+  $("user-save").addEventListener("click", async () => {
+    const done = await ask({ ...form(), kind: "person-update", personId: editing });
+    say("users-result", done.ok, done.ok ? "Saved " + done.data.result.name + "." : "Couldn't save the user: " + done.reason);
+    if (done.ok) clearForm();
+    await people();
+  });
+  $("user-clear").addEventListener("click", clearForm);
 
   const when = (id) => { const value = $(id).value; return value ? new Date(value).toISOString() : undefined; };
   const windowBody = () => ({ endsAt: when("maintenance-end"), message: $("maintenance-message").value || undefined, startsAt: when("maintenance-start") });
@@ -363,7 +454,6 @@ const SCRIPT = `
   window.addEventListener("resize", label);
   label();
 
-  void people();
   void refresh();
   setInterval(refresh, 2000);
 `;
@@ -425,6 +515,7 @@ const page = (saved: null | Theme) => {
       <nav class="nav" aria-label="Controls">
         <a class="nav-item" href="#overview" title="Overview" aria-current="true"><span class="nav-item__icon">◎</span><span class="nav-item__label">Overview</span></a>
         <a class="nav-item" href="#sign-in-card" title="Sign in as"><span class="nav-item__icon">→</span><span class="nav-item__label">Sign in as</span></a>
+        <a class="nav-item" href="#users" title="Users"><span class="nav-item__icon">◐</span><span class="nav-item__label">Users</span></a>
         <a class="nav-item" href="#maintenance" title="Maintenance"><span class="nav-item__icon">◷</span><span class="nav-item__label">Maintenance</span></a>
         <div class="nav" id="nav-actions"></div>
       </nav>
@@ -450,7 +541,34 @@ const page = (saved: null | Theme) => {
             <div class="field"><label class="label" for="person">Person</label><select id="person"></select></div>
           </div>
           <div class="row"><button class="button button--primary" id="sign-in" type="button">Sign in here</button></div>
-          <p class="hint">Any password works except "wrong-password"; any six digits except 000000.</p>
+          <p class="result" id="sign-in-result" role="status" aria-live="polite"></p>
+          <p class="hint">Uses the person's password from Users and skips the second factor. A client's own sign-in takes the same password, then any six digits except 000000.</p>
+        </section>
+        <section class="card" id="users" aria-labelledby="users-title">
+          <h2 id="users-title">Users</h2>
+          <p class="hint">The people who can sign in, and the only passwords that work for them. A change counts from the next sign-in; removing someone signs them out.</p>
+          <div class="table-wrap"><table class="people"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Roles</th><th scope="col">Password</th><th scope="col">Status</th><th scope="col"><span class="label">Actions</span></th></tr></thead><tbody id="people-rows"></tbody></table></div>
+          <div class="row">
+            <div class="field"><label class="label" for="user-name">Name</label><input id="user-name" type="text" placeholder="Charlie Example" autocomplete="off"></div>
+            <div class="field"><label class="label" for="user-username">Username</label><input id="user-username" type="text" placeholder="charlie" autocomplete="off"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label class="label" for="user-email">Email</label><input id="user-email" type="email" placeholder="charlie@example.org" autocomplete="off"></div>
+            <div class="field"><label class="label" for="user-roles">Roles</label><input id="user-roles" type="text" placeholder="ADMIN, STAFF" autocomplete="off"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label class="label" for="user-password">Password</label><input id="user-password" type="text" placeholder="The password they sign in with" autocomplete="off"></div>
+          </div>
+          <div class="row">
+            <label class="check"><input id="user-second-factor" type="checkbox"> Asks for a second factor</label>
+            <label class="check"><input id="user-disabled" type="checkbox"> Disabled</label>
+          </div>
+          <div class="row">
+            <button class="button button--primary" id="user-add" type="button">Add user</button>
+            <button class="button button--primary" id="user-save" type="button" hidden>Save changes</button>
+            <button class="button" id="user-clear" type="button">Clear</button>
+          </div>
+          <p class="result" id="users-result" role="status" aria-live="polite"></p>
         </section>
         <section class="card" id="maintenance" aria-labelledby="maintenance-title">
           <h2 id="maintenance-title">Maintenance</h2>

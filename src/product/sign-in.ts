@@ -5,8 +5,8 @@
 // switch each method (stewardData().signInMethods).
 //
 // The mock sends no mail: a reset code is any six digits but WRONG_CODE, as for every other
-// emailed code, once a reset was asked for that address. The new password isn't kept, since any
-// password but WRONG_PASSWORD signs in anyway.
+// emailed code, once a reset was asked for that address. The new password replaces the old one,
+// so it's the only one that signs in from then on.
 
 import { randomBytes } from "node:crypto";
 
@@ -105,6 +105,8 @@ const confirmReset = async (request: Request) => {
   if (!person?.localAccount || !resets.includes(wanted) || !goodCode(code))
     return refuseWith(400, MSG_INVALID_CODE);
   stewardData().passwordResets = resets.filter((sent) => sent !== wanted);
+  // The new password is the one that signs in from now on, as on /_mock.
+  person.password = newPassword;
   log.debug("password reset", { personId: person.id });
   return json({ ok: true });
 };

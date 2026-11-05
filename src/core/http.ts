@@ -11,8 +11,11 @@ export const json = (
 };
 
 /** A refusal in the gateway's plain shape: `{ "error": "<code>" }`. */
-export const refuse = (status: number, error: string): Response =>
-  json({ error }, status);
+export const refuse = (
+  status: number,
+  error: string,
+  message?: string,
+): Response => json(message ? { error, message } : { error }, status);
 
 /** The request's JSON body, or an empty object when it has none or it doesn't parse. */
 export const readJson = async <T extends object>(

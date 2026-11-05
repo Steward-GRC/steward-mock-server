@@ -207,7 +207,7 @@ describe("maintenance banner", () => {
   it("keeps the sign-in and setup routes answering while maintenance is on", async () => {
     await control(base, { kind: "maintenance-start" });
     const login = await post(base, "/auth/login", {
-      password: "any password",
+      password: "bob-password",
       username: "bob",
     });
     assert.equal(login.status, 200);

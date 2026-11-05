@@ -40,14 +40,18 @@ export const post = (
     method: "POST",
   });
 
-/** Sign in with a password and, when asked, the second factor. */
+/**
+ * Sign in with a password and, when asked, the second factor. The seeds give each person the
+ * password `<username>-password`.
+ */
 export const signIn = async (
   base: string,
   username: string,
   token = false,
+  password = `${username}-password`,
 ): Promise<Signed> => {
   let answer = await post(base, "/auth/login", {
-    password: "any password",
+    password,
     token,
     username,
   });

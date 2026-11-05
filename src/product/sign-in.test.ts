@@ -77,7 +77,10 @@ const assertion = (id: string) =>
   JSON.stringify({ id, rawId: id, type: "public-key" });
 const loginAs = async (username: string) =>
   (await (
-    await post(base, "/auth/login", { password: "any password", username })
+    await post(base, "/auth/login", {
+      password: `${username}-password`,
+      username,
+    })
   ).json()) as Record<string, unknown>;
 const beginFactor = async (pendingId: unknown) =>
   answerOf(await post(base, "/auth/mfa/webauthn/begin", { pendingId }));
