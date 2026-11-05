@@ -12,6 +12,7 @@ import type { PolicyOverride, StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
+import { setRoot } from "#product/groups.ts";
 import {
   impersonationOf,
   startImpersonating,
@@ -152,7 +153,7 @@ export const accountResolvers: Resolvers = {
       const person = personFor(given.userId);
       if (person.deletedAt) throw refuse("NOT_FOUND", "user not found");
       if (!isRoot(person)) {
-        person.root = true;
+        setRoot(person, true);
         person.disabled = false;
         if (!person.roles.includes("site-admin"))
           person.roles.push("site-admin");
@@ -303,7 +304,7 @@ export const accountResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "cannot revoke root from the last root admin",
         );
-      person.root = false;
+      setRoot(person, false);
       record("root.revoked", actor, userSubject(person));
       return asUser(person);
     },

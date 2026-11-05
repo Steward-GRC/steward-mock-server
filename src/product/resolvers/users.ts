@@ -14,6 +14,15 @@ import { settings } from "#core/product.ts";
 import { endSessions, mockState } from "#core/state.ts";
 import { authorScopes } from "#product/access.ts";
 import {
+  idpGroupsOf,
+  isRoot,
+  joinGroup,
+  leaveGroup,
+  managedGroupIdsOf,
+  membershipsOf,
+  rolesOf,
+} from "#product/groups.ts";
+import {
   caller,
   data,
   forbidden,
@@ -79,7 +88,7 @@ const approverScopes = (person: StewardPerson): string[] =>
     .map((c) => c.name);
 
 /** A root admin; identity makes the first site admin one, and grantRoot others. */
-export const isRoot = (person: StewardPerson) => person.root === true;
+export { isRoot } from "#product/groups.ts";
 
 /** A person as the gateway's User type. */
 export const asUser = (person: StewardPerson) => ({
@@ -87,13 +96,13 @@ export const asUser = (person: StewardPerson) => ({
   deletedAt: person.deletedAt,
   email: person.email,
   enabled: !person.disabled,
-  groupIds: person.memberships.map((m) => m.groupId),
-  idpGroups: person.idpGroups,
+  groupIds: membershipsOf(person).map((m) => m.groupId),
+  idpGroups: idpGroupsOf(person),
   isRoot: isRoot(person),
   localAccount: person.localAccount,
   locale: person.locale,
-  managedGroupIds: person.managedGroupIds,
-  memberships: person.memberships,
+  managedGroupIds: managedGroupIdsOf(person),
+  memberships: membershipsOf(person),
   mergedIntoUserId: person.mergedIntoUserId,
   name: person.name,
   needsOnboarding: person.needsOnboarding === true,
@@ -101,7 +110,7 @@ export const asUser = (person: StewardPerson) => ({
   policyOverrides: person.policyOverrides.toSorted((a, b) =>
     a.policyNumber.localeCompare(b.policyNumber),
   ),
-  roles: person.roles,
+  roles: rolesOf(person),
   scopes: { approver: approverScopes(person), author: authorScopes(person) },
   userId: person.id,
   username: person.username,
@@ -129,7 +138,7 @@ const groupFor = (groupId: string) =>
 /** A site admin, or a local manager of the group (identity's group-manager check). */
 const managerOf = (context: Context, groupId: string): StewardPerson => {
   const person = caller(context);
-  if (isSiteAdmin(person) || person.managedGroupIds.includes(groupId))
+  if (isSiteAdmin(person) || managedGroupIdsOf(person).includes(groupId))
     return person;
   throw forbidden();
 };
@@ -204,9 +213,9 @@ const deletionPreview = (person: StewardPerson) => {
     counts: {
       breakGlassGrants: data().breakGlass.filter((g) => g.userId === person.id)
         .length,
-      groupMemberships: person.memberships.length,
-      idpGroups: person.idpGroups.length,
-      managedGroups: person.managedGroupIds.length,
+      groupMemberships: membershipsOf(person).length,
+      idpGroups: idpGroupsOf(person).length,
+      managedGroups: managedGroupIdsOf(person).length,
       ownedPolicies: owned.length,
       pendingApprovals: pending.length,
       permissions: permissionsOf(person.roles).length,
@@ -216,7 +225,7 @@ const deletionPreview = (person: StewardPerson) => {
           c.authorRule.includes(person.id) ||
           c.approverRule.includes(person.id),
       ).length,
-      roles: person.roles.length,
+      roles: rolesOf(person).length,
     },
     items,
     locallyAuthenticable: person.localAccount,
@@ -268,10 +277,9 @@ export const userResolvers: Resolvers = {
       context: Context,
     ) => {
       const actor = managerOf(context, given.groupId);
-      groupFor(given.groupId);
+      const group = groupFor(given.groupId);
       const person = personFor(given.userId);
-      if (!person.memberships.some((m) => m.groupId === given.groupId))
-        person.memberships.push({ groupId: given.groupId, source: "manual" });
+      joinGroup(person, group.name);
       audit("group.member_added", actor, person);
       return asUser(person);
     },
@@ -439,7 +447,7 @@ export const userResolvers: Resolvers = {
     ) => {
       const actor = managerOf(context, given.groupId);
       const person = personFor(given.userId);
-      const membership = person.memberships.find(
+      const membership = membershipsOf(person).find(
         (m: Membership) => m.groupId === given.groupId,
       );
       if (membership?.source === "idp-sync" && !isSiteAdmin(actor))
@@ -447,9 +455,7 @@ export const userResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "A membership synced from the identity provider can't be removed here.",
         );
-      person.memberships = person.memberships.filter(
-        (m) => m.groupId !== given.groupId,
-      );
+      leaveGroup(person, groupFor(given.groupId).name);
       audit("group.member_removed", actor, person);
       return asUser(person);
     },
@@ -527,11 +533,11 @@ export const userResolvers: Resolvers = {
               ? null
               : {
                   id: target.id,
-                  roles: target.roles,
+                  roles: rolesOf(target),
                   username: target.username,
                 },
           id: person.id,
-          roles: person.roles,
+          roles: rolesOf(person),
           username: person.username,
         },
         appliance: null,
@@ -572,14 +578,16 @@ export const userResolvers: Resolvers = {
       managerOf(context, given.groupId);
       groupFor(given.groupId);
       return people()
-        .filter((p) => p.memberships.some((m) => m.groupId === given.groupId))
+        .filter((p) =>
+          membershipsOf(p).some((m) => m.groupId === given.groupId),
+        )
         .map((p) => asUser(p));
     },
     me: (_root, _given, context: Context) => asUser(caller(context)),
     myManagedGroups: (_root, _given, context: Context) => {
       const person = caller(context);
       return data()
-        .platformGroups.filter((g) => person.managedGroupIds.includes(g.id))
+        .platformGroups.filter((g) => managedGroupIdsOf(person).includes(g.id))
         .toSorted((a, b) => a.name.localeCompare(b.name));
     },
     platformGroups: (

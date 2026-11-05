@@ -8,6 +8,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { ackTriggersOf, viewerCan } from "#product/access.ts";
+import { managedGroupIdsOf, membershipsOf } from "#product/groups.ts";
 import {
   caller,
   data,
@@ -41,7 +42,7 @@ const audience = (groupId?: null | string): StewardPerson[] =>
     (p) =>
       !p.deletedAt &&
       !p.disabled &&
-      (!groupId || p.memberships.some((m) => m.groupId === groupId)),
+      (!groupId || membershipsOf(p).some((m) => m.groupId === groupId)),
   );
 
 const entry = (p: StewardPerson, ackedAt: null | string) => ({
@@ -69,7 +70,8 @@ const roster = (policyVersionId: string, groupId?: null | string) => {
 const auditScope = (person: StewardPerson): null | string[] => {
   if (isSiteAdmin(person) || person.roles.includes("compliance-admin"))
     return null;
-  if (person.managedGroupIds.length > 0) return person.managedGroupIds;
+  const managed = managedGroupIdsOf(person);
+  if (managed.length > 0) return managed;
   throw forbidden();
 };
 

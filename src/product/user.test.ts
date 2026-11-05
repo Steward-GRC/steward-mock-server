@@ -88,7 +88,8 @@ describe("me", () => {
     });
     assert.deepEqual(
       (body.data as { me: { permissions: string[] } }).me.permissions,
-      ["policy.read", "reporting.manage"],
+      // Dave is privacy officer and compliance admin.
+      ["policy.read", "reporting.manage", "compliance.manage", "audit.read"],
     );
     const admin = (await meOf("alice")).permissions as string[];
     assert.ok(admin.includes("admin.manage") && admin.includes("audit.read"));
@@ -104,6 +105,7 @@ describe("the sample people", () => {
       "dave",
       "erin",
       "frank",
+      "grace",
       "heidi",
     ];
     const sample = people();

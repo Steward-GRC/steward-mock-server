@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The people who can sign in, one per Steward role, and what the admin directory knows about
 // them beyond the core's sign-in fields. Every address is example.org, which never delivers mail.
+// Their roles and groups are the owner's to edit on /_mock (src/product/groups.ts reads them).
 
 import type { Person } from "#core/state.ts";
 
@@ -25,12 +26,13 @@ export interface StewardPerson extends Person {
    * password with enrollmentRequired, and enrolling turns secondFactor on.
    */
   enrolSecondFactor?: boolean;
-  idpGroups: string[];
+  /**
+   * Free-text groups, edited on /_mock: the person's IdP groups, their platform-group
+   * memberships by name, and "Manages <group>" for a group they manage (src/product/groups.ts).
+   */
+  groups: string[];
   localAccount: boolean;
   locale: string;
-  /** Platform groups this person is a local group manager of. */
-  managedGroupIds: string[];
-  memberships: Membership[];
   mergedIntoUserId: null | string;
   /** Owes first-run onboarding (the welcome page) until completeOnboarding; the controls set it. */
   needsOnboarding?: boolean;
@@ -45,8 +47,6 @@ export interface StewardPerson extends Person {
   policyOverrides: PolicyOverride[];
   /** identity's read-sensitive claim: may read SENSITIVE policies the RACI rules let them read. */
   readSensitive: boolean;
-  /** A root admin: a site admin who may also change who the root admins are. */
-  root?: boolean;
   /** When the authenticator app (secondFactor) was confirmed, and its name; RFC 3339. */
   totpEnrolledAt?: string;
   totpLabel?: null | string;
@@ -54,11 +54,9 @@ export interface StewardPerson extends Person {
 
 const DIRECTORY_DEFAULTS = {
   deletedAt: null,
-  idpGroups: [],
+  groups: [],
   localAccount: true,
   locale: "en",
-  managedGroupIds: [],
-  memberships: [],
   mergedIntoUserId: null,
   policyOverrides: [],
   readSensitive: false,
@@ -80,9 +78,7 @@ const person = (
     Pick<StewardPerson, "email" | "id" | "name" | "roles" | "username">,
 ): StewardPerson => ({
   ...DIRECTORY_DEFAULTS,
-  idpGroups: [],
-  managedGroupIds: [],
-  memberships: [],
+  groups: [],
   // Every seed person signs in with <username>-password; the Users card on /_mock changes it.
   password: `${given.username}-password`,
   policyOverrides: [],
@@ -91,16 +87,15 @@ const person = (
 });
 
 /**
- * One person per Steward role, and Heidi the group manager; reader is implicit and never listed,
- * as in steward-authz.
+ * One person per Steward role, Heidi the group manager and Grace the template admin; reader is
+ * implicit and never listed, as in steward-authz.
  */
 export const people = (): StewardPerson[] => [
   person({
     email: "alice@example.org",
     id: "user-alice",
     name: "Alice Admin",
-    roles: ["site-admin"],
-    root: true,
+    roles: ["site-admin", "root"],
     secondFactor: true,
     totpEnrolledAt: "2026-02-10T09:00:00Z",
     totpLabel: "Work phone",
@@ -108,8 +103,8 @@ export const people = (): StewardPerson[] => [
   }),
   person({
     email: "bob@example.org",
+    groups: ["All staff"],
     id: "user-bob",
-    idpGroups: ["All staff"],
     name: "Bob Author",
     readSensitive: true,
     roles: ["author"],
@@ -117,11 +112,14 @@ export const people = (): StewardPerson[] => [
   }),
   person({
     email: "charlie@example.org",
+    groups: [
+      "finance-staff",
+      "Finance team",
+      "All staff",
+      "Manages Finance team",
+    ],
     id: "user-charlie",
-    idpGroups: ["finance-staff", "Finance team", "All staff"],
     localAccount: false,
-    managedGroupIds: ["group-2"],
-    memberships: [{ groupId: "group-2", source: "manual" }],
     name: "Charlie Approver",
     passkey: true,
     passkeyCreatedAt: "2026-06-18T08:15:00Z",
@@ -135,23 +133,18 @@ export const people = (): StewardPerson[] => [
   person({
     email: "dave@example.org",
     enrolSecondFactor: true,
+    groups: ["contractors", "Finance team", "Facilities team"],
     id: "user-dave",
-    idpGroups: ["contractors"],
     localAccount: false,
-    memberships: [
-      { groupId: "group-2", source: "idp-sync" },
-      { groupId: "group-3", source: "manual" },
-    ],
     name: "Dave Officer",
     policyOverrides: [{ effect: "DENY", policyNumber: "PRC-DEVICES-000001" }],
-    roles: ["privacy-officer"],
+    roles: ["privacy-officer", "compliance-admin"],
     username: "dave",
   }),
   person({
     email: "erin@example.org",
+    groups: ["All staff", "Facilities team"],
     id: "user-erin",
-    idpGroups: ["All staff", "Facilities team"],
-    memberships: [{ groupId: "group-3", source: "manual" }],
     name: "Erin Reader",
     policyOverrides: [{ effect: "ALLOW", policyNumber: "POL-RECORDS-000002" }],
     roles: [],
@@ -165,17 +158,21 @@ export const people = (): StewardPerson[] => [
     roles: [],
     username: "frank",
   }),
+  // The brief's template admin, so the template screens can be walked.
+  person({
+    email: "grace@example.org",
+    groups: ["All staff"],
+    id: "user-grace",
+    name: "Grace Templates",
+    roles: ["template-admin"],
+    username: "grace",
+  }),
   // The brief's group manager: a password account with no second factor, so My groups (A22)
   // can be walked without SSO.
   person({
     email: "heidi@example.org",
+    groups: ["All staff", "Facilities team", "Manages Facilities team"],
     id: "user-heidi",
-    idpGroups: ["All staff", "Facilities team"],
-    managedGroupIds: ["group-3"],
-    memberships: [
-      { groupId: "group-1", source: "manual" },
-      { groupId: "group-3", source: "manual" },
-    ],
     name: "Heidi Manager",
     roles: [],
     username: "heidi",
