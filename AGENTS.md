@@ -65,8 +65,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 
 ## Template sync
 
-- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.3.1**
-  (`aeadfce`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
+- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.4.0**
+  (`cc626e1`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
   metadata only: it never becomes a tag here.
 - `src/core/` is the template's file for file; only the two SPDX lines differ (Steward's holder).
   Steward's sign-in and first-run bootstrap are product routes in `src/product/routes.ts`, which
