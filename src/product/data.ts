@@ -53,6 +53,8 @@ import {
   type Policy,
   type PolicyLinks,
   type PolicyVersion,
+  type PolicyView,
+  policyViews,
   type Run,
   runs,
   versions,
@@ -105,6 +107,8 @@ export interface StewardData extends ProductData {
   people: Person[];
   platformGroups: PlatformGroup[];
   policies: Policy[];
+  /** steward-obligations' policy_views: who viewed which version when. */
+  policyViews: PolicyView[];
   references: Reference[];
   reportCases: ReportCase[];
   runs: Run[];
@@ -138,6 +142,7 @@ export const seed = (): StewardData => ({
   people: people(),
   platformGroups: platformGroups(),
   policies: policies(),
+  policyViews: policyViews(),
   references: references(),
   reportCases: reportCases(),
   runs: runs(),

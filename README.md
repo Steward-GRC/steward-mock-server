@@ -216,6 +216,18 @@ The admin user screens answer as steward-gateway and steward-identity do:
   are audited under the admin, and the gateway's high-risk mutations are refused meanwhile with
   `IMPERSONATION_DENIED`.
 
+### Acknowledgement activity
+
+`ackActivity(policyVersionId, groupId, days)` answers the completion chart as steward-obligations
+does: one entry per UTC day from `days - 1` days ago through today, oldest first, with empty days
+included (a window of zero or less is 30 days). `acks` counts every acknowledgement of the version
+that day, and `views` counts the distinct people the policy asks to acknowledge who viewed it that
+day (`recordView` writes a view). The group is accepted and ignored, as obligations ignores it.
+The seed spreads acknowledgements and views by Alice, Dave, Grace and Heidi, and views by the
+others, over the last 90 days on the Desk Booking, Visitor Sign-in and Expense Claims policies,
+dated from when the mock starts, so 30- and 90-day charts both show bars. Erin, Bob and Charlie
+keep the obligations described above.
+
 ### Policy governance
 
 The admin policy screen's governance actions answer as steward-gateway, steward-core and

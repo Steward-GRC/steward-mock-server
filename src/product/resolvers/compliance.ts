@@ -120,6 +120,69 @@ const obligationsOf = (person: StewardPerson) =>
       };
     });
 
+/**
+ * steward-obligations' audienceFor: nobody when the policy asks for no acknowledgement, else the
+ * enabled people it obliges (the same rule myObligations applies).
+ */
+const ackAudience = (policyId: string): StewardPerson[] => {
+  const policy = data().policies.find((p) => p.id === policyId);
+  if (!policy || ackTriggersOf(policy) === "NONE") return [];
+  return people().filter(
+    (person) =>
+      !person.deletedAt &&
+      !person.disabled &&
+      (policy.sensitivity !== "SENSITIVE" || person.readSensitive) &&
+      viewerCan(person, policy).ack,
+  );
+};
+
+const utcDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * steward-obligations' Activity: a day per entry from `days - 1` days ago through today (UTC),
+ * oldest first, empty days included. Acks counts every acknowledgement of the version that day;
+ * views counts the distinct audience members who viewed it that day. The group is ignored.
+ */
+const activity = (policyVersionId: string, window: number) => {
+  const version = data().versions.find((v) => v.id === policyVersionId);
+  if (!version)
+    throw refuse(
+      "INTERNAL",
+      "Something went wrong on our side. Please try again.",
+    );
+  const days = window > 0 ? window : 30;
+  const now = Date.now();
+  const since = Date.parse(`${utcDate(now - (days - 1) * DAY_MS)}T00:00:00Z`);
+  const acks = new Map<string, number>();
+  for (const ack of data().acknowledgements)
+    if (
+      ack.policyVersionId === policyVersionId &&
+      Date.parse(ack.ackedAt) >= since
+    ) {
+      const day = utcDate(Date.parse(ack.ackedAt));
+      acks.set(day, (acks.get(day) ?? 0) + 1);
+    }
+  const audience = new Set(ackAudience(version.policyId).map((p) => p.id));
+  const viewers = new Map<string, Set<string>>();
+  for (const view of data().policyViews)
+    if (
+      view.policyVersionId === policyVersionId &&
+      audience.has(view.userId) &&
+      Date.parse(view.viewedAt) >= since
+    ) {
+      const day = utcDate(Date.parse(view.viewedAt));
+      viewers.set(day, (viewers.get(day) ?? new Set()).add(view.userId));
+    }
+  return Array.from({ length: days }, (_, index) => {
+    const date = utcDate(now - (days - 1 - index) * DAY_MS);
+    return {
+      acks: acks.get(date) ?? 0,
+      date,
+      views: viewers.get(date)?.size ?? 0,
+    };
+  });
+};
+
 export const complianceResolvers: Resolvers = {
   Mutation: {
     recordAck: (
@@ -150,8 +213,30 @@ export const complianceResolvers: Resolvers = {
       }
       return { ...ack, id: `${ack.policyVersionId}:${ack.userId}` };
     },
+    /** steward-obligations' RecordView: one more view row for the caller, every time. */
+    recordView: (
+      _root,
+      given: { policyVersionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      data().policyViews.push({
+        policyVersionId: given.policyVersionId,
+        userId: person.id,
+        viewedAt: now(),
+      });
+      return true;
+    },
   },
   Query: {
+    ackActivity: (
+      _root,
+      given: { days: number; groupId?: null | string; policyVersionId: string },
+      context: Context,
+    ) => {
+      reporter(context);
+      return activity(given.policyVersionId, given.days);
+    },
     ackRoster: (
       _root,
       given: { groupId?: null | string; policyVersionId: string },

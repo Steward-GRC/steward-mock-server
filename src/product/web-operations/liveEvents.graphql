@@ -1,0 +1,9 @@
+subscription LiveEvents($topics: [String!]) {
+  liveEvents(topics: $topics) {
+    type
+    entityId
+    groupId
+    actorUserId
+    at
+  }
+}
