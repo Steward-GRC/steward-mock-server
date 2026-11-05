@@ -26,9 +26,9 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 - `src/core/product.ts` - the Product contract; `src/core/test-fixture.ts` - the fixture product
   the core tests serve.
 - `src/product/` - `product.ts` (Steward as a Product), `maintenance.ts` (the gateway's
-  maintenance gate: its GraphQL whitelist and `MAINTENANCE` error, with `/auth`, `/setup`, the SSO
-  admin routes and `GET /maintenance` passed through; `resolvers/admin.ts` puts an announced
-  window in the announcement and a window that's on in the maintenance banner),
+  maintenance gate: scope `graphql`, its GraphQL whitelist, the site-admin `allow` and the
+  `MAINTENANCE` error; `resolvers/admin.ts` puts an announced window in the announcement and a
+  window that's on in the maintenance banner),
   `routes.ts` (the gateway's sign-in and `/setup/bootstrap`), `sign-in-state.ts` (the session,
   pending sign-in and factors those routes share), `sign-in.ts` (`/auth/config`, the password
   reset and passkey sign-in, switched by the `sign-in-methods` control), `passkeys.ts` (WebAuthn
@@ -91,13 +91,12 @@ drafts.
   its helpers, so a build at load time would read the resolvers before they exist.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
-- While maintenance is on (`src/core/maintenance.ts`), every gateway path and new websocket goes to
-  the product's maintenance answer (`src/product/maintenance.ts`) and `/readyz` says not ready;
-  `/livez`, `/healthz`, `/_mock` and the whitelisted fields keep answering. The product's answer
-  returns a promise for the routes it passes through, which the core awaits for HTTP; a websocket
-  upgrade must still get a plain Response. The product's `allow` hook is the gateway's site-admin
-  bypass: a site admin runs every GraphQL operation. A site admin's `setGlobalSettings` starts or
-  ends the window, since the gateway's maintenance is that setting.
+- While maintenance is on (`src/core/maintenance.ts`), Steward's scope is `graphql`, as the
+  gateway's gate is GraphQL middleware: every other route and websocket stays open and `/readyz`
+  stays ready. Each GraphQL operation, over HTTP or on the websocket, runs when it selects only
+  the whitelisted fields or the product's `allow` hook (the gateway's site-admin bypass) lets the
+  caller through; a refused one over HTTP gets the product's `MAINTENANCE` answer. A site admin's
+  `setGlobalSettings` starts or ends the window, since the gateway's maintenance is that setting.
 - `needs-onboarding` marks a person as owing onboarding; `completeOnboarding` in
   `resolvers/users.ts` follows identity's CompleteOnboarding.
 - A route that throws answers 500 `internal` (logged), never a hung request. A websocket upgrade

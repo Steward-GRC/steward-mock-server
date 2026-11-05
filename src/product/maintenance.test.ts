@@ -9,14 +9,18 @@
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { WebSocket } from "ws";
 
 import type { RunningMockServer } from "#core/server.ts";
 
 import { stewardData } from "#product/data.ts";
 import {
   control,
+  openSocket,
   post,
   query,
+  type Signed,
+  signIn,
   startForTests,
   startFresh,
 } from "#product/test-client.ts";
@@ -211,6 +215,79 @@ describe("maintenance banner", () => {
     assert.deepEqual(await session.json(), { authenticated: false });
     const state = await fetch(`${base}/setup/state`);
     assert.equal(state.status, 200);
+  });
+
+  it("leaves the gateway's other routes open: assets answer as without maintenance", async () => {
+    await control(base, { kind: "maintenance-start" });
+    const assets = await post(base, "/api/assets", {});
+    assert.equal(assets.status, 501);
+    assert.deepEqual(await assets.json(), { error: "not_mocked" });
+  });
+
+  it("stays ready, as the gateway's /readyz does during maintenance", async () => {
+    await control(base, { kind: "maintenance-start" });
+    const ready = await fetch(`${base}/readyz`);
+    assert.equal(ready.status, 200);
+  });
+
+  it("keeps the co-editing socket open during maintenance", async () => {
+    const author = await signIn(base, "bob");
+    const minted = await call(base, author, "IssueCollabToken", {
+      draftId: "version-3",
+      policyId: "policy-2",
+    });
+    const { token } = minted.data.issueCollabToken as { token: string };
+    await control(base, { kind: "maintenance-start" });
+    const socket = new WebSocket(
+      `${base.replace("http", "ws")}/collab/ws/version-3?token=${encodeURIComponent(token)}`,
+      { headers: { cookie: author.cookie } },
+    );
+    const opened = await new Promise<boolean>((done) => {
+      socket.once("open", () => done(true));
+      socket.once("error", () => done(false));
+    });
+    socket.close();
+    assert.equal(opened, true);
+  });
+
+  it("runs a site admin's subscription during maintenance and refuses a reader's", async () => {
+    await control(base, { kind: "maintenance-start", message: "Down now." });
+    const subscribe = async (signed: Signed) => {
+      const ws = await openSocket(base, "graphql-transport-ws");
+      ws.send({
+        payload: { authToken: signed.token },
+        type: "connection_init",
+      });
+      await ws.next("connection_ack");
+      ws.send({
+        id: "1",
+        payload: { query: "subscription { liveEvents { type } }" },
+        type: "subscribe",
+      });
+      return ws;
+    };
+    const reader = await subscribe(await signInAs(base, "user-erin"));
+    const refused = await reader.next("error");
+    reader.socket.close();
+    assert.deepEqual(refused.payload, [
+      { extensions: { code: "MAINTENANCE" }, message: "Down now." },
+    ]);
+
+    const admin = await signInAs(base, "user-alice");
+    const live = await subscribe(admin);
+    // A site admin's change during maintenance arrives on their stream.
+    const saved = await call(base, admin, "SetGlobalSettings", {
+      input: {
+        announcement: { enabled: true, level: "info", message: "Back soon." },
+        maintenance: { enabled: true, message: "Down now." },
+      },
+    });
+    assert.equal(saved.refused, undefined);
+    const event = await live.next("next");
+    live.socket.close();
+    assert.deepEqual(event.payload, {
+      data: { liveEvents: { type: "global_settings.updated" } },
+    });
   });
 
   it("reports the state at GET /maintenance, as the gateway's public route does", async () => {
