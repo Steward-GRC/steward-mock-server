@@ -10,7 +10,8 @@ Steward's mock gateway: a standalone Node server that answers steward-gateway's 
 resettable data, on port 5175. steward-web's apps run in their normal live mode against it with
 `GATEWAY_URL=http://localhost:5175/query`. The schema in `src/product/schema.graphql` is copied
 from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
-`bash scripts/schema-copy.sh`, and commit both, keeping the ref the same as steward-web's.
+`bash scripts/schema-copy.sh`, and commit both, keeping the ref the same as steward-web's (or
+ahead of it while steward-web moves to the same commit).
 
 ## Layout
 
@@ -35,7 +36,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   options and the mock passkeys), `sso.ts` (`/auth/discover`, the pass-through SSO sign-in at
   `/auth/sso/start`, the IdP test link, and the `/admin/idp/*` imports
   from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
-  `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain; `resolvers/raci.ts` is category access and
+  `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain; `resolvers/accounts.ts` is the admin user screens; `resolvers/raci.ts` is
+  category access and
   the simulator, a port of steward-authz's Resolve);
   `access.ts` is the policy read model (who reads, edits and approves what); `audit-actions.ts`
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
@@ -108,6 +110,9 @@ drafts.
   once that it called something nobody mocked.
 - Health probes never fail, whatever the controls armed.
 - File names are kebab-case.
+- Acting as someone (`impersonation.ts`) is kept per session. `caller()` in
+  `resolvers/shared.ts` answers the target while it's live, and `realCaller()` the signed-in admin;
+  `resolvers.ts` wraps the gateway's denylisted mutations to refuse them meanwhile.
 - Passkeys are faked, as in steward-gateway's tests: the mock never verifies a signature, and an
   assertion counts as the passkey whose `id` or `rawId` it carries (`passkeyCredentialId`). A
   person has one when `passkey: true` (Charlie).

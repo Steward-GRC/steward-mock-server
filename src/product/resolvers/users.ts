@@ -13,7 +13,6 @@ import { type Context, type Resolvers } from "#core/graphql.ts";
 import { settings } from "#core/product.ts";
 import { endSessions, mockState } from "#core/state.ts";
 import { authorScopes } from "#product/access.ts";
-import { stewardData } from "#product/data.ts";
 import {
   caller,
   data,
@@ -22,6 +21,7 @@ import {
   isSiteAdmin,
   newId,
   people,
+  realCaller,
   record,
   refuse,
   siteAdmin,
@@ -78,8 +78,8 @@ const approverScopes = (person: StewardPerson): string[] =>
     )
     .map((c) => c.name);
 
-const isRoot = (person: StewardPerson) =>
-  person.id === stewardData().people[0]?.id;
+/** A root admin; identity makes the first site admin one, and grantRoot others. */
+export const isRoot = (person: StewardPerson) => person.root === true;
 
 /** A person as the gateway's User type. */
 export const asUser = (person: StewardPerson) => ({
@@ -98,7 +98,9 @@ export const asUser = (person: StewardPerson) => ({
   name: person.name,
   needsOnboarding: person.needsOnboarding === true,
   permissions: permissionsOf(person.roles),
-  policyOverrides: [],
+  policyOverrides: person.policyOverrides.toSorted((a, b) =>
+    a.policyNumber.localeCompare(b.policyNumber),
+  ),
   roles: person.roles,
   scopes: { approver: approverScopes(person), author: authorScopes(person) },
   userId: person.id,
@@ -208,7 +210,7 @@ const deletionPreview = (person: StewardPerson) => {
       ownedPolicies: owned.length,
       pendingApprovals: pending.length,
       permissions: permissionsOf(person.roles).length,
-      policyOverrides: 0,
+      policyOverrides: person.policyOverrides.length,
       raciGrants: data().categories.filter(
         (c) =>
           c.authorRule.includes(person.id) ||
@@ -515,10 +517,19 @@ export const userResolvers: Resolvers = {
   },
   Query: {
     diagnostics: (_root, _given, context: Context) => {
-      const person = caller(context);
+      // The real admin is the actor; the person they act as, if any, is actingAs.
+      const person = realCaller(context);
+      const target = caller(context);
       return {
         actor: {
-          actingAs: null,
+          actingAs:
+            target.id === person.id
+              ? null
+              : {
+                  id: target.id,
+                  roles: target.roles,
+                  username: target.username,
+                },
           id: person.id,
           roles: person.roles,
           username: person.username,

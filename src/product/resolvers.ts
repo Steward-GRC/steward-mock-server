@@ -6,8 +6,12 @@
 // subscription from every client. Fields with no resolver answer null, or an error where the
 // schema says non-null.
 
+import { GraphQLError } from "graphql";
+
 import { subscribe } from "#core/events.ts";
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
+import { impersonationOf } from "#product/impersonation.ts";
+import { accountResolvers } from "#product/resolvers/accounts.ts";
 import { adminResolvers } from "#product/resolvers/admin.ts";
 import { aiResolvers } from "#product/resolvers/ai.ts";
 import { caseResolvers } from "#product/resolvers/cases.ts";
@@ -63,6 +67,7 @@ const liveResolvers: Resolvers = {
 };
 
 const domains: Resolvers[] = [
+  accountResolvers,
   adminResolvers,
   aiResolvers,
   caseResolvers,
@@ -91,4 +96,70 @@ const merge = (maps: Resolvers[]): Resolvers => {
   return merged as Resolvers;
 };
 
-export const resolvers: Resolvers = merge(domains);
+/**
+ * steward-gateway's impersonation denylist (internal/resolvers/impersonation_denylist.go): the
+ * high-risk mutations refused while the request acts as another person.
+ */
+const IMPERSONATION_DENYLIST = [
+  "resetUserPassword",
+  "enrollTotpBegin",
+  "enrollTotpConfirm",
+  "sendEnrollEmailOtp",
+  "verifyEnrollEmailOtp",
+  "webauthnRegisterBegin",
+  "webauthnRegisterFinish",
+  "removeFactor",
+  "removeWebauthnCredential",
+  "renameMfaMethod",
+  "removeUserMfaFactor",
+  "renameUserMfaFactor",
+  "disableUser",
+  "enableUser",
+  "deleteOrganization",
+  "deleteGroupMapping",
+  "grantRole",
+  "revokeRole",
+  "setUserPolicyOverride",
+  "addUserToGroup",
+  "removeUserFromGroup",
+  "revokeUserSessions",
+  "revokeMagicLink",
+  "createLocalUser",
+  "recordAck",
+  "shredAuditSubject",
+  "createAuditLegalHold",
+  "releaseAuditLegalHold",
+  "startImpersonation",
+];
+
+type FieldResolver = (
+  root: unknown,
+  given: unknown,
+  context: Context,
+  info: unknown,
+) => unknown;
+
+/** Refuse a denylisted mutation while the request acts as someone, as the gateway's middleware does. */
+const guarded = (map: Resolvers): Resolvers => {
+  const mutations = (map.Mutation ?? {}) as Record<string, unknown>;
+  for (const field of IMPERSONATION_DENYLIST) {
+    const resolve = mutations[field];
+    if (typeof resolve !== "function") continue;
+    mutations[field] = (
+      root: unknown,
+      given: unknown,
+      context: Context,
+      info: unknown,
+    ) => {
+      if (impersonationOf(context))
+        throw new GraphQLError(
+          `not allowed while acting as another user: "${field}" is a high-risk operation`,
+          { extensions: { code: "IMPERSONATION_DENIED", field } },
+        );
+      return (resolve as FieldResolver)(root, given, context, info);
+    };
+  }
+  return map;
+};
+
+export const resolvers: Resolvers = guarded(merge(domains));

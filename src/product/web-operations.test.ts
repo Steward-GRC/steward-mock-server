@@ -368,6 +368,11 @@ const cases: Record<string, Case> = {
       policyId: "policy-2",
     },
   },
+  SearchAndAnswer: {
+    as: READER,
+    refused: AI_DOWN,
+    variables: { question: "How do I book a desk?" },
+  },
   SearchUsers: { as: AUTHOR, variables: { limit: 5, query: "charlie" } },
   SetCaseDiscoveryDate: {
     as: OFFICER,
@@ -499,6 +504,7 @@ const cases: Record<string, Case> = {
   },
   Templates: { as: AUTHOR, variables: {} },
   TemplateVersions: { as: ADMIN, variables: { templateId: "template-1" } },
+  TopPolicyQuestions: { as: READER, variables: { limit: 6 } },
   UpcomingApprovals: { as: ADMIN },
   UpdateAppendix: {
     as: AUTHOR,
@@ -636,7 +642,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 135);
+    assert.equal(webOperations.length, 137);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

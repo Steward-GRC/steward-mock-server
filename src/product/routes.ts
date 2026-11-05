@@ -150,7 +150,11 @@ const enrolConfirm = async (request: Request) => {
   if (found.pending.purpose !== "enrol") return refuse(400, "invalid_request");
   if (!goodCode(code)) return wrongCode(found.pendingId, found.pending);
   drop(found.pendingId);
-  Object.assign(found.person, { enrolSecondFactor: false, secondFactor: true });
+  Object.assign(found.person, {
+    enrolSecondFactor: false,
+    secondFactor: true,
+    totpEnrolledAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+  });
   log.debug("second factor enrolled", { personId: found.person.id });
   return startSession(found.person, token === true);
 };
@@ -192,11 +196,13 @@ const bootstrap = async (request: Request) => {
   if (!mockState.needsSetup) return refuse(409, "already set up");
   if (!username?.trim() || !email?.trim() || !password)
     return refuse(400, "username, email, and password are required");
-  const admin: Person = {
+  // identity makes the first site admin a root admin too.
+  const admin: { root: boolean } & Person = {
     email: email.trim().toLowerCase(),
     id: newId("user"),
     name: name?.trim() || username.trim(),
     roles: ["site-admin"],
+    root: true,
     secondFactor: false,
     username: username.trim().toLowerCase(),
   };

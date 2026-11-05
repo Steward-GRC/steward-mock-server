@@ -11,6 +11,12 @@ export interface Membership {
   source: string;
 }
 
+/** A per-person exception to the rules for one policy, as identity keeps it. */
+export interface PolicyOverride {
+  effect: "ALLOW" | "DENY";
+  policyNumber: string;
+}
+
 /** A person as Steward's directory keeps them: the core's sign-in fields and the User type's. */
 export interface StewardPerson extends Person {
   deletedAt: null | string;
@@ -33,8 +39,17 @@ export interface StewardPerson extends Person {
    * factor beside the authenticator app and the emailed code.
    */
   passkey?: boolean;
+  /** When the passkey was registered, and its name; RFC 3339. */
+  passkeyCreatedAt?: string;
+  passkeyLabel?: null | string;
+  policyOverrides: PolicyOverride[];
   /** identity's read-sensitive claim: may read SENSITIVE policies the RACI rules let them read. */
   readSensitive: boolean;
+  /** A root admin: a site admin who may also change who the root admins are. */
+  root?: boolean;
+  /** When the authenticator app (secondFactor) was confirmed, and its name; RFC 3339. */
+  totpEnrolledAt?: string;
+  totpLabel?: null | string;
 }
 
 const DIRECTORY_DEFAULTS = {
@@ -45,6 +60,7 @@ const DIRECTORY_DEFAULTS = {
   managedGroupIds: [],
   memberships: [],
   mergedIntoUserId: null,
+  policyOverrides: [],
   readSensitive: false,
 };
 
@@ -67,6 +83,7 @@ const person = (
   idpGroups: [],
   managedGroupIds: [],
   memberships: [],
+  policyOverrides: [],
   secondFactor: false,
   ...given,
 });
@@ -78,7 +95,10 @@ export const people = (): StewardPerson[] => [
     id: "user-alice",
     name: "Alice Admin",
     roles: ["site-admin"],
+    root: true,
     secondFactor: true,
+    totpEnrolledAt: "2026-02-10T09:00:00Z",
+    totpLabel: "Work phone",
     username: "alice",
   }),
   person({
@@ -99,9 +119,12 @@ export const people = (): StewardPerson[] => [
     memberships: [{ groupId: "group-2", source: "manual" }],
     name: "Charlie Approver",
     passkey: true,
+    passkeyCreatedAt: "2026-06-18T08:15:00Z",
+    passkeyLabel: "MacBook Touch ID",
     readSensitive: true,
     roles: ["approver"],
     secondFactor: true,
+    totpEnrolledAt: "2026-04-02T14:30:00Z",
     username: "charlie",
   }),
   person({
@@ -112,6 +135,7 @@ export const people = (): StewardPerson[] => [
     localAccount: false,
     memberships: [{ groupId: "group-2", source: "idp-sync" }],
     name: "Dave Officer",
+    policyOverrides: [{ effect: "DENY", policyNumber: "PRC-DEVICES-000001" }],
     roles: ["privacy-officer"],
     username: "dave",
   }),
@@ -121,6 +145,7 @@ export const people = (): StewardPerson[] => [
     idpGroups: ["All staff", "Facilities team"],
     memberships: [{ groupId: "group-3", source: "manual" }],
     name: "Erin Reader",
+    policyOverrides: [{ effect: "ALLOW", policyNumber: "POL-RECORDS-000002" }],
     roles: [],
     username: "erin",
   }),

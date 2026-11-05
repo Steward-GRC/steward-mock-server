@@ -1,0 +1,3 @@
+query TopPolicyQuestions($limit: Int) {
+  topPolicyQuestions(limit: $limit)
+}
