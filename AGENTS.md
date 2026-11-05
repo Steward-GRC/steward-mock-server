@@ -39,7 +39,8 @@ ahead of it while steward-web moves to the same commit).
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain; `resolvers/accounts.ts` is the admin user screens; `resolvers/raci.ts` is
   category access and
   the simulator, a port of steward-authz's Resolve);
-  `access.ts` is the policy read model (who reads, edits and approves what); `sections.ts` is steward-core's section reading (ExtractSections, the slug rule and
+  `access.ts` is the policy read model (who reads, edits and approves what); `documents.ts` is the gateway's `/documents/extract` and `/documents/validate-url`;
+  `sections.ts` is steward-core's section reading (ExtractSections, the slug rule and
   DiffVersions), where every section key comes from; `audit-actions.ts`
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
   the co-editing relay at `/collab/ws/<draftId>` (the product's `sockets` hook) and the tokens

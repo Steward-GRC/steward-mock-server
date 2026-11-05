@@ -178,6 +178,22 @@ The admin user screens answer as steward-gateway and steward-identity do:
   are audited under the admin, and the gateway's high-risk mutations are refused meanwhile with
   `IMPERSONATION_DENIED`.
 
+### Reference documents
+
+Generate with AI's reference documents use steward-gateway's `POST /documents/extract` and
+`POST /documents/validate-url`, with its shapes, limits and refusal texts, behind a signed-in
+session.
+
+- **Extract** (multipart, the file under `file`, up to 10 MB) answers `{title, content}`. Text and
+  Markdown, Word (`.docx`) and RTF files are read the way the gateway reads them. A PDF or legacy
+  Word (`.doc`) file that looks like one answers a fixed sample text instead, since the mock
+  doesn't parse those formats; one that doesn't look like one is refused as the gateway does.
+- **Validate a URL** (`{url}`) refuses what the gateway's URL guard refuses (a scheme other than
+  http or https, no host, `localhost`, `.local` and `.internal` hosts, private, loopback and
+  link-local addresses), then answers from the URL's shape without fetching it: a path with a
+  sign-in marker (`login`, `signin`, `sign-in`, `/sso`, `authwall`) "requires a login", a host under
+  `.invalid` "couldn't be reached", and anything else is readable, titled from its host and path.
+
 ### Category access
 
 Each category keeps its own access rules (`categoryRuleset`, `setCategoryRuleset`), as
