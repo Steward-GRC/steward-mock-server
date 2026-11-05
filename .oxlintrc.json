@@ -1,0 +1,29 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": [
+    "./node_modules/@bugs5382/node-oxlint-config/configs/base.json",
+    "./node_modules/@bugs5382/node-oxlint-config/configs/testing.json"
+  ],
+  "ignorePatterns": ["coverage/**"],
+  "rules": {
+    "unicorn/filename-case": ["error", { "cases": { "kebabCase": true } }],
+    // GraphQL answers `null` for a missing value, and the wire protocol carries it.
+    "unicorn/no-null": "off"
+  },
+  "overrides": [
+    {
+      // Tests read an answer's body or status straight off the awaited call, and talk plain
+      // HTTP to the mock on loopback.
+      "files": ["src/**/*.test.ts", "src/core/test-client.ts"],
+      "rules": {
+        "unicorn/no-await-expression-member": "off",
+        "unicorn-js/prefer-https": "off"
+      }
+    },
+    {
+      // The launcher's exit code is how a shell or a container reads its result.
+      "files": ["bin/**"],
+      "rules": { "unicorn/no-process-exit": "off" }
+    }
+  ]
+}

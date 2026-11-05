@@ -1,0 +1,44 @@
+name: Release Drafter
+
+# Drafts the next release on push to main, using the built-in GITHUB_TOKEN,
+# from .github/release-drafter.yml (the emoji category headings). Nothing tags
+# or publishes on its own: publishing the draft by hand creates the tag, and
+# in a product that also runs the Deploy workflow.
+#
+# Push to main only. The Label Checker workflow applies and checks the label
+# on every PR, so the drafter has nothing to do on pull requests.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Release runs queue and are never cancelled mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    name: 📝 Draft release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Release Drafter
+        uses: Bugs5382/release-drafter-action@de0c4559d69039b8b371ef951b62a2532ad3593f # v1.0.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-name: release-drafter.yml
+          first-version: 0.1.0
+          prerelease: false

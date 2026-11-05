@@ -1,0 +1,50 @@
+{
+  "name": "template-node-mock-server",
+  "version": "0.0.0",
+  "description": "Starting point for a product's mock gateway: a standalone Node server that speaks the gateway's wire protocol with resettable invented data.",
+  "author": "Shane",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "mock-server": "bin/mock-server.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#core/*": "./src/core/*",
+    "#product/*": "./src/product/*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/the-rabbit-hole-tech/template-node-mock-server.git"
+  },
+  "homepage": "https://github.com/the-rabbit-hole-tech/template-node-mock-server#readme",
+  "bugs": {
+    "url": "https://github.com/the-rabbit-hole-tech/template-node-mock-server/issues"
+  },
+  "scripts": {
+    "start": "node bin/mock-server.mjs",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint && oxfmt --check",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt"
+  },
+  "dependencies": {
+    "graphql": "^17.1.0",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@bugs5382/node-oxlint-config": "1.0.1",
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.2",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "typescript": "~6.0.0"
+  }
+}

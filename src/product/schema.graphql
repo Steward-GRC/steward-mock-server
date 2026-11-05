@@ -1,0 +1,68 @@
+# The gateway's schema, as the mock serves it. A product replaces this file with its real
+# gateway's schema (or the part of it the mock serves), so the mock answers exactly what the
+# gateway would. This sample is a small invented one that exercises every path: a public field,
+# signed-in reads, a role-gated mutation, and a subscription.
+
+type Query {
+  "Who the server is. Public: clients read it before anyone signs in."
+  serverInfo: ServerInfo!
+  "The signed-in person."
+  viewer: Person!
+  people: [Person!]!
+  items(status: ItemStatus): [Item!]!
+  item(id: ID!): Item
+}
+
+type Mutation {
+  createItem(input: CreateItemInput!): Item!
+  setItemStatus(id: ID!, status: ItemStatus!): Item!
+  "Admins only."
+  deleteItem(id: ID!): Boolean!
+}
+
+type Subscription {
+  "Every change to an item, from any client."
+  itemChanged: ItemChange!
+}
+
+type ServerInfo {
+  name: String!
+  version: String!
+  needsSetup: Boolean!
+}
+
+type Person {
+  id: ID!
+  username: String!
+  name: String!
+  email: String!
+  roles: [String!]!
+}
+
+type Item {
+  id: ID!
+  title: String!
+  status: ItemStatus!
+  owner: Person!
+  updatedAt: String!
+}
+
+enum ItemStatus {
+  OPEN
+  DONE
+}
+
+input CreateItemInput {
+  title: String!
+}
+
+type ItemChange {
+  kind: ItemChangeKind!
+  item: Item!
+}
+
+enum ItemChangeKind {
+  CREATED
+  UPDATED
+  DELETED
+}

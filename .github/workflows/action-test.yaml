@@ -1,0 +1,58 @@
+name: Test
+# Lint, typecheck and the tests, then the mock started the way a person starts it, with its
+# probes, its GraphQL endpoint and its controls page called over the network.
+#
+# One job on one Node version (the one in .nvmrc), so there is one required check. Pull requests
+# only, and not while the PR is a draft; the PR run covers what merges.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🧪 Build & Test
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Start the mock and call it
+        run: |
+          set -euo pipefail
+          node bin/mock-server.mjs --port 5180 > mock.log 2>&1 &
+          for _ in $(seq 1 50); do curl -sf http://127.0.0.1:5180/livez > /dev/null && break; sleep 0.2; done
+          curl -sf http://127.0.0.1:5180/readyz
+          curl -sf http://127.0.0.1:5180/query -H 'content-type: application/json' \
+            -d '{"query":"{ serverInfo { name version } }"}' | grep -q '"serverInfo"'
+          curl -sf http://127.0.0.1:5180/_mock | grep -q 'Mock controls'
+          cat mock.log
