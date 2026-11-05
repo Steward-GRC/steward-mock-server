@@ -160,10 +160,11 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .live__dot { width: 8px; height: 8px; border-radius: 4px; background: var(--ok); flex: none; }
 .live.down { color: var(--danger); }
 .live.down .live__dot { background: var(--danger); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; }
-.tile { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
-.tile__label { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.tile__value { font: 700 30px/1 var(--font-mono); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 16px; }
+.tile { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
+.tile__label { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); overflow-wrap: anywhere; }
+.tile__value { font: 700 30px/1 var(--font-mono); overflow-wrap: anywhere; }
+.tile__value--text { font: 700 16px/1.35 var(--font-mono); }
 .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .card {
   display: flex; flex-direction: column; gap: 14px; padding: 24px; scroll-margin-top: 16px;
@@ -292,10 +293,12 @@ const SCRIPT = `
     banner.append(el("b", "banner__glyph", window.state === "active" ? "●" : "▲"), text, manage);
     slot.replaceChildren(banner);
   };
+  // A count stays big; a text value gets the smaller style that wraps inside the tile.
+  const valueClass = (value) => typeof value === "number" ? "tile__value" : "tile__value tile__value--text";
   const showTiles = (summary) => {
     $("tiles").replaceChildren(...Object.entries(summary ?? {}).map(([label, value]) => {
       const tile = el("div", "tile");
-      tile.append(el("span", "tile__label", label), el("span", "tile__value", String(value)));
+      tile.append(el("span", "tile__label", label), el("span", valueClass(value), String(value)));
       return tile;
     }));
   };
@@ -377,12 +380,16 @@ const bannerHtml = (window: MaintenanceWindow) => {
   return `<div class="banner banner--${window.state}" role="region" aria-label="Maintenance"><b class="banner__glyph">${on ? "●" : "▲"}</b><span class="banner__text"><b>${on ? "Maintenance is on." : "Maintenance announced."}</b>${escape(describeWindow(window))}</span><a class="button button--ink button--small" href="#maintenance">Manage</a></div>`;
 };
 
-/** The product's summary counts as tiles (the script keeps them current). */
+/** A count stays big; a text value gets the smaller style that wraps inside the tile. */
+const valueClass = (value: unknown) =>
+  typeof value === "number" ? "tile__value" : "tile__value tile__value--text";
+
+/** The product's summary as tiles (the script keeps them current). */
 const tilesHtml = (summary: Record<string, unknown>) =>
   Object.entries(summary)
     .map(
       ([label, value]) =>
-        `<div class="tile"><span class="tile__label">${escape(label)}</span><span class="tile__value">${escape(String(value))}</span></div>`,
+        `<div class="tile"><span class="tile__label">${escape(label)}</span><span class="${valueClass(value)}">${escape(String(value))}</span></div>`,
     )
     .join("");
 

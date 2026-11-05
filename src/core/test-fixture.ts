@@ -248,5 +248,8 @@ export const fixture: Product = {
       socket.on("close", () => peers.delete(socket));
     };
   },
-  summary: () => ({ notes: data().notes.length }),
+  summary: () => ({
+    notes: data().notes.length,
+    signInMethods: "passkey, passwordReset, sso",
+  }),
 };
