@@ -6,10 +6,12 @@
 // names, other records, another GraphQL path), so a core test that leaned on the sample would fail
 // here first.
 
+import type { WebSocket } from "ws";
+
 import type { ControlBody } from "#core/controls.ts";
 import type { Product, ProductData } from "#core/product.ts";
 
-import { sessionOf } from "#core/auth.ts";
+import { sessionOf, sessionOfCookie } from "#core/auth.ts";
 import { publish, subscribe } from "#core/events.ts";
 import { type Context, MockError, signedIn, withRole } from "#core/graphql.ts";
 import { json, newId } from "#core/http.ts";
@@ -26,6 +28,9 @@ interface FixtureData extends ProductData {
 }
 
 const NOTE_ADDED = "fixture:note-added";
+
+/** The fixture's websocket relay: the sockets open on each room, by room name. */
+const rooms = new Map<string, Set<WebSocket>>();
 
 const data = () => mockState.data as FixtureData;
 
@@ -190,6 +195,30 @@ export const fixture: Product = {
     sessionCookie: "fixture_session",
     version: FIXTURE_VERSION,
     versionHeader: "Fixture-Version",
+  },
+  // A relay between the clients on one room, signed in by cookie, the way a gateway proxies an
+  // editor's collaboration socket.
+  sockets: (request, path) => {
+    const room = /^\/fixture\/relay\/([^/]+)$/.exec(path)?.[1];
+    if (!room) return;
+    if (!sessionOfCookie(request)) {
+      return new Response("unauthorized", {
+        headers: { "content-type": "text/plain" },
+        status: 401,
+      });
+    }
+    return (socket) => {
+      const peers = rooms.get(room) ?? new Set<WebSocket>();
+      peers.add(socket);
+      rooms.set(room, peers);
+      socket.on("message", (data, isBinary) => {
+        for (const peer of peers) {
+          if (peer !== socket && peer.readyState === peer.OPEN)
+            peer.send(data, { binary: isBinary });
+        }
+      });
+      socket.on("close", () => peers.delete(socket));
+    };
   },
   summary: () => ({ notes: data().notes.length }),
 };

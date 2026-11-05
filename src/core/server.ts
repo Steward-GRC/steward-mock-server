@@ -4,17 +4,23 @@
 // refuses plain HTTP outside its exceptions). Both share one state and one websocket server.
 
 import type { AddressInfo, Server } from "node:net";
+import type { Duplex } from "node:stream";
 
 import {
   createServer as createHttpServer,
   type IncomingMessage,
   type RequestListener,
+  STATUS_CODES,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
+import { WebSocketServer } from "ws";
 
 import { handle } from "#core/handle.ts";
-import { settings } from "#core/product.ts";
+import { createLogger } from "#core/log.ts";
+import { product, type ProductSockets, settings } from "#core/product.ts";
 import { createWebSocketServer } from "#core/websocket.ts";
+
+const log = createLogger("server");
 
 export interface MockServerOptions {
   /** Where to listen. Loopback by default: the controls have no sign-in. */
@@ -77,6 +83,42 @@ const listen = (server: Server, port: number, host: string) =>
 const closeServer = (server: Server) =>
   new Promise<void>((done) => server.close(() => done()));
 
+/** The upgrade request as a fetch Request, so a product reads it the way it reads any other. */
+const requestOf = (incoming: IncomingMessage): Request => {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(incoming.headers)) {
+    if (value !== undefined)
+      for (const one of [value].flat()) headers.append(name, one);
+  }
+  return new Request(
+    new URL(
+      incoming.url ?? "/",
+      `http://${incoming.headers.host ?? "localhost"}`,
+    ),
+    { headers },
+  );
+};
+
+/** Refuse an upgrade with an HTTP answer on the raw socket, then close it. */
+const refuseUpgrade = async (
+  socket: Duplex,
+  answer: Response,
+): Promise<void> => {
+  const body = Buffer.from(await answer.arrayBuffer());
+  const lines = [
+    `HTTP/1.1 ${String(answer.status)} ${STATUS_CODES[answer.status] ?? ""}`,
+  ];
+  for (const [name, value] of answer.headers.entries())
+    lines.push(`${name}: ${value}`);
+  lines.push(
+    `content-length: ${String(body.length)}`,
+    "connection: close",
+    "",
+    "",
+  );
+  socket.end(Buffer.concat([Buffer.from(lines.join("\r\n")), body]));
+};
+
 /** Start the mock gateway on a port. */
 export const startMockServer = async ({
   host = "127.0.0.1",
@@ -84,19 +126,41 @@ export const startMockServer = async ({
   tls,
 }: MockServerOptions = {}): Promise<RunningMockServer> => {
   const sockets = createWebSocketServer();
+  // The product's own websocket paths get a server of their own: no subprotocol to agree on.
+  const productSockets = new WebSocketServer({ noServer: true });
   const upgrade = (server: Server) =>
-    server.on("upgrade", (incoming: IncomingMessage, socket, head) => {
-      if (
-        new URL(incoming.url ?? "/", "https://mock.invalid").pathname !==
-        settings().graphqlPath
-      ) {
-        socket.destroy();
-        return;
-      }
-      sockets.handleUpgrade(incoming, socket, head, (ws) =>
-        sockets.emit("connection", ws, incoming),
-      );
-    });
+    server.on(
+      "upgrade",
+      (incoming: IncomingMessage, socket: Duplex, head: Buffer) => {
+        const path = new URL(incoming.url ?? "/", "https://mock.invalid")
+          .pathname;
+        if (path === settings().graphqlPath) {
+          sockets.handleUpgrade(incoming, socket, head, (ws) =>
+            sockets.emit("connection", ws, incoming),
+          );
+          return;
+        }
+        const request = requestOf(incoming);
+        let answer: ReturnType<ProductSockets>;
+        try {
+          answer = product().sockets?.(request, path);
+        } catch (error) {
+          log.error("socket route failed", { error: String(error), path });
+          answer = Response.json({ error: "internal" }, { status: 500 });
+        }
+        if (typeof answer === "function") {
+          const accept = answer;
+          productSockets.handleUpgrade(incoming, socket, head, (ws) =>
+            accept(ws, request),
+          );
+          return;
+        }
+        void refuseUpgrade(
+          socket,
+          answer ?? Response.json({ error: "not_mocked" }, { status: 404 }),
+        );
+      },
+    );
   const http = await listen(
     upgrade(createHttpServer(listener("http"))),
     port,
@@ -116,8 +180,10 @@ export const startMockServer = async ({
     : undefined;
   return {
     close: async () => {
-      for (const client of sockets.clients) client.terminate();
+      for (const client of [...sockets.clients, ...productSockets.clients])
+        client.terminate();
       sockets.close();
+      productSockets.close();
       await Promise.all([
         closeServer(http),
         ...(https ? [closeServer(https)] : []),

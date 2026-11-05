@@ -5,6 +5,8 @@
 // src/product, the core tests hand it a fixture of their own). That keeps src/core the same file
 // in every product that cloned the template, and lets the core tests pass whatever the product is.
 
+import type { WebSocket } from "ws";
+
 import type { Action, ProductControl } from "#core/controls.ts";
 import type { Resolvers } from "#core/graphql.ts";
 import type { Person } from "#core/state.ts";
@@ -30,6 +32,13 @@ export interface Product {
   /** The invented data, made fresh on every reset. */
   seed: () => ProductData;
   settings: Settings;
+  /**
+   * The product's own websocket paths. On an upgrade for any path but the GraphQL one, the core
+   * asks this hook: undefined answers 404, a Response refuses the upgrade with that answer (a
+   * plain-text 401 without a session, say), and a handler accepts it and gets the socket.
+   * `sessionOfCookie(request)` from src/core/auth.ts reads the session from the upgrade.
+   */
+  sockets?: ProductSockets;
   /** The counts the controls page shows under Data. */
   summary: () => Record<string, unknown>;
 }
@@ -47,6 +56,12 @@ export type ProductRoutes = (
   request: Request,
   path: string,
 ) => Promise<Response | undefined> | Response | undefined;
+
+/** A product's own websocket paths (see Product.sockets). */
+export type ProductSockets = (
+  request: Request,
+  path: string,
+) => Response | SocketHandler | undefined;
 
 /** Who the product's gateway is, as the mock presents it. */
 export interface Settings {
@@ -68,6 +83,9 @@ export interface Settings {
   /** The response header the probes carry the version in. */
   versionHeader: string;
 }
+
+/** What a product does with a websocket it accepted: the socket, and the upgrade request. */
+export type SocketHandler = (socket: WebSocket, request: Request) => void;
 
 let current: Product | undefined;
 const changeHooks: (() => void)[] = [];

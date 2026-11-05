@@ -71,6 +71,13 @@ subscription. Replace it; don't build around it.
    `src/core/auth.ts` gives the signed-in session, and `json` and `refuse` from
    `src/core/http.ts` build the answers.
 
+   When the gateway also proxies websockets of its own (an editor's collaboration relay, say),
+   add `sockets` to the product: a function that takes the upgrade `Request` and its path and
+   returns `undefined` for a path it doesn't serve (the core answers 404), a `Response` to refuse
+   the upgrade with (a plain-text 401 without a session, as a real proxy answers), or a handler
+   that gets the accepted socket. `sessionOfCookie(request)` reads the session from the upgrade.
+   The GraphQL path's websocket stays the core's.
+
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
    identity provider's flow), change `src/core/auth.ts` to match it, change the sign-in tests in
    `src/core/server.test.ts` to match, and say in the PR which part of the core moved. That's the
