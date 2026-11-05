@@ -1,0 +1,5 @@
+mutation SetTypeCadence($kind: String!, $cadence: NotifCadence!) {
+  setTypeCadence(kind: $kind, cadence: $cadence) {
+    ...NotificationSettingsFields
+  }
+}

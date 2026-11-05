@@ -1,0 +1,3 @@
+mutation RenameMfaMethod($methodId: ID!, $label: String!) {
+  renameMfaMethod(methodId: $methodId, label: $label)
+}

@@ -459,6 +459,9 @@ export const userResolvers: Resolvers = {
       audit("group.member_removed", actor, person);
       return asUser(person);
     },
+    /** identity's RevokeMySessions: every session of the caller's, this one included; no audit. */
+    revokeMySessions: (_root, _given, context: Context) =>
+      revokeAll(caller(context).id),
     revokeRole: (
       _root,
       given: { role: string; userId: string },

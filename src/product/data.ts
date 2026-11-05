@@ -44,6 +44,10 @@ import {
   type Workflow,
   workflowDefs,
 } from "#product/data/library.ts";
+import {
+  type NotificationPrefs,
+  notificationPrefs,
+} from "#product/data/notifications.ts";
 import { people } from "#product/data/people.ts";
 import {
   type Acknowledgement,
@@ -97,12 +101,19 @@ export interface StewardData extends ProductData {
   magicLinks: Record<string, MagicLink>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
+  /** steward-obligations' saved notification choices, by person id. */
+  notificationPrefs: Record<string, NotificationPrefs>;
   organizations: Organization[];
   /** Emails a password reset code was sent to and not used yet. */
   passwordResets: string[];
   pastSessions: PastSession[];
   /** steward-delivery's PDF export jobs, by id. */
   pdfJobs: Record<string, PdfJob>;
+  /**
+   * identity's factor ceremonies under way: who began an authenticator app enrollment, and each
+   * passkey registration's single-use session, by session id, with whose it is.
+   */
+  pendingFactors: { totp: string[]; webauthn: Record<string, string> };
   /** The core's sign-in records; the directory's fields are filled in by asSteward. */
   people: Person[];
   platformGroups: PlatformGroup[];
@@ -135,10 +146,12 @@ export const seed = (): StewardData => ({
   links: links(),
   magicLinks: {},
   next: {},
+  notificationPrefs: notificationPrefs(),
   organizations: organizations(),
   passwordResets: [],
   pastSessions: pastSessions(),
   pdfJobs: {},
+  pendingFactors: { totp: [], webauthn: {} },
   people: people(),
   platformGroups: platformGroups(),
   policies: policies(),

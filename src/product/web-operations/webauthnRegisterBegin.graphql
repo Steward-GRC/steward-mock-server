@@ -1,0 +1,6 @@
+mutation WebauthnRegisterBegin {
+  webauthnRegisterBegin {
+    optionsJson
+    sessionId
+  }
+}

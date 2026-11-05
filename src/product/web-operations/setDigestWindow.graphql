@@ -1,0 +1,5 @@
+mutation SetDigestWindow($dailyHour: Int!, $weeklyDow: Int!) {
+  setDigestWindow(dailyHour: $dailyHour, weeklyDow: $weeklyDow) {
+    ...NotificationSettingsFields
+  }
+}

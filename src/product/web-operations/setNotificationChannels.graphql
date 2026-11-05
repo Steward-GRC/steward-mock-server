@@ -1,0 +1,5 @@
+mutation SetNotificationChannels($input: NotificationPrefInput!) {
+  setNotificationChannels(input: $input) {
+    ...NotificationSettingsFields
+  }
+}

@@ -1,11 +1,12 @@
-mutation UpdateMyProfile($firstName: String!, $lastName: String!) {
-  updateMyProfile(firstName: $firstName, lastName: $lastName) {
+mutation UpdateMyProfile($firstName: String, $lastName: String, $locale: String) {
+  updateMyProfile(firstName: $firstName, lastName: $lastName, locale: $locale) {
     userId
     username
     name
     firstName
     lastName
     email
+    locale
     roles
     permissions
     managedGroupIds
