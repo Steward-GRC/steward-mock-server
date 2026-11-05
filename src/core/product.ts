@@ -1,4 +1,4 @@
-// Copyright 2026 The template-node-mock-server Authors
+// Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // The contract between the core and a product. The core never imports src/product: whoever
 // starts the mock hands it a product through useProduct (src/serve.ts hands it the one in

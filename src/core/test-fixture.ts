@@ -1,4 +1,4 @@
-// Copyright 2026 The template-node-mock-server Authors
+// Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // A small product that exists only for the core tests. The core tests hand the core this product
 // and never the one in src/product, so they pass unchanged in every product that cloned the

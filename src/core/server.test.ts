@@ -1,4 +1,4 @@
-// Copyright 2026 The template-node-mock-server Authors
+// Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // The core's tests. They run against the test-only fixture product (src/core/test-fixture.ts),
 // never src/product, so they pass unchanged in a product that replaced the sample.
