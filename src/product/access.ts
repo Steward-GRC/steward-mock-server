@@ -86,7 +86,8 @@ export const readEffect = (
   return "deny";
 };
 
-const ackTriggersOf = (policy: Policy): string =>
+/** The acknowledgement trigger in force: the policy's own, or the nearest category's. */
+export const ackTriggersOf = (policy: Policy): string =>
   policy.ackTriggers ??
   chainOf(policy.homeCategoryId).find((c) => c.ackTriggers !== "NONE")
     ?.ackTriggers ??

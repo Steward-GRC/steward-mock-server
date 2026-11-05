@@ -68,14 +68,14 @@ the six below.
 
 ### Who to sign in as
 
-| Username  | Role            | What they see                                                                                                     |
-| --------- | --------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.                       |
-| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                      |
-| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has a passkey. |
-| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                                        |
-| `erin`    | reader          | Published, non-sensitive policies only.                                                                           |
-| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                    |
+| Username  | Role            | What they see                                                                                                                                     |
+| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.                                                       |
+| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                                                      |
+| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has a passkey.                                 |
+| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                                                                        |
+| `erin`    | reader          | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. |
+| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                                                    |
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with

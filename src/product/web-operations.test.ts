@@ -139,6 +139,7 @@ const cases: Record<string, Case> = {
       outcome: "SUBSTANTIATED",
     },
   },
+  CompleteOnboarding: { as: READER, variables: { acceptTerms: true } },
   CompletionReport: { as: ADMIN, variables: { policyVersionId: "version-2" } },
   ContactBlocks: { as: AUTHOR, variables: { includeArchived: true } },
   CreateCategory: {
@@ -268,8 +269,10 @@ const cases: Record<string, Case> = {
       newParentId: "category-information",
     },
   },
+  MyAckSummary: { as: READER },
   MyDrafts: { as: AUTHOR },
   MyManagedGroups: { as: APPROVER },
+  MyObligations: { as: READER },
   Organizations: { as: ADMIN },
   PendingTasks: { as: APPROVER },
   PlatformGroups: { as: ADMIN, variables: { parentId: null } },
@@ -450,6 +453,15 @@ const cases: Record<string, Case> = {
       },
     },
   },
+  SubmitWorkflow: {
+    as: AUTHOR,
+    variables: {
+      ancestorCategoryIds: [],
+      categoryId: "category-records",
+      policyId: "policy-2",
+      policyVersionId: "version-3",
+    },
+  },
   Templates: { as: AUTHOR, variables: {} },
   TemplateVersions: { as: ADMIN, variables: { templateId: "template-1" } },
   UpcomingApprovals: { as: ADMIN },
@@ -589,7 +601,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 126);
+    assert.equal(webOperations.length, 130);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

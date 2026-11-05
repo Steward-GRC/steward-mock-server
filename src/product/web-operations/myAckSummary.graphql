@@ -1,0 +1,6 @@
+query MyAckSummary {
+  myAckSummary {
+    required
+    done
+  }
+}

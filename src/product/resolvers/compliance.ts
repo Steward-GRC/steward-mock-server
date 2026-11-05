@@ -7,6 +7,7 @@
 import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { ackTriggersOf, viewerCan } from "#product/access.ts";
 import {
   caller,
   data,
@@ -76,6 +77,46 @@ const recordsFor = (person: StewardPerson) => {
   const scope = auditScope(person);
   return data().audit.filter((r) => !scope || scope.includes(r.groupId));
 };
+
+/**
+ * steward-obligations' view of one person: each currently obligating policy (published, not
+ * retired, with an acknowledgement trigger) that obliges them, and whether they've cleared it. A
+ * sensitive policy obliges only someone with the read-sensitive grant. ON_CHANGE is cleared by
+ * acknowledging the published version, ON_PUBLISH by acknowledging any version.
+ */
+const obligationsOf = (person: StewardPerson) =>
+  data()
+    .policies.filter(
+      (policy) =>
+        policy.currentPublishedVersionId !== null &&
+        policy.retiredAt === null &&
+        (policy.sensitivity !== "SENSITIVE" || person.readSensitive) &&
+        viewerCan(person, policy).ack,
+    )
+    .map((policy) => {
+      const published = versionFor(policy.currentPublishedVersionId ?? "");
+      const acked = new Set(
+        data()
+          .acknowledgements.filter((a) => a.userId === person.id)
+          .map((a) => a.policyVersionId),
+      );
+      const cleared =
+        ackTriggersOf(policy) === "ON_CHANGE"
+          ? acked.has(published.id)
+          : data().versions.some(
+              (v) => v.policyId === policy.id && acked.has(v.id),
+            );
+      return {
+        cleared,
+        obligation: {
+          number: policy.number,
+          policyId: policy.id,
+          policyVersionId: published.id,
+          title: policy.title,
+          version: String(published.versionNo),
+        },
+      };
+    });
 
 export const complianceResolvers: Resolvers = {
   Mutation: {
@@ -215,6 +256,17 @@ export const complianceResolvers: Resolvers = {
         filename: `acknowledgements-${newId("export")}.csv`,
       };
     },
+    myAckSummary: (_root, _given, context: Context) => {
+      const all = obligationsOf(caller(context));
+      return {
+        done: all.filter((o) => o.cleared).length,
+        required: all.length,
+      };
+    },
+    myObligations: (_root, _given, context: Context) =>
+      obligationsOf(caller(context))
+        .filter((o) => !o.cleared)
+        .map((o) => o.obligation),
     verifyAuditChain: (
       _root,
       given: { fromRecordId: string; toRecordId: string },

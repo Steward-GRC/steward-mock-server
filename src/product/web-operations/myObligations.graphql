@@ -1,0 +1,9 @@
+query MyObligations {
+  myObligations {
+    policyId
+    number
+    title
+    version
+    policyVersionId
+  }
+}
