@@ -34,7 +34,7 @@ beforeEach(() => {
   startFresh();
 });
 
-const login = async (username: string, password = "any password") => {
+const login = async (username: string, password = `${username}-password`) => {
   const answer = await post(base, "/auth/login", { password, username });
   return { answer, body: (await answer.json()) as Record<string, unknown> };
 };
@@ -47,11 +47,14 @@ describe("sign-in", () => {
     for (const [username, password] of [
       ["charlie", "wrong-password"],
       ["nobody", "x"],
-      ["frank", "x"],
+      ["frank", "frank-password"],
     ] as const) {
       const refused = await login(username, password);
       assert.equal(refused.answer.status, 401);
-      assert.deepEqual(refused.body, { error: "invalid_credentials" });
+      assert.deepEqual(refused.body, {
+        error: "invalid_credentials",
+        message: "The username or password is wrong.",
+      });
     }
   });
 
@@ -242,7 +245,7 @@ describe("first-run setup", () => {
     const admin = {
       email: "first@example.org",
       name: "First Admin",
-      password: "x",
+      password: "first-password",
       setupToken: SETUP_TOKEN,
       username: "first",
     };

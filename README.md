@@ -54,8 +54,10 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
    It listens on `http://localhost:5175`. Pass `-- --port 0` for a free port; the ready line says
    which one it got.
 
-3. Open the controls at `http://localhost:5175/_mock`, or sign in from a client: any person listed
-   at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
+3. Open the controls at `http://localhost:5175/_mock`, or sign in from a client with a person's
+   username and the password set for them (the seed's are `<username>-password`, and the Users card
+   on `/_mock` changes them), then any six digits except `000000`. A refused sign-in answers an
+   `error` code and a `message` a client can show.
 
 ### Sample data
 
@@ -109,15 +111,17 @@ checkpoints the way steward-collab does: the editor's Save button writes the dra
 ## 🎛️ Controls
 
 `POST /_mock/controls` with a JSON body takes a `kind`; `GET /_mock/controls` returns what's going
-on, and `GET /_mock/state` the whole state.
+on, `GET /_mock/state` the whole state, and `GET /_mock/people` the people who can sign in. Neither
+ever includes a password: a person shows `hasPassword` instead, so a dev quick-login widget can
+read the list live and offer exactly those people.
 
-| Kind             | Body                                   | What it does                                                                          |
-| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
-| `sign-in`        | `personId`, `token`                    | A finished sign-in in one step; `token: true` returns a bearer token.                 |
-| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                     |
-| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                       |
-| `reset`          |                                        | The sample data back; everyone stays signed in.                                       |
-| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true. |
+| Kind             | Body                                   | What it does                                                                                                                                                                           |
+| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sign-in`        | `personId`, `token`                    | A sign-in in one step with the person's own password, skipping the second factor, for a dev quick-login widget; `token: true` returns a bearer token. A refusal says why in `message`. |
+| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                                                                                                                      |
+| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                                                                                                                        |
+| `reset`          |                                        | The sample data back; everyone stays signed in.                                                                                                                                        |
+| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true.                                                                                                  |
 
 The maintenance cycle has its own kinds, and its own card on the page:
 
@@ -129,7 +133,16 @@ The maintenance cycle has its own kinds, and its own card on the page:
 | `maintenance-end`      |                                 | Back to normal.                                                                                                                     |
 | `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                           |
 
-Reset and start fresh put it back to no maintenance. Steward answers the window the way
+The people who can sign in have kinds of their own, and the Users card on the page:
+
+| Kind            | Body                                                                                        | What it does                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `person-add`    | `username`, and `name`, `email`, `roles`, `password`, `secondFactor`, `disabled` (optional) | Someone new who can sign in; `roles` is a list or a comma-separated string.                |
+| `person-update` | `personId`, and any of the fields above                                                     | Changes what it's given. A password counts from the next sign-in; an empty one is ignored. |
+| `person-remove` | `personId`                                                                                  | Takes the person out and ends their sessions.                                              |
+
+A product's own person fields (`personFields`) are set the same way, by their key, and show in the
+Users card. Reset and start fresh put the seed people back, and no maintenance. Steward answers the window the way
 steward-gateway does:
 
 - **Announced:** `globalSettings.announcement` is a `warning` announcement with the window's
@@ -166,8 +179,8 @@ The admin user screens answer as steward-gateway and steward-identity do:
 - **Reassigning a person's policies:** `reassignUserPolicies` moves every policy one person owns to
   another and rewrites the category rules that name them, each change audited, as steward-core
   does before an account is deleted.
-- **Password and welcome email:** `resetUserPassword` answers true for a local account (the
-  password isn't kept, since any password signs in); `resendWelcomeEmail` answers true and sends
+- **Password and welcome email:** `resetUserPassword` answers true for a local account and
+  replaces its password; `resendWelcomeEmail` answers true and sends
   nothing.
 - **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
   `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
@@ -237,7 +250,8 @@ every variant of the sign-in page shows. Everything is on after a reset or a fre
 
 How to walk each method:
 
-- **Password:** any person, any password but `wrong-password`; Alice and Charlie then give any six
+- **Password:** any person with their password (`<username>-password` unless the Users card
+  changed it); Alice and Charlie then give any six
   digits but `000000`, and Dave enrols an authenticator first.
 - **SSO:** a pass-through test, not the gateway's SSO flow. While SSO is on, `POST /auth/discover`
   sends anyone to the connection `mock-sso`, and `GET /auth/sso/start` signs the person straight
@@ -246,8 +260,8 @@ How to walk each method:
   `/login?pendingMfa=<id>&mfaFactors=...` when the person has a second factor (Alice, Charlie).
   It needs no connection or state, and there's no callback.
 - **Password reset:** request a code for any address (the answer is always the same), then confirm
-  with any six digits but `000000` and any new password. The mock sends no mail and doesn't keep
-  the new password, since any password signs in. A person without a local password, like Charlie,
+  with any six digits but `000000` and any new password. The mock sends no mail; the new password
+  replaces the old one. A person without a local password, like Charlie,
   gets the gateway's invalid-code refusal.
 - **Passkey:** there's no authenticator behind the mock, so it doesn't check signatures. The
   options it hands out are valid WebAuthn request options for the host the caller used, and the

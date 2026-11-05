@@ -9,7 +9,8 @@ import { WebSocket } from "ws";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { listen } from "#core/events.ts";
+import { checkCredentials } from "#core/auth.ts";
+import { listen, PEOPLE_CHANGED } from "#core/events.ts";
 import { handle } from "#core/handle.ts";
 import { MAINTENANCE_CHANGED } from "#core/maintenance.ts";
 import {
@@ -55,31 +56,51 @@ describe("health", () => {
 });
 
 describe("sign-in", () => {
-  it("refuses a wrong password, an unknown person and a disabled account", async () => {
+  it("accepts exactly the configured password and says why it refuses", async () => {
     assert.equal(
       (
         await post(base, "/auth/login", {
-          password: "wrong-password",
-          username: "ben",
+          password: "cy-password",
+          username: "cy",
         })
       ).status,
-      401,
+      200,
     );
+    const wrong = await post(base, "/auth/login", {
+      password: "ben-passw0rd",
+      username: "ben",
+    });
+    assert.equal(wrong.status, 401);
+    assert.deepEqual(await wrong.json(), {
+      error: "invalid_credentials",
+      message: "The username or password is wrong.",
+    });
+    const unknown = await post(base, "/auth/login", {
+      password: "x",
+      username: "nobody",
+    });
+    assert.equal(unknown.status, 401);
     assert.equal(
-      (await post(base, "/auth/login", { password: "x", username: "nobody" }))
-        .status,
-      401,
+      ((await unknown.json()) as Record<string, string>).error,
+      "invalid_credentials",
     );
-    assert.equal(
-      (await post(base, "/auth/login", { password: "x", username: "dot" }))
-        .status,
-      403,
-    );
+    const disabled = await post(base, "/auth/login", {
+      password: "dot-password",
+      username: "dot",
+    });
+    assert.equal(disabled.status, 403);
+    assert.deepEqual(await disabled.json(), {
+      error: "account_disabled",
+      message: "This account is disabled.",
+    });
   });
 
   it("asks for the second factor and refuses the wrong code", async () => {
     const login = (await (
-      await post(base, "/auth/login", { password: "x", username: "ada" })
+      await post(base, "/auth/login", {
+        password: "ada-password",
+        username: "ada",
+      })
     ).json()) as Record<string, string>;
     assert.equal(login.mfaRequired, true);
     assert.equal(
@@ -265,7 +286,7 @@ describe("controls", () => {
     assert.equal((await query(base, "{ me { name } }", ben)).status, 401);
   });
 
-  it("signs someone in at once, and refuses an unknown kind", async () => {
+  it("signs someone in at once with their stored password, and refuses an unknown kind", async () => {
     const answer = await post(base, "/_mock/controls", {
       kind: "sign-in",
       personId: "person-cy",
@@ -404,6 +425,242 @@ describe("controls", () => {
     const html = await (await fetch(`${base}/_mock`)).text();
     assert.match(html, /fetch\("\/_mock\/controls"/);
     assert.match(html, /kind: "sign-in"/);
+  });
+});
+
+const people = async () =>
+  (await (await fetch(`${base}/_mock/people`)).json()) as Record<
+    string,
+    unknown
+  >[];
+const login = (username: string, password: string) =>
+  post(base, "/auth/login", { password, username });
+
+describe("sign-in users", () => {
+  it("adds a user whose password works for ordinary sign-in at once", async () => {
+    const added = await control(base, {
+      kind: "person-add",
+      name: "Charlie Example",
+      password: "charlie-password",
+      roles: "STAFF, AUDITOR",
+      username: "Charlie",
+    });
+    const charlie = added.result as Record<string, unknown>;
+    assert.deepEqual(
+      { ...charlie, id: undefined },
+      {
+        disabled: false,
+        email: "charlie@example.org",
+        hasPassword: true,
+        id: undefined,
+        name: "Charlie Example",
+        onCall: false,
+        roles: ["STAFF", "AUDITOR"],
+        secondFactor: false,
+        tags: [],
+        team: "",
+        username: "charlie",
+      },
+    );
+    assert.equal((await login("charlie", "charlie-password")).status, 200);
+    assert.equal((await login("charlie", "something-else")).status, 401);
+    assert.ok((await people()).some((p) => p.username === "charlie"));
+    const again = await post(base, "/_mock/controls", {
+      kind: "person-add",
+      password: "x",
+      username: "charlie",
+    });
+    assert.equal(again.status, 409);
+    assert.equal(
+      ((await again.json()) as Record<string, string>).error,
+      "username_taken",
+    );
+  });
+
+  it("changes a password, and only the new one works from the next sign-in", async () => {
+    await control(base, {
+      kind: "person-update",
+      password: "a-new-password",
+      personId: "person-cy",
+    });
+    assert.equal((await login("cy", "cy-password")).status, 401);
+    assert.equal((await login("cy", "a-new-password")).status, 200);
+  });
+
+  it("edits a user's details and leaves the password alone when none is given", async () => {
+    const updated = await control(base, {
+      disabled: true,
+      kind: "person-update",
+      name: "Cy Renamed",
+      personId: "person-cy",
+      roles: [],
+    });
+    assert.equal(
+      (updated.result as Record<string, unknown>).name,
+      "Cy Renamed",
+    );
+    assert.equal((await login("cy", "cy-password")).status, 403);
+  });
+
+  it("removes a user, ends their sessions, and refuses their sign-in", async () => {
+    const cy = await signIn(base, "cy");
+    await control(base, { kind: "person-remove", personId: "person-cy" });
+    assert.equal((await query(base, "{ me { name } }", cy)).status, 401);
+    assert.equal((await login("cy", "cy-password")).status, 401);
+    assert.ok(!(await people()).some((p) => p.username === "cy"));
+    assert.equal(
+      (
+        await post(base, "/_mock/controls", {
+          kind: "person-remove",
+          personId: "person-cy",
+        })
+      ).status,
+      404,
+    );
+  });
+
+  it("refuses a sign-in for a user with no password set", async () => {
+    await control(base, { kind: "person-add", username: "bob" });
+    assert.equal((await login("bob", "")).status, 400);
+    assert.equal((await login("bob", "anything")).status, 401);
+    const quick = await post(base, "/_mock/controls", {
+      kind: "sign-in",
+      personId: (await people()).find((p) => p.username === "bob")?.id,
+    });
+    assert.equal(quick.status, 409);
+    assert.equal(
+      ((await quick.json()) as Record<string, string>).message,
+      "Bob has no password set on /_mock.",
+    );
+  });
+
+  it("refuses a quick sign-in for a disabled account, with the reason", async () => {
+    const quick = await post(base, "/_mock/controls", {
+      kind: "sign-in",
+      personId: "person-dot",
+    });
+    assert.equal(quick.status, 403);
+    assert.equal(
+      ((await quick.json()) as Record<string, string>).message,
+      "This account is disabled.",
+    );
+  });
+
+  it("keeps a product's own person fields, edited like the core's", async () => {
+    const added = await control(base, {
+      kind: "person-add",
+      onCall: true,
+      password: "charlie-password",
+      tags: "night, weekend",
+      team: "Platform",
+      username: "charlie",
+    });
+    const charlie = added.result as Record<string, unknown>;
+    assert.deepEqual(
+      { onCall: charlie.onCall, tags: charlie.tags, team: charlie.team },
+      { onCall: true, tags: ["night", "weekend"], team: "Platform" },
+    );
+    await control(base, {
+      kind: "person-update",
+      personId: charlie.id,
+      tags: ["weekend"],
+    });
+    const listed = (await people()).find((p) => p.username === "charlie");
+    assert.deepEqual(
+      { onCall: listed?.onCall, tags: listed?.tags, team: listed?.team },
+      { onCall: true, tags: ["weekend"], team: "Platform" },
+    );
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<th scope="col">Tags<\/th>/);
+    assert.match(html, /id="user-field-onCall" type="checkbox"/);
+    assert.match(html, /data-fields="\[\{&quot;key&quot;:&quot;team&quot;/);
+    assert.doesNotMatch(html, /Shadow/);
+  });
+
+  it("tells the product which fields of whom changed, the moment they change", async () => {
+    const heard: unknown[] = [];
+    const stop = listen(PEOPLE_CHANGED, (change) => heard.push(change));
+    await control(base, {
+      kind: "person-add",
+      password: "charlie-password",
+      username: "charlie",
+    });
+    await control(base, {
+      kind: "person-update",
+      name: "Cy Phone",
+      password: "a-new-password",
+      personId: "person-cy",
+      tags: "night",
+    });
+    await control(base, { kind: "person-update", personId: "person-cy" });
+    await control(base, { kind: "person-remove", personId: "person-cy" });
+    stop();
+    assert.deepEqual(heard, [
+      {
+        change: "added",
+        fields: [
+          "disabled",
+          "email",
+          "id",
+          "name",
+          "onCall",
+          "password",
+          "roles",
+          "secondFactor",
+          "tags",
+          "team",
+          "username",
+        ],
+        personId: "person-charlie",
+      },
+      {
+        change: "updated",
+        fields: ["password", "tags"],
+        personId: "person-cy",
+      },
+      { change: "removed", fields: [], personId: "person-cy" },
+    ]);
+  });
+
+  it("never hands out a password, on the list or in the state dump", async () => {
+    const list = await people();
+    assert.ok(list.every((p) => !("password" in p)));
+    assert.deepEqual(
+      list.find((p) => p.username === "ada"),
+      {
+        disabled: false,
+        email: "ada@example.org",
+        hasPassword: true,
+        id: "person-ada",
+        name: "Ada Admin",
+        roles: ["ADMIN"],
+        secondFactor: true,
+        username: "ada",
+      },
+    );
+    const dump = await (await fetch(`${base}/_mock/state`)).text();
+    assert.doesNotMatch(dump, /cy-password/);
+  });
+
+  it("gives a product's own sign-in route the same password check", () => {
+    const found = checkCredentials("cy", "cy-password");
+    assert.ok(!(found instanceof Response));
+    assert.equal(found.username, "cy");
+    const refused = checkCredentials("cy", "nope");
+    assert.ok(refused instanceof Response);
+    assert.equal(refused.status, 401);
+  });
+
+  it("manages the users from the page and says who was signed in", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /id="users"/);
+    assert.match(html, /kind: "person-add"/);
+    assert.match(html, /kind: "person-update"/);
+    assert.match(html, /kind: "person-remove"/);
+    assert.match(
+      html,
+      /"Signed in as " \+ [a-z.]+ \+ "\. Refresh this page\."/,
+    );
   });
 });
 
@@ -652,8 +909,12 @@ describe("maintenance", () => {
       await control(base, { kind: "maintenance-start" });
       assert.equal((await fetch(`${base}/readyz`)).status, 200);
       assert.equal(
-        (await post(base, "/auth/login", { password: "x", username: "ben" }))
-          .status,
+        (
+          await post(base, "/auth/login", {
+            password: "ben-password",
+            username: "ben",
+          })
+        ).status,
         200,
       );
       assert.equal((await fetch(`${base}/setup/state`)).status, 200);

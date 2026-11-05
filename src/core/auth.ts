@@ -5,8 +5,10 @@
 // because a phone has no cookie jar the gateway can rely on. Both stand for the same kind of
 // session, so a person signed in on the web and on a phone sees the same data.
 //
-// Any non-empty password works except WRONG_PASSWORD, and any six digits except WRONG_CODE, so
-// clients can show their failure screens on purpose.
+// A person signs in with exactly the password set for them, in the seed or on /_mock, and a
+// change there counts from the next sign-in. Any six digits work as the second factor except
+// WRONG_CODE, so clients can show that failure screen on purpose. Every refusal carries a
+// `message` a client can show as it is.
 
 import { cookieOf, json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
@@ -18,7 +20,6 @@ import {
   type Session,
 } from "#core/state.ts";
 
-export const WRONG_PASSWORD = "wrong-password";
 export const WRONG_CODE = "000000";
 
 /** How long a cookie session lasts, in seconds. */
@@ -97,6 +98,26 @@ const findPerson = (username: string) => {
 const goodCode = (code: string | undefined) =>
   !!code && /^\d{6}$/.test(code) && code !== WRONG_CODE;
 
+/**
+ * The person a username and password sign in, or the gateway's refusal. The core's /auth/login
+ * uses it, and a product whose sign-in is its own route calls it for the same check.
+ */
+export const checkCredentials = (
+  username: string,
+  password: string,
+): Person | Response => {
+  const person = findPerson(username);
+  if (!person?.password || password !== person.password)
+    return refuse(
+      401,
+      "invalid_credentials",
+      "The username or password is wrong.",
+    );
+  if (person.disabled)
+    return refuse(403, "account_disabled", "This account is disabled.");
+  return person;
+};
+
 interface LoginBody {
   password: string;
   token: boolean;
@@ -105,11 +126,10 @@ interface LoginBody {
 
 const login = async (request: Request) => {
   const { password, token, username } = await readJson<LoginBody>(request);
-  if (!username) return refuse(400, "invalid_request");
-  const person = findPerson(username);
-  if (!person || !password || password === WRONG_PASSWORD)
-    return refuse(401, "invalid_credentials");
-  if (person.disabled) return refuse(403, "account_disabled");
+  if (!username || !password)
+    return refuse(400, "invalid_request", "Enter a username and a password.");
+  const person = checkCredentials(username, password);
+  if (person instanceof Response) return person;
   if (!person.secondFactor) return issueSession(person, token === true);
   const pendingId = newId("pending");
   mockState.pending.set(pendingId, person.id);
@@ -126,8 +146,14 @@ const verify = async (request: Request) => {
   const { code, pendingId, token } = await readJson<VerifyBody>(request);
   const personId = pendingId ? mockState.pending.get(pendingId) : undefined;
   const person = personId ? personById(personId) : undefined;
-  if (!pendingId || !person) return refuse(401, "invalid_pending");
-  if (!goodCode(code)) return refuse(401, "invalid_code");
+  if (!pendingId || !person)
+    return refuse(
+      401,
+      "invalid_pending",
+      "That sign-in has expired. Start again.",
+    );
+  if (!goodCode(code))
+    return refuse(401, "invalid_code", "That code isn't right.");
   mockState.pending.delete(pendingId);
   return issueSession(person, token === true);
 };

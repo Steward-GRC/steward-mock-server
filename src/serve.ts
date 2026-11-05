@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 
-import { WRONG_CODE, WRONG_PASSWORD } from "#core/auth.ts";
+import { WRONG_CODE } from "#core/auth.ts";
 import { settings, useProduct } from "#core/product.ts";
 import { startMockServer } from "#core/server.ts";
 import { steward } from "#product/product.ts";
@@ -39,7 +39,7 @@ console.log(
 );
 console.log(`  controls ${base}/_mock`);
 console.log(
-  `  sign in  any person at ${base}/_mock/people, any password but "${WRONG_PASSWORD}",`,
+  `  sign in  a person at ${base}/_mock with the password set there,`,
 );
 console.log(`           then any six-digit code but ${WRONG_CODE}`);
 

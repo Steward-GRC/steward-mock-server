@@ -83,6 +83,8 @@ const person = (
   idpGroups: [],
   managedGroupIds: [],
   memberships: [],
+  // Every seed person signs in with <username>-password; the Users card on /_mock changes it.
+  password: `${given.username}-password`,
   policyOverrides: [],
   secondFactor: false,
   ...given,

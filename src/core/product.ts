@@ -12,6 +12,17 @@ import type { Action, ProductControl } from "#core/controls.ts";
 import type { Resolvers } from "#core/graphql.ts";
 import type { MaintenanceWindow, Person, Session } from "#core/state.ts";
 
+/** A per-person field a product adds to the Users card. */
+export interface PersonField {
+  /** A short hint in the empty input. */
+  hint?: string;
+  /** The property on the person. It can't be one of the core's own fields. */
+  key: string;
+  /** "text" is one string, "list" a list edited as comma-separated text, "boolean" a checkbox. */
+  kind: "boolean" | "list" | "text";
+  label: string;
+}
+
 export interface Product {
   /** The product's own controls. */
   actions: ProductAction[];
@@ -21,6 +32,12 @@ export interface Product {
    * `maintenance()` from src/core/maintenance.ts and hear changes on MAINTENANCE_CHANGED.
    */
   maintenance?: ProductMaintenance;
+  /**
+   * Fields of the product's own on each person, beyond the core's sign-in fields: shown and
+   * edited in the Users card on /_mock, stored on the person, and listed by GET /_mock/people, so
+   * the user store stays the owner's to edit while the product decides what the fields mean.
+   */
+  personFields?: PersonField[];
   /** What each field of the schema answers, by type and field name. */
   resolvers: Resolvers;
   /**

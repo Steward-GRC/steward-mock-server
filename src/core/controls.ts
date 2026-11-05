@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 // The mock's own tools: GET /_mock/controls for what's going on, POST /_mock/controls with a
 // `kind` to change it, GET /_mock/state for the whole state, GET /_mock/people for who can sign
-// in. The /_mock page and tests drive the mock through these. They have no sign-in, so the
+// in (never with their passwords, so a dev quick-login widget can read it live). The /_mock page and tests drive the mock through these. They have no sign-in, so the
 // server listens on loopback unless HOST says otherwise.
 //
-// The core kinds work for every product: reset, fresh, fail-next, expire-session and sign-in.
+// The core kinds work for every product: reset, fresh, fail-next, expire-session, sign-in, the
+// maintenance cycle and the people who can sign in (person-add, person-update, person-remove).
 // A product adds its own in src/product/controls.ts.
 
-import { issueSession } from "#core/auth.ts";
+import { checkCredentials, issueSession } from "#core/auth.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { maintenanceControls } from "#core/maintenance.ts";
+import { listPeople, peopleControls } from "#core/people.ts";
 import { product, settings } from "#core/product.ts";
 import {
   endSessions,
@@ -96,6 +98,7 @@ const snapshot = () => ({
 
 const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
   ...maintenanceControls,
+  ...peopleControls,
   "expire-session": (body) => {
     endSessions(typeof body.personId === "string" ? body.personId : undefined);
   },
@@ -112,16 +115,30 @@ const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
   reset: () => {
     resetData();
   },
-  /** A finished sign-in in one step, for tests and a client's dev quick login. */
+  /**
+   * A finished sign-in in one step, for tests, the page and a client's dev quick login: the
+   * person's stored password is checked as /auth/login checks it, and the second factor is
+   * skipped. Each refusal says why, for the widget or the page to show.
+   */
   "sign-in": (body) => {
     const person = personById(String(body.personId ?? ""));
-    if (!person || person.disabled) return refuse(404, "unknown_person");
+    if (!person) return refuse(404, "unknown_person", "No such person.");
+    if (!person.password)
+      return refuse(
+        409,
+        "no_password",
+        `${person.name} has no password set on /_mock.`,
+      );
+    const checked = checkCredentials(person.username, person.password);
+    if (checked instanceof Response) return checked;
     return issueSession(person, body.token === true);
   },
 };
 
-/** Maps become objects and Sets arrays, so GET /_mock/state reads as plain JSON. */
-const plain = (_key: string, value: unknown): unknown => {
+/** Maps become objects and Sets arrays, so GET /_mock/state reads as plain JSON, without passwords. */
+const plain = (key: string, value: unknown): unknown => {
+  // Passwords go in through the controls and never come out.
+  if (key === "password") return undefined;
   if (value instanceof Map) return Object.fromEntries(value);
   if (value instanceof Set) return [...value];
   return value;
@@ -158,6 +175,6 @@ export const answerControls = (
     });
   }
   if (path === "/_mock/people" && request.method === "GET")
-    return json(mockState.data.people);
+    return json(listPeople());
   return undefined;
 };

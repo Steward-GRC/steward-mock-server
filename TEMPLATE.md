@@ -50,8 +50,18 @@ subscription. Replace it; don't build around it.
 3. Copy the gateway's schema into `src/product/schema.graphql`.
 
 4. Write the invented data in `src/product/data.ts`. Keep the people's shape (the sign-in routes
-   read `username`, `email`, `roles`, `secondFactor` and `disabled`), use example.org addresses,
-   and invent every name and record. Never copy real customer or production data into it.
+   read `username`, `email`, `password`, `roles`, `secondFactor` and `disabled`), use example.org
+   addresses, and invent every name, password and record. Never copy real customer or production
+   data into it. Each person signs in with exactly their `password`; the tests' `signIn` helper
+   expects `<username>-password`. People added or changed on `/_mock` sign in the same way, until
+   a reset puts the seed back. `/_mock` is the owner's store of users, which the product reads
+   live. For fields of the product's own on each person (groups, roles of its own, a team), list
+   them as `personFields` in `src/product/product.ts`, each with a `key`, a `label` and a `kind`
+   (`text`, `list` or `boolean`). The Users card shows and edits them, they're stored on the
+   person, `GET /_mock/people` lists them, and the product's resolvers decide what they mean.
+   Every add, edit or removal on `/_mock` is published on `PEOPLE_CHANGED` from
+   `src/core/events.ts`, with the person's id, the kind of change and the names of the fields that
+   changed (a password by name only), so the product can push it to open pages straight away.
 
 5. Write the resolvers in `src/product/resolvers.ts`. Start with the fields the clients call
    first; anything without a resolver answers `null`, or an error where the schema says non-null.
@@ -68,8 +78,9 @@ subscription. Replace it; don't build around it.
    `Response`, or `undefined` for a path it doesn't serve. They run before the core's `/auth` and
    `/setup` routes, so a sign-in path the core doesn't know reaches them, but never in place of
    the health probes, the controls or the GraphQL path. `sessionOf(request)` from
-   `src/core/auth.ts` gives the signed-in session, and `json` and `refuse` from
-   `src/core/http.ts` build the answers.
+   `src/core/auth.ts` gives the signed-in session, `checkCredentials(username, password)` checks a
+   password against the people as `/auth/login` does (the person, or the refusal to return), and
+   `json` and `refuse` from `src/core/http.ts` build the answers.
 
    When the gateway also proxies websockets of its own (an editor's collaboration relay, say),
    add `sockets` to the product: a function that takes the upgrade `Request` and its path and

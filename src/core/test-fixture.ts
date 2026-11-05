@@ -110,6 +110,13 @@ export const fixture: Product = {
     },
     fields: ["maintenance"],
   },
+  // Its own person fields, and one that tries to shadow a core field and is left out.
+  personFields: [
+    { key: "team", kind: "text", label: "Team" },
+    { hint: "night, weekend", key: "tags", kind: "list", label: "Tags" },
+    { key: "onCall", kind: "boolean", label: "On call" },
+    { key: "name", kind: "text", label: "Shadow" },
+  ],
   resolvers: {
     Mutation: {
       addNote: (_root, given: { text: string }, context: Context) => {
@@ -184,6 +191,7 @@ export const fixture: Product = {
         email: "ada@example.org",
         id: "person-ada",
         name: "Ada Admin",
+        password: "ada-password",
         roles: ["ADMIN"],
         secondFactor: true,
         username: "ada",
@@ -192,6 +200,7 @@ export const fixture: Product = {
         email: "ben@example.org",
         id: "person-ben",
         name: "Ben Staff",
+        password: "ben-password",
         roles: ["STAFF"],
         secondFactor: true,
         username: "ben",
@@ -200,6 +209,7 @@ export const fixture: Product = {
         email: "cy@example.org",
         id: "person-cy",
         name: "Cy Phone",
+        password: "cy-password",
         roles: ["STAFF"],
         secondFactor: false,
         username: "cy",
@@ -209,6 +219,7 @@ export const fixture: Product = {
         email: "dot@example.org",
         id: "person-dot",
         name: "Dot Disabled",
+        password: "dot-password",
         roles: ["STAFF"],
         secondFactor: false,
         username: "dot",

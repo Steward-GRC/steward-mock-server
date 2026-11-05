@@ -32,6 +32,11 @@ export interface Person {
   email: string;
   id: string;
   name: string;
+  /**
+   * The only password that signs this person in, set in the seed or on /_mock; an empty one
+   * means no password sign-in. The mock never hands it out: /_mock/people says hasPassword.
+   */
+  password: string;
   roles: string[];
   /** Asks for a six-digit code after the password. */
   secondFactor: boolean;

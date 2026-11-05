@@ -4,11 +4,16 @@
 // (internal/setup). They run before the core's /auth and /setup, so Steward answers the
 // gateway's shapes while src/core stays the template's file for file.
 //
-// Any non-empty password works except WRONG_PASSWORD, and any six digits except WRONG_CODE, so
-// clients can show their failure screens on purpose. A native client may ask for a bearer token
+// A person signs in with exactly the password set for them, in the seed (<username>-password) or on
+// /_mock, and any six digits except WRONG_CODE, so clients can show their failure screens on
+// purpose. A native client may ask for a bearer token
 // ("token": true), a mock extra for the phone apps, standing for the same kind of session.
 
-import { sessionOfCookie, sessionOfToken, WRONG_PASSWORD } from "#core/auth.ts";
+import {
+  checkCredentials,
+  sessionOfCookie,
+  sessionOfToken,
+} from "#core/auth.ts";
 import { json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { settings } from "#core/product.ts";
@@ -20,7 +25,6 @@ import {
   cookie,
   drop,
   factorsOf,
-  findPerson,
   goodCode,
   hasPasskey,
   mustEnrol,
@@ -51,9 +55,13 @@ const login = async (request: Request) => {
     username: string;
   }>(request);
   if (!username?.trim()) return refuse(400, "invalid_request");
-  const person = findPerson(username);
-  if (!person || !password || password === WRONG_PASSWORD || person.disabled)
-    return refuse(401, "invalid_credentials");
+  // The password set for the person in the seed or on /_mock, and nothing else.
+  const person = checkCredentials(username, password ?? "");
+  // steward-gateway answers a disabled account exactly as a wrong password.
+  if (person instanceof Response)
+    return person.status === 403
+      ? refuse(401, "invalid_credentials", "The username or password is wrong.")
+      : person;
   if (factorsOf(person).length > 0)
     return json({
       factors: factorsOf(person),
@@ -202,6 +210,7 @@ const bootstrap = async (request: Request) => {
     email: email.trim().toLowerCase(),
     id: newId("user"),
     name: name?.trim() || username.trim(),
+    password,
     roles: ["site-admin"],
     root: true,
     secondFactor: false,

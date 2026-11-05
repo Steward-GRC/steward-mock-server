@@ -32,7 +32,7 @@ beforeEach(() => {
 /** Sign in as steward-web does, by password, and take the cookie session it answers. */
 const signInByPassword = async (username: string): Promise<Signed> => {
   const answer = await post(base, "/auth/login", {
-    password: "any password",
+    password: `${username.split("@", 1)[0] ?? username}-password`,
     username,
   });
   assert.equal(answer.status, 200);

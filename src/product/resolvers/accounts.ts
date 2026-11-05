@@ -285,6 +285,7 @@ export const accountResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "the account has no local password to reset",
         );
+      person.password = given.newPassword;
       log.debug("password reset by an admin", { personId: person.id });
       return true;
     },
