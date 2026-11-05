@@ -14,8 +14,9 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
 
 - 🔌 **The gateway's wire protocol:** GraphQL at `POST /query` and `GET /query`, a websocket on the
   same path for subscriptions (`graphql-transport-ws`, and the older `graphql-ws` that some mobile
-  clients still speak), sign-in under `/auth/*`, first-run setup under `/setup/*`, and the
-  `/livez`, `/readyz` and `/healthz` probes.
+  clients still speak), sign-in under `/auth/*`, first-run setup under `/setup/*`, the
+  `/livez`, `/readyz` and `/healthz` probes, and the editor's co-editing relay at
+  `/collab/ws/<draftId>` (the session cookie and the token from `issueCollabToken`).
 - 📐 **Answers shaped by the real schema:** every operation runs against the product's own GraphQL
   schema, so clients get only the fields they asked for, and a query the gateway would refuse is
   refused here too, with the same error codes.
@@ -50,10 +51,10 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
    npm start
    ```
 
-   It listens on `http://localhost:5180`. Pass `-- --port 0` for a free port; the ready line says
+   It listens on `http://localhost:5175`. Pass `-- --port 0` for a free port; the ready line says
    which one it got.
 
-3. Open the controls at `http://localhost:5180/_mock`, or sign in from a client: any person listed
+3. Open the controls at `http://localhost:5175/_mock`, or sign in from a client: any person listed
    at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
 
 ### Who to sign in as
@@ -72,12 +73,14 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Steward AI isn't mocked: `aiHealth` says
 `ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
+The co-editing relay passes edits between the browsers on a draft but doesn't keep the editor's
+checkpoints the way steward-collab does: the editor's Save button writes the draft.
 
 ### Settings
 
 | Variable                                      | What it does                                                                                                                            |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                        | The HTTP port (default 5180). `--port` on the command line wins.                                                                        |
+| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                        |
 | `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network. |
 | `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                  |
 | `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                 |
