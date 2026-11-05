@@ -25,8 +25,10 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   and the refusal while it's on), `state.ts`, `events.ts`, `log.ts`.
 - `src/core/product.ts` - the Product contract; `src/core/test-fixture.ts` - the fixture product
   the core tests serve.
-- `src/product/` - `product.ts` (Steward as a Product; `maintenance.fields` keeps `globalSettings`
-  answering during maintenance, and `resolvers/admin.ts` reports the window in its banner),
+- `src/product/` - `product.ts` (Steward as a Product), `maintenance.ts` (the gateway's
+  maintenance gate: its GraphQL whitelist and `MAINTENANCE` error, with `/auth`, `/setup`, the SSO
+  admin routes and `GET /maintenance` passed through; `resolvers/admin.ts` puts an announced
+  window in the announcement and a window that's on in the maintenance banner),
   `routes.ts` (the gateway's sign-in and `/setup/bootstrap`), `sign-in-state.ts` (the session,
   pending sign-in and factors those routes share), `sign-in.ts` (`/auth/config`, the password
   reset and passkey sign-in, switched by the `sign-in-methods` control), `passkeys.ts` (WebAuthn
@@ -89,9 +91,14 @@ drafts.
   its helpers, so a build at load time would read the resolvers before they exist.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
-- While maintenance is on (`src/core/maintenance.ts`), the gateway paths and new websockets get
-  the product's maintenance refusal and `/readyz` says not ready; `/livez`, `/healthz`, `/_mock`
-  and the product's maintenance fields keep answering.
+- While maintenance is on (`src/core/maintenance.ts`), every gateway path and new websocket goes to
+  the product's maintenance answer (`src/product/maintenance.ts`) and `/readyz` says not ready;
+  `/livez`, `/healthz`, `/_mock` and the whitelisted fields keep answering. The product's answer
+  returns a promise for the routes it passes through, which the core awaits for HTTP; a websocket
+  upgrade must still get a plain Response. The gateway's site-admin bypass needs a core hook the
+  template doesn't have yet (the core decides GraphQL before the product sees the caller).
+- `needs-onboarding` marks a person as owing onboarding; `completeOnboarding` in
+  `resolvers/users.ts` follows identity's CompleteOnboarding.
 - A route that throws answers 500 `internal` (logged), never a hung request. A websocket upgrade
   on any path but the GraphQL one goes to the product's `sockets` hook; nothing there answers 404.
   Product routes run after the health probes, the controls and the GraphQL path, and before

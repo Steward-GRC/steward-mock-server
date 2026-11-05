@@ -113,19 +113,43 @@ on, and `GET /_mock/state` the whole state.
 
 The maintenance cycle has its own kinds, and its own card on the page:
 
-| Kind                   | Body                            | What it does                                                                                                                                                                        |
-| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `maintenance-announce` | `startsAt`, `endsAt`, `message` | A window ahead, which every client reads.                                                                                                                                           |
-| `maintenance-start`    | `endsAt`, `message` (optional)  | Maintenance on now: the gateway paths answer 503 with a Retry-After and `/readyz` isn't ready, while `/livez`, `/healthz`, `/_mock` and the product's banner fields keep answering. |
-| `maintenance-update`   | `startsAt`, `endsAt`, `message` | Extend or change the window, announced or on.                                                                                                                                       |
-| `maintenance-end`      |                                 | Back to normal.                                                                                                                                                                     |
-| `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                                                           |
+| Kind                   | Body                            | What it does                                                                                                                                 |
+| ---------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maintenance-announce` | `startsAt`, `endsAt`, `message` | A window ahead, which every client reads.                                                                                                    |
+| `maintenance-start`    | `endsAt`, `message` (optional)  | Maintenance on now, gated the way steward-gateway gates it (below). `/readyz` isn't ready; `/livez`, `/healthz` and `/_mock` keep answering. |
+| `maintenance-update`   | `startsAt`, `endsAt`, `message` | Extend or change the window, announced or on.                                                                                                |
+| `maintenance-end`      |                                 | Back to normal.                                                                                                                              |
+| `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                    |
 
-Reset and start fresh put it back to no maintenance. Steward's banner field is `globalSettings`,
-which steward-web reads before sign-in: it keeps answering while maintenance is on, and while a
-window is announced or on its `maintenance` reports `enabled: true` with the window's message (or
-a line naming the window when it has none). Steward adds `idp-test-outcome` and
-`expire-test-links`, and `sign-in-methods` below.
+Reset and start fresh put it back to no maintenance. Steward answers the window the way
+steward-gateway does:
+
+- **Announced:** `globalSettings.announcement` is a `warning` announcement with the window's
+  message (or a line naming the window when it has none), and `maintenance.enabled` stays false.
+  Nothing is locked.
+- **On:** `globalSettings.maintenance` reports `enabled: true` with the message. GraphQL answers
+  only operations whose root fields are all on the gateway's whitelist (`globalSettings`, `me`,
+  `__schema`, `__type`); anything else answers 200 with the gateway's `MAINTENANCE` error. Sign-in
+  (`/auth`), `/setup`, the SSO admin routes and `GET /maintenance` keep answering; new websockets
+  get a 503.
+- `GET /maintenance` answers `{enabled, message}`, as the gateway's public route does.
+
+One difference remains: the gateway lets a site admin run every operation during maintenance, so
+they can use the admin console and lift it there. The mock's shared core decides GraphQL before
+it knows the caller, so a site admin gets the same whitelist as everyone else until the template
+has a hook for it. End maintenance from `/_mock` instead.
+
+Steward adds `idp-test-outcome`, `expire-test-links`, `needs-onboarding` and `sign-in-methods`
+below.
+
+### Onboarding
+
+`needs-onboarding` with `personId` (and `needsOnboarding: false` to clear it) marks a person as
+still owing first-run onboarding, so `me.needsOnboarding` is true and steward-web shows the welcome
+page (G10). `completeOnboarding` clears it the gateway's way: the terms must be accepted, a sent
+first or last name sets the name (derived as "first last"), a sent non-empty email replaces the
+email, and a sent username must be non-empty (`InvalidArgument`) and free (`AlreadyExists`). The
+"Erin owes onboarding" button on `/_mock` marks Erin. A reset clears it.
 
 ### Sign-in methods
 

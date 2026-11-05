@@ -3,9 +3,9 @@
 // Site settings and single sign-on: the announcement and maintenance banners, the email
 // transport, organisations through their activation gates (domain verified, IdP test passed),
 // IdP group mappings and the service-provider certificate. All of it is site admin only, except
-// globalSettings, which anyone may read before signing in. While the controls have a maintenance
-// window announced or on, globalSettings reports it in the maintenance banner, as the gateway
-// reports a site admin's notice; with no window it reports what the admin saved.
+// globalSettings, which anyone may read before signing in. The controls' maintenance window shows
+// the gateway's way: announced, it's a warning announcement; on, it's the maintenance notice with
+// enabled true. With no window, globalSettings reports what the admin saved.
 
 import type { GlobalSettings } from "#product/data.ts";
 import type { Organization } from "#product/data/admin.ts";
@@ -42,21 +42,21 @@ const windowMessage = (window: MaintenanceWindow): string => {
     : "Steward is down for maintenance.";
 };
 
-/** The saved settings, with the controls' maintenance window in the maintenance banner. */
-const settingsNow = (): GlobalSettings => {
+/** The saved settings, with the controls' maintenance window in the banner it belongs in. */
+export const globalSettingsNow = (): GlobalSettings => {
   const saved = data().settings;
   const window = maintenance();
   if (window.state === "none") return saved;
   log.trace("globalSettings reports the maintenance window", {
     state: window.state,
   });
-  return {
-    ...saved,
-    maintenance: {
-      enabled: true,
-      message: window.message ?? windowMessage(window),
-    },
-  };
+  const message = window.message ?? windowMessage(window);
+  if (window.state === "announced")
+    return {
+      ...saved,
+      announcement: { enabled: true, level: "warning", message },
+    };
+  return { ...saved, maintenance: { enabled: true, message } };
 };
 
 // steward-identity audits no organisation, group mapping or SP certificate change (it sends only
@@ -284,7 +284,7 @@ export const adminResolvers: Resolvers = {
       siteAdmin(context);
       return data().emailServiceConfig;
     },
-    globalSettings: () => settingsNow(),
+    globalSettings: () => globalSettingsNow(),
     groupMappings: (
       _root,
       given: { connectionId: string },

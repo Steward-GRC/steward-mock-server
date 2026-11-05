@@ -11,6 +11,7 @@ import type { Product } from "#core/product.ts";
 import { collabSockets } from "#product/collab.ts";
 import { productActions, productSummary } from "#product/controls.ts";
 import { seed } from "#product/data.ts";
+import { stewardMaintenance } from "#product/maintenance.ts";
 import { resolvers } from "#product/resolvers.ts";
 import { stewardRoutes } from "#product/routes.ts";
 
@@ -19,11 +20,8 @@ const read = (file: string) =>
 
 export const steward: Product = {
   actions: productActions,
-  /**
-   * globalSettings is the banner query steward-web reads before sign-in, so it keeps answering
-   * while maintenance is on; everything else gets the core's 503 with a Retry-After.
-   */
-  maintenance: { fields: ["globalSettings"] },
+  /** The gateway's maintenance gate (src/product/maintenance.ts). */
+  maintenance: stewardMaintenance,
   resolvers,
   routes: stewardRoutes,
   schema: [read("schema.graphql"), read("schema-pending.graphql")],

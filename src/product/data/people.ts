@@ -26,6 +26,8 @@ export interface StewardPerson extends Person {
   managedGroupIds: string[];
   memberships: Membership[];
   mergedIntoUserId: null | string;
+  /** Owes first-run onboarding (the welcome page) until completeOnboarding; the controls set it. */
+  needsOnboarding?: boolean;
   /**
    * Has a passkey (src/product/passkeys.ts): it signs in on its own, and is offered as a second
    * factor beside the authenticator app and the emailed code.
