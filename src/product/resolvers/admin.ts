@@ -12,7 +12,12 @@ import type { Organization } from "#product/data/admin.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
-import { maintenance, type MaintenanceWindow } from "#core/maintenance.ts";
+import {
+  maintenance,
+  maintenanceControls,
+  maintenanceOn,
+  type MaintenanceWindow,
+} from "#core/maintenance.ts";
 import { spCertificate } from "#product/data/admin.ts";
 import {
   data,
@@ -46,15 +51,18 @@ const windowMessage = (window: MaintenanceWindow): string => {
 export const globalSettingsNow = (): GlobalSettings => {
   const saved = data().settings;
   const window = maintenance();
-  if (window.state === "none") return saved;
+  // Maintenance is on only while the window is: saving it on starts the window, and ending the
+  // window from the controls turns it off.
+  if (window.state === "none")
+    return { ...saved, maintenance: { ...saved.maintenance, enabled: false } };
   log.trace("globalSettings reports the maintenance window", {
     state: window.state,
   });
   const message = window.message ?? windowMessage(window);
   if (window.state === "announced")
     return {
-      ...saved,
       announcement: { enabled: true, level: "warning", message },
+      maintenance: { ...saved.maintenance, enabled: false },
     };
   return { ...saved, maintenance: { enabled: true, message } };
 };
@@ -226,14 +234,19 @@ export const adminResolvers: Resolvers = {
       context: Context,
     ) => {
       const admin = siteAdmin(context);
-      const { announcement, maintenance } = given.input;
+      const { announcement, maintenance: notice } = given.input;
       if (announcement.enabled && !announcement.message.trim())
         throw refuse(
           "BAD_USER_INPUT",
           "An enabled announcement needs a message.",
         );
-      data().settings = { announcement, maintenance };
+      data().settings = { announcement, maintenance: notice };
       record("global_settings.updated", admin, SETTINGS);
+      // The gateway's maintenance is this setting, so saving it turns the window on or off.
+      if (notice.enabled && !maintenanceOn())
+        maintenanceControls["maintenance-start"]?.({ message: notice.message });
+      if (!notice.enabled && maintenanceOn())
+        maintenanceControls["maintenance-end"]?.({});
       return data().settings;
     },
     startDomainVerification: (

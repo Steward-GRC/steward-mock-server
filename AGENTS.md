@@ -95,8 +95,9 @@ drafts.
   the product's maintenance answer (`src/product/maintenance.ts`) and `/readyz` says not ready;
   `/livez`, `/healthz`, `/_mock` and the whitelisted fields keep answering. The product's answer
   returns a promise for the routes it passes through, which the core awaits for HTTP; a websocket
-  upgrade must still get a plain Response. The gateway's site-admin bypass needs a core hook the
-  template doesn't have yet (the core decides GraphQL before the product sees the caller).
+  upgrade must still get a plain Response. The product's `allow` hook is the gateway's site-admin
+  bypass: a site admin runs every GraphQL operation. A site admin's `setGlobalSettings` starts or
+  ends the window, since the gateway's maintenance is that setting.
 - `needs-onboarding` marks a person as owing onboarding; `completeOnboarding` in
   `resolvers/users.ts` follows identity's CompleteOnboarding.
 - A route that throws answers 500 `internal` (logged), never a hung request. A websocket upgrade
