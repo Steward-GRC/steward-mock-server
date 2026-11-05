@@ -1,0 +1,5 @@
+mutation SetUserPolicyOverride($userId: ID!, $policyNumber: String!, $effect: OverrideEffect) {
+  setUserPolicyOverride(userId: $userId, policyNumber: $policyNumber, effect: $effect) {
+    ...UserFields
+  }
+}

@@ -1,0 +1,3 @@
+mutation RemoveUserMfaFactor($userId: ID!, $methodId: ID!) {
+  removeUserMfaFactor(userId: $userId, methodId: $methodId)
+}

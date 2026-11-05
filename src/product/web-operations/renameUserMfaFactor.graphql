@@ -1,0 +1,3 @@
+mutation RenameUserMfaFactor($userId: ID!, $methodId: ID!, $label: String!) {
+  renameUserMfaFactor(userId: $userId, methodId: $methodId, label: $label)
+}

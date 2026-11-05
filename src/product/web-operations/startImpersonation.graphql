@@ -1,0 +1,7 @@
+mutation StartImpersonation($userId: ID!, $reason: String!) {
+  startImpersonation(userId: $userId, reason: $reason) {
+    targetUserId
+    targetName
+    expiresAt
+  }
+}

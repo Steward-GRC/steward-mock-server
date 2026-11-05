@@ -1,0 +1,8 @@
+query UserFactors($userId: ID!) {
+  userFactors(userId: $userId) {
+    id
+    kind
+    enrolledAt
+    label
+  }
+}

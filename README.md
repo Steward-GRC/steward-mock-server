@@ -83,7 +83,7 @@ per section of the pinned template, keyed and word-diffed as core does.
 | `dave`    | privacy officer | The report case queue. Has to enrol a second factor first. Has a deny exception on the Lost Device Procedure.                                                                                          |
 | `erin`    | reader          | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. Has an allow exception on the Archive Access Policy. |
 | `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                                                                                                         |
-| `heidi`   | group manager   | Manages the Facilities team (My groups), with no second factor.                                                                                                                                        |
+| `heidi`   | group manager   | Manages the Facilities team (My groups: Dave, Erin and Heidi), with no second factor.                                                                                                                  |
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with
@@ -163,6 +163,9 @@ The admin user screens answer as steward-gateway and steward-identity do:
   email factor, and `removeUserMfaFactor` and `renameUserMfaFactor` change them. Removing one
   takes it off sign-in too. `myFactors` is the signed-in person's own list (one passkey entry,
   unlabelled); Erin has only the email factor, so steward-web nudges her towards a stronger one.
+- **Reassigning a person's policies:** `reassignUserPolicies` moves every policy one person owns to
+  another and rewrites the category rules that name them, each change audited, as steward-core
+  does before an account is deleted.
 - **Password and welcome email:** `resetUserPassword` answers true for a local account (the
   password isn't kept, since any password signs in); `resendWelcomeEmail` answers true and sends
   nothing.

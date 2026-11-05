@@ -75,7 +75,7 @@ describe("Heidi", () => {
     const ids = (members.data.managedGroupMembers as { userId: string }[]).map(
       (u) => u.userId,
     );
-    assert.deepEqual(ids.toSorted(), ["user-erin", "user-heidi"]);
+    assert.deepEqual(ids.toSorted(), ["user-dave", "user-erin", "user-heidi"]);
   });
 
   it("manages no other group", async () => {

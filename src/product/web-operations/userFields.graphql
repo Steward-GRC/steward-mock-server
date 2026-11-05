@@ -7,6 +7,11 @@ fragment UserFields on User {
   enabled
   roles
   idpGroups
+  groupIds
+  policyOverrides {
+    policyNumber
+    effect
+  }
   isRoot
   localAccount
   username

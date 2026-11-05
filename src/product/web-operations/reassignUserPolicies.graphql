@@ -1,0 +1,6 @@
+mutation ReassignUserPolicies($fromUserId: ID!, $toUserId: ID!) {
+  reassignUserPolicies(fromUserId: $fromUserId, toUserId: $toUserId) {
+    reassignedOwnerCount
+    reassignedAuthorGrants
+  }
+}

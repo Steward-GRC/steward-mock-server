@@ -20,6 +20,7 @@ import {
 import { passkeyCredentialId } from "#product/passkeys.ts";
 import {
   caller,
+  data,
   found,
   isSiteAdmin,
   people,
@@ -158,6 +159,59 @@ export const accountResolvers: Resolvers = {
         record("root.granted", actor, userSubject(person));
       }
       return asUser(person);
+    },
+    /**
+     * core's ReassignUserPolicies: every policy the first person owns, retired ones too, moves to
+     * the second, and every category rule naming the first as a user names the second, each
+     * audited. It never deletes anything, and checks neither person exists.
+     */
+    reassignUserPolicies: (
+      _root,
+      given: { fromUserId: string; toUserId: string },
+      context: Context,
+    ) => {
+      const actor = siteAdmin(context);
+      const { fromUserId, toUserId } = given;
+      if (fromUserId === toUserId)
+        throw refuse(
+          "BAD_USER_INPUT",
+          "from_user_id and to_user_id must differ",
+        );
+      const moved = data().policies.filter((p) => p.ownerUserId === fromUserId);
+      for (const policy of moved) {
+        policy.ownerUserId = toUserId;
+        policy.updatedAt = new Date().toISOString();
+        record("policy.owner_changed", actor, {
+          groupId: policy.homeCategoryId,
+          id: policy.id,
+          kind: "policy",
+          label: policy.title,
+        });
+      }
+      let grants = 0;
+      for (const category of data().categories) {
+        for (const rule of category.rules)
+          if (rule.subjectKind === "USER" && rule.subjectRef === fromUserId) {
+            rule.subjectRef = toUserId;
+            grants++;
+          }
+        // The mock's read model keeps the authors on the category too.
+        category.authorRule = category.authorRule.map((id) =>
+          id === fromUserId ? toUserId : id,
+        );
+      }
+      const from = people().find((p) => p.id === fromUserId);
+      if (grants > 0)
+        record("category.ruleset_changed", actor, {
+          id: fromUserId,
+          kind: "user",
+          label: from?.name ?? fromUserId,
+        });
+      return {
+        reassignedAuthorGrants: grants,
+        reassignedOwnerCount: moved.length,
+        reassignedPolicyIds: moved.map((p) => p.id),
+      };
     },
     removeUserMfaFactor: (
       _root,

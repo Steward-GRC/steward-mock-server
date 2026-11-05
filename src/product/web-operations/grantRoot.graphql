@@ -1,0 +1,5 @@
+mutation GrantRoot($userId: ID!, $otp: String!) {
+  grantRoot(userId: $userId, otp: $otp) {
+    ...UserFields
+  }
+}
