@@ -560,6 +560,37 @@ describe("maintenance", () => {
     assert.equal((await fetch(`${base}/fixture/whoami`)).status, 503);
   });
 
+  it("runs an operation the product's allow hook lets through, for that caller only", async () => {
+    const ada = await signIn(base, "ada");
+    const ben = await signIn(base, "ben");
+    await control(base, { kind: "maintenance-start", message: "Back soon" });
+    const asAdmin = await post(
+      base,
+      "/gql",
+      { query: "{ me { username } }" },
+      headersFor(ada),
+    );
+    assert.equal(asAdmin.status, 200);
+    assert.deepEqual((await asAdmin.json()).data, {
+      me: { username: "ada" },
+    });
+    assert.equal(
+      (
+        await post(
+          base,
+          "/gql",
+          { query: "{ me { username } }" },
+          headersFor(ben),
+        )
+      ).status,
+      503,
+    );
+    assert.equal(
+      (await post(base, "/gql", { query: "{ me { username } }" })).status,
+      503,
+    );
+  });
+
   it("keeps the health of the process, the controls and the product's banner answering", async () => {
     await control(base, { kind: "maintenance-start", message: "Back soon" });
     assert.equal((await fetch(`${base}/readyz`)).status, 503);

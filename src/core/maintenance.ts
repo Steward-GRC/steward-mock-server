@@ -8,7 +8,8 @@
 // routes and new websockets) answer the product's maintenance refusal: by default 503 with a
 // Retry-After until the window ends, the way a gateway in front of a stopped service answers.
 // /readyz says not ready; /livez, /healthz and /_mock keep answering, and so do the root fields
-// the product lists for its maintenance banner.
+// the product lists for its maintenance banner and the GraphQL operations its allow hook lets a
+// caller run.
 
 import type { OperationDefinitionNode } from "graphql";
 
@@ -19,6 +20,7 @@ import {
   type MaintenanceWindow,
   mockState,
   noMaintenance,
+  type Session,
 } from "#core/state.ts";
 
 export { MAINTENANCE_CHANGED } from "#core/events.ts";
@@ -68,16 +70,25 @@ export const maintenanceRefusal = (
   );
 };
 
-/** Whether a GraphQL operation selects only the fields the product keeps answering. */
+/**
+ * Whether a GraphQL operation runs during maintenance: it selects only the fields the product
+ * keeps answering, or the product's allow hook lets this caller through.
+ */
 export const maintenanceAllows = (
   operation: OperationDefinitionNode,
+  request: Request,
+  session: null | Session,
 ): boolean => {
   const fields = product().maintenance?.fields ?? [];
-  return operation.selectionSet.selections.every(
+  const banner = operation.selectionSet.selections.every(
     (selection) =>
       selection.kind === "Field" &&
       (selection.name.value === "__typename" ||
         fields.includes(selection.name.value)),
+  );
+  return (
+    banner ||
+    product().maintenance?.allow?.(request, session, operation) === true
   );
 };
 
