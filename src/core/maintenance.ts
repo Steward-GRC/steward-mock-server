@@ -9,7 +9,8 @@
 // Retry-After until the window ends, the way a gateway in front of a stopped service answers.
 // /readyz says not ready; /livez, /healthz and /_mock keep answering, and so do the root fields
 // the product lists for its maintenance banner and the GraphQL operations its allow hook lets a
-// caller run.
+// caller run. A product whose gateway gates only GraphQL sets its scope to "graphql": then only
+// GraphQL operations are refused, over HTTP and on the websocket, and everything else stays open.
 
 import type { OperationDefinitionNode } from "graphql";
 
@@ -69,6 +70,27 @@ export const maintenanceRefusal = (
     maintenanceAnswer(window)
   );
 };
+
+/** Whether maintenance closes the whole gateway (the default) or only its GraphQL operations. */
+export const maintenanceClosesGateway = (): boolean =>
+  (product().maintenance?.scope ?? "gateway") === "gateway";
+
+/** The answer for a non-GraphQL call or a new websocket while maintenance closes the gateway. */
+export const maintenanceGate = (
+  request: Request,
+  path: string,
+): Response | undefined =>
+  maintenanceClosesGateway() ? maintenanceRefusal(request, path) : undefined;
+
+/** The GraphQL error an operation on an open websocket gets while maintenance refuses it. */
+export const maintenanceError = (): {
+  extensions: { code: string };
+  message: string;
+} => ({
+  extensions: { code: "MAINTENANCE" },
+  message:
+    mockState.maintenance.message ?? "The service is down for maintenance.",
+});
 
 /**
  * Whether a GraphQL operation runs during maintenance: it selects only the fields the product

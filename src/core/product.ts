@@ -83,6 +83,14 @@ export interface ProductMaintenance {
   ) => Response;
   /** Root fields that keep answering during maintenance: the product's maintenance banner query. */
   fields?: string[];
+  /**
+   * What maintenance closes. "gateway" (the default) is a gateway in front of a stopped service:
+   * the GraphQL path, /auth, /setup, the product's routes and new websockets answer the
+   * refusal, and /readyz says not ready. "graphql" is a gateway that gates only its GraphQL
+   * operations: every other route and websocket stays open and /readyz stays ready, while each
+   * operation, over HTTP or on the websocket, still goes through `fields` and `allow`.
+   */
+  scope?: "gateway" | "graphql";
 }
 
 /** A product's own HTTP routes (see Product.routes). */

@@ -24,7 +24,7 @@ import {
   startFresh,
   WRONG_CODE,
 } from "#core/test-client.ts";
-import { FIXTURE_VERSION } from "#core/test-fixture.ts";
+import { fixture, FIXTURE_VERSION } from "#core/test-fixture.ts";
 
 let base = "";
 let server: RunningMockServer;
@@ -589,6 +589,81 @@ describe("maintenance", () => {
       (await post(base, "/gql", { query: "{ me { username } }" })).status,
       503,
     );
+  });
+
+  it("gates each operation on a websocket opened before maintenance, through the allow hook", async () => {
+    const subscription = "subscription { noteAdded { text } }";
+    const opened = async (username: string) => {
+      const who = await signIn(base, username, true);
+      const ws = await openSocket(base, "graphql-transport-ws");
+      ws.send({ payload: { authToken: who.token }, type: "connection_init" });
+      await ws.next("connection_ack");
+      return ws;
+    };
+    const ada = await opened("ada");
+    const ben = await opened("ben");
+    await control(base, { kind: "maintenance-start", message: "Back soon" });
+    ben.send({ id: "1", payload: { query: subscription }, type: "subscribe" });
+    const refused = await ben.next("error");
+    assert.deepEqual(refused.payload, [
+      { extensions: { code: "MAINTENANCE" }, message: "Back soon" },
+    ]);
+    ada.send({ id: "1", payload: { query: subscription }, type: "subscribe" });
+    await new Promise((settle) => setTimeout(settle, 50));
+    await control(base, { kind: "add-note", text: "Still here" });
+    assert.deepEqual((await ada.next("next")).payload, {
+      data: { noteAdded: { text: "Still here" } },
+    });
+    ada.socket.close();
+    ben.socket.close();
+  });
+
+  describe("scoped to GraphQL, the way a gateway gates only its operations", () => {
+    before(() => {
+      (fixture.maintenance ?? {}).scope = "graphql";
+    });
+    after(() => {
+      (fixture.maintenance ?? {}).scope = undefined;
+    });
+
+    it("keeps /readyz ready, and /auth, /setup and the product's routes open", async () => {
+      await control(base, { kind: "maintenance-start" });
+      assert.equal((await fetch(`${base}/readyz`)).status, 200);
+      assert.equal(
+        (await post(base, "/auth/login", { password: "x", username: "ben" }))
+          .status,
+        200,
+      );
+      assert.equal((await fetch(`${base}/setup/state`)).status, 200);
+      assert.equal((await fetch(`${base}/fixture/whoami`)).status, 200);
+    });
+
+    it("opens new websockets, and still refuses the operations the allow hook doesn't", async () => {
+      const ben = await signIn(base, "ben");
+      await control(base, { kind: "maintenance-start" });
+      const relay = await connect("/fixture/relay/draft-1", {
+        cookie: ben.cookie,
+      });
+      assert.equal(relay.status, undefined);
+      relay.socket.close();
+      const ws = await openSocket(base, "graphql-transport-ws", {
+        cookie: ben.cookie,
+      });
+      ws.send({ type: "connection_init" });
+      await ws.next("connection_ack");
+      ws.socket.close();
+      assert.equal(
+        (
+          await post(
+            base,
+            "/gql",
+            { query: "{ notes { id } }" },
+            headersFor(ben),
+          )
+        ).status,
+        503,
+      );
+    });
   });
 
   it("keeps the health of the process, the controls and the product's banner answering", async () => {

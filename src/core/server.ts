@@ -17,7 +17,7 @@ import { WebSocketServer } from "ws";
 
 import { handle } from "#core/handle.ts";
 import { createLogger } from "#core/log.ts";
-import { maintenanceRefusal } from "#core/maintenance.ts";
+import { maintenanceGate } from "#core/maintenance.ts";
 import { product, type ProductSockets, settings } from "#core/product.ts";
 import { createWebSocketServer } from "#core/websocket.ts";
 
@@ -135,8 +135,9 @@ export const startMockServer = async ({
       (incoming: IncomingMessage, socket: Duplex, head: Buffer) => {
         const path = new URL(incoming.url ?? "/", "https://mock.invalid")
           .pathname;
-        // While maintenance is on, a new socket gets the maintenance refusal; open ones stay.
-        const refused = maintenanceRefusal(requestOf(incoming), path);
+        // While maintenance closes the gateway, a new socket gets the maintenance refusal; open
+        // ones stay, and their operations are gated one by one.
+        const refused = maintenanceGate(requestOf(incoming), path);
         if (refused) {
           void refuseUpgrade(socket, refused);
           return;

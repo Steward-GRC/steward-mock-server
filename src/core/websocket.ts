@@ -15,6 +15,11 @@ import { sessionOfCookie, sessionOfToken } from "#core/auth.ts";
 import { listen, SESSIONS_ENDED } from "#core/events.ts";
 import { type Operation, prepare, run, start } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
+import {
+  maintenanceAllows,
+  maintenanceError,
+  maintenanceOn,
+} from "#core/maintenance.ts";
 import { mockState, type Session } from "#core/state.ts";
 
 const log = createLogger("websocket");
@@ -59,7 +64,8 @@ const asRequest = (incoming: IncomingMessage) => {
 
 const serve = (socket: WebSocket, incoming: IncomingMessage) => {
   const legacy = socket.protocol === LEGACY;
-  const cookieSession = sessionOfCookie(asRequest(incoming));
+  const upgrade = asRequest(incoming);
+  const cookieSession = sessionOfCookie(upgrade);
   let session: null | Session = cookieSession;
   let acknowledged = false;
   const operations = new Map<string, () => void>();
@@ -107,6 +113,13 @@ const serve = (socket: WebSocket, incoming: IncomingMessage) => {
   const begin = async (id: string, payload: Operation) => {
     const prepared = prepare(payload, session);
     if (!prepared.ok) return fail(id, prepared.errors);
+    // During maintenance each operation is gated as it would be over HTTP.
+    if (
+      maintenanceOn() &&
+      !maintenanceAllows(prepared.operation, upgrade, session)
+    ) {
+      return fail(id, [maintenanceError()]);
+    }
     const data = legacy ? "data" : "next";
     if (prepared.operation.operation !== "subscription") {
       const result = await run(prepared, payload, session);
