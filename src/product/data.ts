@@ -66,6 +66,18 @@ export interface BreakGlassGrant {
   userId: string;
 }
 
+/**
+ * The gateway's sign-in switches. `passwordReset` off answers like a gateway without its
+ * internal/passwordreset package, the only way the gateway shows no reset: steward-web offers the
+ * reset whenever /auth/config answers.
+ */
+export interface SignInMethods {
+  defaultLoginMethod: "local" | "sso";
+  passkey: boolean;
+  passwordReset: boolean;
+  sso: boolean;
+}
+
 export interface StewardData extends ProductData {
   acknowledgements: Acknowledgement[];
   audit: AuditRecord[];
@@ -81,6 +93,8 @@ export interface StewardData extends ProductData {
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
   organizations: Organization[];
+  /** Emails a password reset code was sent to and not used yet. */
+  passwordResets: string[];
   pastSessions: PastSession[];
   /** The core's sign-in records; the directory's fields are filled in by asSteward. */
   people: Person[];
@@ -90,6 +104,8 @@ export interface StewardData extends ProductData {
   reportCases: ReportCase[];
   runs: Run[];
   settings: GlobalSettings;
+  /** Which sign-in methods the gateway offers (the controls switch them). */
+  signInMethods: SignInMethods;
   spCertificate: SpCertificate;
   templates: Template[];
   templateVersions: TemplateVersion[];
@@ -110,6 +126,7 @@ export const seed = (): StewardData => ({
   links: links(),
   next: {},
   organizations: organizations(),
+  passwordResets: [],
   pastSessions: pastSessions(),
   people: people(),
   platformGroups: platformGroups(),
@@ -118,6 +135,12 @@ export const seed = (): StewardData => ({
   reportCases: reportCases(),
   runs: runs(),
   settings: globalSettings(),
+  signInMethods: {
+    defaultLoginMethod: "local",
+    passkey: true,
+    passwordReset: true,
+    sso: true,
+  },
   spCertificate: spCertificate(),
   templates: templates(),
   templateVersions: templateVersions(),

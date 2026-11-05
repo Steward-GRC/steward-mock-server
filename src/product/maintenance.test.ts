@@ -126,7 +126,7 @@ describe("maintenance banner", () => {
 });
 
 describe("summary", () => {
-  it("counts people, policies, open runs and cases, beside the IdP test outcome", async () => {
+  it("counts people, policies, open runs and cases, beside the IdP test outcome and the sign-in methods", async () => {
     const state = await control(base, { kind: "reset" });
     const data = stewardData();
     assert.deepEqual(state.summary, {
@@ -137,6 +137,7 @@ describe("summary", () => {
       ).length,
       people: data.people.length,
       policies: data.policies.length,
+      "sign-in": "passkey, passwordReset, sso",
     });
     assert.ok(
       data.runs.some((run) => run.status !== "APPROVAL_STATUS_IN_REVIEW"),

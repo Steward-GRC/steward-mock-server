@@ -27,8 +27,12 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   the core tests serve.
 - `src/product/` - `product.ts` (Steward as a Product; `maintenance.fields` keeps `globalSettings`
   answering during maintenance, and `resolvers/admin.ts` reports the window in its banner),
-  `routes.ts` (the gateway's sign-in and `/setup/bootstrap`), `sso.ts` (the IdP test link, `/auth/sso/start` with a test token, and
-  the `/admin/idp/*` imports from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
+  `routes.ts` (the gateway's sign-in and `/setup/bootstrap`), `sign-in-state.ts` (the session,
+  pending sign-in and factors those routes share), `sign-in.ts` (`/auth/config`, the password
+  reset and passkey sign-in, switched by the `sign-in-methods` control), `passkeys.ts` (WebAuthn
+  options and the mock passkeys), `sso.ts` (`/auth/discover`, the pass-through SSO sign-in at
+  `/auth/sso/start`, the IdP test link, and the `/admin/idp/*` imports
+  from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
   `access.ts` is the policy read model (who reads, edits and approves what); `audit-actions.ts`
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
@@ -96,3 +100,10 @@ drafts.
   once that it called something nobody mocked.
 - Health probes never fail, whatever the controls armed.
 - File names are kebab-case.
+- Passkeys are faked, as in steward-gateway's tests: the mock never verifies a signature, and an
+  assertion counts as the passkey whose `id` or `rawId` it carries (`passkeyCredentialId`). A
+  person has one when `passkey: true` (Charlie).
+- The SSO sign-in is deliberately a pass-through test, not an emulation of the
+  gateway's flow: `/auth/sso/start` (without a test link) signs in the person `identifier` names,
+  or Erin, and redirects to `/home` or `/login?pendingMfa=` as the gateway's callback would. There
+  is no connection, state or callback; don't add the gateway's refusals back.
