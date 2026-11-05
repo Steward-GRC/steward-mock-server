@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 
 import type { Product } from "#core/product.ts";
 
+import { collabSockets } from "#product/collab.ts";
 import { productActions, productSummary } from "#product/controls.ts";
 import { seed } from "#product/data.ts";
 import { resolvers } from "#product/resolvers.ts";
@@ -47,5 +48,6 @@ export const steward: Product = {
     /** steward-gateway's version header (the services answer health with it). */
     versionHeader: "Steward-Version",
   },
+  sockets: collabSockets,
   summary: productSummary,
 };

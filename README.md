@@ -14,8 +14,9 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
 
 - 🔌 **The gateway's wire protocol:** GraphQL at `POST /query` and `GET /query`, a websocket on the
   same path for subscriptions (`graphql-transport-ws`, and the older `graphql-ws` that some mobile
-  clients still speak), sign-in under `/auth/*`, first-run setup under `/setup/*`, and the
-  `/livez`, `/readyz` and `/healthz` probes.
+  clients still speak), sign-in under `/auth/*`, first-run setup under `/setup/*`, the
+  `/livez`, `/readyz` and `/healthz` probes, and the editor's co-editing relay at
+  `/collab/ws/<draftId>` (the session cookie and the token from `issueCollabToken`).
 - 📐 **Answers shaped by the real schema:** every operation runs against the product's own GraphQL
   schema, so clients get only the fields they asked for, and a query the gateway would refuse is
   refused here too, with the same error codes.
@@ -72,6 +73,8 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Steward AI isn't mocked: `aiHealth` says
 `ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
+The co-editing relay passes edits between the browsers on a draft but doesn't keep the editor's
+checkpoints the way steward-collab does: the editor's Save button writes the draft.
 
 ### Settings
 

@@ -22,6 +22,7 @@ import {
   readEffect,
   visible,
 } from "#product/access.ts";
+import { collabPath, collabToken } from "#product/collab.ts";
 import {
   caller,
   data,
@@ -425,10 +426,16 @@ export const policyResolvers: Resolvers = {
       const policy = editablePolicy(person, given.input.policyId);
       if (policy.currentDraftVersionId !== given.input.draftId)
         throw notFound("draft");
+      const expiresAt = new Date(Date.now() + COLLAB_TOKEN_MS);
       return {
-        expiresAt: new Date(Date.now() + COLLAB_TOKEN_MS).toISOString(),
-        token: newId("collab-token"),
-        wsUrl: `/collab/ws/${encodeURIComponent(given.input.draftId)}`,
+        expiresAt: expiresAt.toISOString(),
+        token: collabToken({
+          draftId: given.input.draftId,
+          expiresAt,
+          policyId: policy.id,
+          userId: person.id,
+        }),
+        wsUrl: collabPath(given.input.draftId),
       };
     },
     publishDraft: (_root, given: { policyId: string }, context: Context) => {

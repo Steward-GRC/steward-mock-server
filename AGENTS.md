@@ -29,7 +29,9 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   the `/admin/idp/*` imports from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
   `access.ts` is the policy read model (who reads, edits and approves what); `audit-actions.ts`
-  lists the audit action names the services write, the only ones `record` takes.
+  lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
+  the co-editing relay at `/collab/ws/<draftId>` (the product's `sockets` hook) and the tokens
+  `issueCollabToken` mints for it.
 - `src/product/web-operations/` - steward-web's operations, byte for byte at the commit its README
   names; `web-operations.test.ts` sends every one of them. Keep the folder out of the formatter.
 - `src/core/server.test.ts` - the core's tests, against a real server on a free port, serving the
