@@ -81,9 +81,13 @@ subscription. Replace it; don't build around it.
    tests run against a fixture product of their own (`src/core/test-fixture.ts`), never
    `src/product/`, so they pass unchanged whatever the product is.
 
-9. Run the checks, then commit in one PR and say in its body which template commit the product
-   started from (`git log -1 --format=%H` before step 2). That commit is where the next sync
-   starts.
+   The mock is for local runs and walkthroughs, never a substitute for unit tests: every client
+   repo keeps its own unit tests against its public API, and passing against the mock doesn't count
+   as tested.
+
+9. Run the checks, then commit in one PR and say in its body which template release the product
+   started from: the tag of the release the clone came from (the newest one on the template's
+   Releases page when it was made, for example `v1.2.0`). That tag is where the next sync starts.
 
    ```bash
    npm run lint
