@@ -80,7 +80,7 @@ describe("the policy read model", () => {
     const sensitive = await call(base, reader, "PolicyByNumber", {
       number: "POL-USAGE-000002",
     });
-    assert.equal(sensitive.refused, "NOT_FOUND");
+    assert.equal(sensitive.refused, "NotFound");
   });
 
   it("hides a draft from everyone who can't edit it", async () => {
@@ -92,7 +92,7 @@ describe("the policy read model", () => {
     const draft = await call(base, reader, "PolicyVersion", {
       id: "version-6",
     });
-    assert.equal(draft.refused, "NOT_FOUND");
+    assert.equal(draft.refused, "NotFound");
   });
 
   it("shows the author her drafts, sensitive ones included", async () => {
@@ -198,7 +198,7 @@ describe("refusals", () => {
   for (const [personId, operation, variables] of refusals)
     it(`refuses ${operation} to ${personId}`, async () => {
       const answer = await call(base, await as(personId), operation, variables);
-      assert.equal(answer.refused, "FORBIDDEN");
+      assert.equal(answer.refused, "PermissionDenied");
     });
 
   it("signs a disabled account out at once", async () => {

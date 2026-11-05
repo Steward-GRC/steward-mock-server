@@ -146,7 +146,7 @@ describe("the reader follows the author's writes", () => {
     const draft = await byNumber(author, created.number);
     assert.equal(draft.policy.currentVersionStatus, "DRAFT");
     assert.equal(draft.policy.currentVersionNo, 0);
-    assert.equal((await byNumber(reader, created.number)).refused, "NOT_FOUND");
+    assert.equal((await byNumber(reader, created.number)).refused, "NotFound");
 
     ok(
       await call(base, author, "SaveDraft", {
@@ -220,7 +220,7 @@ describe("submitting a draft for review", () => {
       { homeCategoryId: "category-usage", id: "policy-2" },
       "version-3",
     );
-    assert.equal(refused, "FORBIDDEN");
+    assert.equal(refused, "PermissionDenied");
   });
 
   it("refuses a policy whose category has no workflow", async () => {
@@ -230,7 +230,7 @@ describe("submitting a draft for review", () => {
       { homeCategoryId: "category-due-diligence", id: "policy-5" },
       "version-6",
     );
-    assert.equal(refused, "FAILED_PRECONDITION");
+    assert.equal(refused, "FailedPrecondition");
   });
 });
 
@@ -350,7 +350,7 @@ describe("deciding an approval", () => {
     };
     ok(await decide(approver, task, "SIGNAL_TYPE_APPROVE"));
     const again = await decide(approver, task, "SIGNAL_TYPE_REJECT");
-    assert.equal(again.refused, "FAILED_PRECONDITION");
+    assert.equal(again.refused, "FailedPrecondition");
   });
 
   it("refuses a decision on a run that has ended", async () => {
@@ -360,7 +360,7 @@ describe("deciding an approval", () => {
       { policyVersionId: "version-8", runId: "run-2", taskId: "task-4" },
       "SIGNAL_TYPE_APPROVE",
     );
-    assert.equal(decided.refused, "FAILED_PRECONDITION");
+    assert.equal(decided.refused, "FailedPrecondition");
   });
 
   it("wants a comment with an approval", async () => {
@@ -371,6 +371,6 @@ describe("deciding an approval", () => {
       "SIGNAL_TYPE_APPROVE",
       " ",
     );
-    assert.equal(answer.refused, "BAD_USER_INPUT");
+    assert.equal(answer.refused, "InvalidArgument");
   });
 });
