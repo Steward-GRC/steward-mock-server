@@ -1,2 +1,4 @@
 # The operator owns and reviews everything by default.
 * @the-rabbit-hole-tech
+/.github/workflows/** @Bugs5382
+/.github/CODEOWNERS @Bugs5382

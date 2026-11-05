@@ -2,6 +2,12 @@ name: License Check (npm)
 # Fail if a 3rd-party npm dependency carries a license outside the allowlist. No
 # SAST/vuln scanning (deliberately out of scope).
 #
+# This file ships only to repos with a root package.json (compose.sh by
+# manifest, the governance overlay by manifest), so it never starts a runner just
+# to find no package.json. The Go check lives in job-license-check-go.yaml the
+# same way; both replace the old two-job job-license-check.yaml, whose
+# off-ecosystem job billed a minute per run to do nothing.
+#
 # Pull requests only, and not while the PR is a draft; the PR run covers what
 # merges, so nothing reruns on push to main.
 on:

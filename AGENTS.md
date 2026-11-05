@@ -39,7 +39,7 @@ changing it:
 - Lint: `npm run lint` (oxlint, then `oxfmt --check`; `npm run format` fixes the formatting)
 - Typecheck: `npm run typecheck`
 - Test: `npm test`
-- License headers: `task license` (check) and `task license:fix` (inject), MIT "2026 Shane"
+- License headers: `task license` (check) and `task license:fix` (inject), Apache-2.0, two-line SPDX header for "2026 The Steward Authors"
 
 ## Logging
 
@@ -47,6 +47,13 @@ changing it:
   (`console` or `json`). Requests log their method, path, status and time at `debug`.
 - Never log a request or response body, a password, a code, a cookie or a token, even invented
   ones. Log the person's id instead.
+
+## Template sync
+
+This repo started from `the-rabbit-hole-tech/template-node-mock-server` at commit
+`14159069615ceda41559fcbf38fffca3178b3f7d`. Take later
+template fixes as `TEMPLATE.md` says, starting from that commit: `src/core/` moves file for
+file, `src/product/` stays Steward's.
 
 ## Conventions and gotchas
 

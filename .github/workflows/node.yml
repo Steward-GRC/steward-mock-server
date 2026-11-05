@@ -1,35 +1,35 @@
-name: Test
-# Lint, typecheck and the tests, then the mock started the way a person starts it, with its
-# probes, its GraphQL endpoint and its controls page called over the network.
+# Node build and test for steward-mock-server. checks.yml calls it from its one
+# `checks` job, so its status check is `checks / Build & Test`.
 #
-# One job on one Node version (the one in .nvmrc), so there is one required check. Pull requests
-# only, and not while the PR is a draft; the PR run covers what merges.
+# Steps, in order: install with the lockfile and scripts off, lint, typecheck,
+# the tests, then the mock started the way a person starts it, with its probes,
+# its GraphQL endpoint and its controls page called over the network. It takes
+# no secrets.
+name: node
+
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, reopened, ready_for_review, synchronize]
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      timeout-minutes:
+        description: Job timeout.
+        type: number
+        default: 15
 
 jobs:
-  build:
-    name: 🧪 Build & Test
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm

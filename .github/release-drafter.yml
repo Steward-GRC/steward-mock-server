@@ -1,6 +1,11 @@
-# Release-drafter config for this repo.
+# Canonical release-drafter config for every governed repo (libraries/extensions
+# use release-drafter; only apps would use release-please, which we do not ship).
 # The autolabeler derives the categorizing label from the conventional-commit PR
 # title, so labeling is near-zero-effort; job-label-checker is the backstop.
+#
+# An owner whose scaffold settings name `release-drafter-extends` reads its shared copy of this
+# file through `extends:` instead of a local copy. Every other owner gets this file shipped as
+# `.github/release-drafter.yml`, the fallback behind its own `config: vars.RELEASE_DRAFTER_CONFIG`.
 #
 # Categories carry their own `when` conditions and `semver-increment`, and a
 # `pre-exclude` category drops skip-changelog pull requests: the new-format

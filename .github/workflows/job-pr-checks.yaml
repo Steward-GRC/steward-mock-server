@@ -1,10 +1,12 @@
 name: PR Checks
-# Conventional PR title, a PR body that follows the template and references an
-# issue, and the gitleaks secret scan.
+# Authoritative CI enforcement of what the local hooks check (hooks are advisory
+# and may not be installed): conventional PR title, no AI-tells/emoji in the
+# diff, a PR body that follows the template + references an issue, and the
+# gitleaks secret scan.
 #
 # ONE job, with each check as a step. Each of these checks does a few seconds of
-# work, and GitHub bills every job for at least a full minute, so separate
-# jobs cost a minute each per run where one job costs one. Every check step runs
+# work, and GitHub bills every job for at least a full minute, so four separate
+# jobs cost four minutes per run where one job costs one. Every check step runs
 # with `!cancelled()`, so a failing check never hides the ones after it: the log
 # shows every failure, and the job fails if any step failed.
 #
@@ -12,7 +14,7 @@ name: PR Checks
 # the only workflow (with the label checker, which also reads the title) that
 # reacts to `edited`, so a title or body fix reruns one job, not the build. An
 # edit reruns every step, not just title and body: the new result replaces the
-# last one for the same commit, so skipping gitleaks on an edit would
+# last one for the same commit, so skipping hygiene or gitleaks on an edit would
 # turn an earlier failure green.
 on:
   pull_request:
@@ -62,6 +64,34 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: 🧼 PR Hygiene
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Reuse the exact rules the local pre-commit hook uses.
+          source .claude/hooks/lib.sh
+          fail=0
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              .git/*) continue ;;
+              *.png|*.jpg|*.jpeg|*.gif|*.pdf|*.ico|*.svg|*.woff|*.woff2|*.ttf|*.eot|*.zip|*.gz|*.dotx|*.potx|*.pptx) continue ;;
+            esac
+            # Emoji allowed in Markdown and .github folders (nested ones too, as the pre-commit hook allows); blocked elsewhere.
+            case "$f" in
+              .github/*|*/.github/*|*.md|NOTES.txt|*/NOTES.txt) : ;;
+              *) e="$(gov_find_emoji < "$f")"; [ -n "$e" ] && { echo "emoji not allowed in $f:"; echo "$e"; fail=1; } ;;
+            esac
+            # AI-tells blocked except in files that document the rule (the same paths the pre-commit hook exempts).
+            case "$f" in
+              CLAUDE.md|*/CLAUDE.md|.claude/*|*/.claude/*|governance/*|*/governance/*|.github/workflows/*|*workflows/*.yml|*workflows/*.yaml|*forbidden-text.txt) : ;;
+              *) t="$(gov_find_file_tells "$f")"; [ -n "$t" ] && { echo "AI-tell not allowed in $f:"; echo "$t"; fail=1; } ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACM "$BASE" "$HEAD")
+          [ "$fail" -eq 0 ] || { echo "pr-hygiene: remove the above before merging."; exit 1; }
 
       # Secret scan, no paths-ignore: a secret can land in any file, docs
       # included. Hard failure: the scan exits non-zero on a finding. It runs the

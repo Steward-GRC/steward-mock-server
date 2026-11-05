@@ -1,0 +1,33 @@
+name: checks
+# The org's reusable workflows from Steward-GRC/.github, with this repo's own
+# Node build in place of the Go one. The ruleset on main requires
+# `checks / Build & Test`, `dco / DCO` and `secrets / Secrets`, so the caller job
+# ids stay `checks`, `dco` and `secrets`. The secrets scan covers the PR's own
+# range on a PR and the full history on a push to main. There are no protos, so
+# there are no proto-sync jobs. Timeouts are set inside the called jobs.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    if: (github.event_name == 'pull_request' || github.event_name == 'merge_group') && github.event.pull_request.draft != true
+    uses: ./.github/workflows/node.yml
+    with:
+      timeout-minutes: 15
+  dco:
+    if: (github.event_name == 'pull_request' || github.event_name == 'merge_group') && github.event.pull_request.draft != true
+    uses: Steward-GRC/.github/.github/workflows/dco.yml@main
+  secrets:
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' && github.event.pull_request.draft != true
+    permissions:
+      contents: read
+    uses: Steward-GRC/.github/.github/workflows/secrets.yml@main

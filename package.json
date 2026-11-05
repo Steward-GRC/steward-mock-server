@@ -2,8 +2,8 @@
   "name": "template-node-mock-server",
   "version": "0.0.0",
   "description": "Starting point for a product's mock gateway: a standalone Node server that speaks the gateway's wire protocol with resettable invented data.",
-  "author": "Shane",
-  "license": "MIT",
+  "author": "The Steward Authors",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "engines": {

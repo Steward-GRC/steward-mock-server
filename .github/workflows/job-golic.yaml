@@ -1,6 +1,7 @@
 name: GoLic
-# Verify every source file carries the repo's license header. golic (Bugs5382's own
-# tool) is run through go-task (`task license`). `golic inject --dry -x` fails the check if a header is missing; it never
+# Verify every source file carries the repo's license header. golic is run through go-task
+# (`task license`) -- the standard runner for every
+# project. `golic inject --dry -x` fails the check if a header is missing; it never
 # modifies files.
 #
 # Pull requests only, and not while the PR is a draft. There is no rerun on push
