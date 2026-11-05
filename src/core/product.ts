@@ -14,8 +14,19 @@ export interface Product {
   actions: ProductAction[];
   /** What each field of the schema answers, by type and field name. */
   resolvers: Resolvers;
-  /** The gateway's GraphQL schema, as SDL text. */
-  schema: string;
+  /**
+   * The product's own HTTP routes: a Response for a request it serves, undefined for one it
+   * doesn't. They run after the health probes, the controls and the GraphQL path (which a product
+   * can't replace) and before the core's /auth and /setup routes, so a product can add a sign-in
+   * path the core doesn't know.
+   */
+  routes?: ProductRoutes;
+  /**
+   * The gateway's GraphQL schema as SDL text, or several texts read as one: a copy of the real
+   * gateway's schema, and beside it a file of schema that's ahead of the gateway (written with
+   * `extend type`), so the copy stays untouched.
+   */
+  schema: string | string[];
   /** The invented data, made fresh on every reset. */
   seed: () => ProductData;
   settings: Settings;
@@ -30,6 +41,12 @@ export type ProductAction = { run: ProductControl } & Action;
 export interface ProductData {
   people: Person[];
 }
+
+/** A product's own HTTP routes (see Product.routes). */
+export type ProductRoutes = (
+  request: Request,
+  path: string,
+) => Promise<Response | undefined> | Response | undefined;
 
 /** Who the product's gateway is, as the mock presents it. */
 export interface Settings {

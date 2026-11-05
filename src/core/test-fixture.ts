@@ -9,9 +9,10 @@
 import type { ControlBody } from "#core/controls.ts";
 import type { Product, ProductData } from "#core/product.ts";
 
+import { sessionOf } from "#core/auth.ts";
 import { publish, subscribe } from "#core/events.ts";
 import { type Context, MockError, signedIn, withRole } from "#core/graphql.ts";
-import { newId } from "#core/http.ts";
+import { json, newId } from "#core/http.ts";
 import { mockState, personById } from "#core/state.ts";
 
 export interface Note {
@@ -52,6 +53,13 @@ type Subscription {
 type Status { name: String! version: String! }
 type Person { id: ID! username: String! name: String! }
 type Note { id: ID! text: String! author: Person! }
+`;
+
+/** Schema the fixture serves ahead of its "real gateway", kept in a file of its own. */
+const PENDING_SCHEMA = `
+extend type Query {
+  noteCount: Int!
+}
 `;
 
 export const FIXTURE_VERSION = "v9.9.9-fixture";
@@ -96,6 +104,10 @@ export const fixture: Product = {
         signedIn(context);
         return data().notes.find((note) => note.id === given.id) ?? null;
       },
+      noteCount: (_root, _given, context: Context) => {
+        signedIn(context);
+        return data().notes.length;
+      },
       notes: (_root, _given, context: Context) => {
         signedIn(context);
         return data().notes;
@@ -112,7 +124,23 @@ export const fixture: Product = {
       },
     },
   },
-  schema: SCHEMA,
+  routes: (request, path) => {
+    if (request.method === "GET" && path === "/fixture/whoami") {
+      return json({ personId: sessionOf(request)?.personId ?? null });
+    }
+    // A sign-in path the core doesn't know: it must reach the product, not the core's 404.
+    if (request.method === "GET" && path === "/auth/fixture-start") {
+      return new Response(null, {
+        headers: { location: "/signed-in" },
+        status: 302,
+      });
+    }
+    if (path === "/fixture/boom") throw new Error("a product route failed");
+    // The core keeps its own paths: this never answers.
+    if (path === "/livez") return new Response(null, { status: 418 });
+    return;
+  },
+  schema: [SCHEMA, PENDING_SCHEMA],
   seed: (): FixtureData => ({
     notes: [
       { authorId: "person-ada", id: "note-1", text: "First note" },

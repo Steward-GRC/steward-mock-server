@@ -91,7 +91,7 @@ type FieldResolvers = Record<string, GraphQLFieldResolver<unknown, Context>>;
 
 /** Build the schema from the product's SDL and wire the product's resolvers into it. */
 const build = (): GraphQLSchema => {
-  const schema = buildSchema(product().schema);
+  const schema = buildSchema([product().schema].flat().join("\n"));
   for (const [typeName, fields] of Object.entries(product().resolvers)) {
     const type = schema.getType(typeName);
     if (!isObjectType(type) || !fields)

@@ -13,7 +13,7 @@ import { answerHealth } from "#core/health.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { answerPage } from "#core/page.ts";
-import { settings } from "#core/product.ts";
+import { product, settings } from "#core/product.ts";
 import { answerSetup } from "#core/setup.ts";
 
 const log = createLogger("http");
@@ -121,13 +121,22 @@ const route = async (request: Request, url: URL): Promise<Response> => {
   ) {
     return answerGraphql(request, url);
   }
-  const answer =
-    answerHealth(request, path) ??
-    answerPage(request, path) ??
-    answerControls(request, path) ??
-    answerAuth(request, path) ??
-    answerSetup(request, path);
-  return (await answer) ?? refuse(501, "not_mocked");
+  // In order: the core's own paths, then the product's routes, then the core's /auth and /setup
+  // (whose catch-alls answer 404 for paths they don't know). Each is awaited before the next is
+  // asked, so a route that answers nothing asynchronously still falls through.
+  const answerers = [
+    answerHealth,
+    answerPage,
+    answerControls,
+    product().routes,
+    answerAuth,
+    answerSetup,
+  ];
+  for (const answerer of answerers) {
+    const answer = await answerer?.(request, path);
+    if (answer) return answer;
+  }
+  return refuse(501, "not_mocked");
 };
 
 /** Answer one request. */
@@ -136,7 +145,18 @@ export const handle = async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS")
     return withCors(request, new Response(null, { status: 204 }));
   const started = Date.now();
-  const response = await route(request, url);
+  let response: Response;
+  try {
+    response = await route(request, url);
+  } catch (error) {
+    // A route that throws still answers, so the client sees a failure instead of waiting forever.
+    log.error("route failed", {
+      error: String(error),
+      method: request.method,
+      path: url.pathname,
+    });
+    response = refuse(500, "internal");
+  }
   // Paths and statuses only: bodies carry passwords and tokens, even invented ones.
   log.debug("request answered", {
     method: request.method,

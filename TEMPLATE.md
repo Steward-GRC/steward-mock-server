@@ -10,14 +10,15 @@ file.
 
 ## 🧾 What a product fills in
 
-| File                          | What it holds                                                                                                                                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/product/product.ts`      | The one object the core is handed: the settings (name, default port, GraphQL path, session cookie, version header, the root fields anyone may read before signing in) and the four files below. |
-| `src/product/schema.graphql`  | The gateway's GraphQL schema, or the part of it the mock serves. Copy it from the gateway; don't write one by hand.                                                                             |
-| `src/product/data.ts`         | The invented data, made fresh on every reset: the people who can sign in, and the product's own records.                                                                                        |
-| `src/product/resolvers.ts`    | What each field answers, by type and field name, reading and changing `mockState.data`.                                                                                                         |
-| `src/product/controls.ts`     | The product's own buttons on `/_mock`, and the counts it shows.                                                                                                                                 |
-| `src/product/product.test.ts` | The product's own tests, through the core. Replace them with tests for what the product fills in.                                                                                               |
+| File                                 | What it holds                                                                                                                                                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/product/product.ts`             | The one object the core is handed: the settings (name, default port, GraphQL path, session cookie, version header, the root fields anyone may read before signing in) and the four files below.                                       |
+| `src/product/schema.graphql`         | The gateway's GraphQL schema, or the part of it the mock serves. Copy it from the gateway; don't write one by hand.                                                                                                                   |
+| `src/product/schema-pending.graphql` | Optional: schema that's ahead of the gateway (fields the clients are built against before the gateway ships them), written with `extend type`. List it after `schema.graphql` in `product.ts`, so the gateway's copy stays untouched. |
+| `src/product/data.ts`                | The invented data, made fresh on every reset: the people who can sign in, and the product's own records.                                                                                                                              |
+| `src/product/resolvers.ts`           | What each field answers, by type and field name, reading and changing `mockState.data`.                                                                                                                                               |
+| `src/product/controls.ts`            | The product's own buttons on `/_mock`, and the counts it shows.                                                                                                                                                                       |
+| `src/product/product.test.ts`        | The product's own tests, through the core. Replace them with tests for what the product fills in.                                                                                                                                     |
 
 Everything in `src/product/` today is a small invented example (items with an owner and a status)
 that exercises every path: a public field, signed-in reads, a role-gated mutation and a
@@ -60,6 +61,15 @@ subscription. Replace it; don't build around it.
 
 6. Add the product's controls in `src/product/controls.ts`: the things that happen elsewhere and
    that a client needs to see happen (a new record arriving, an approval coming in).
+
+   When the gateway serves more than GraphQL, sign-in and setup (admin endpoints, an identity
+   provider's start and callback, a test-mode sign-in link), add them as `routes` in
+   `src/product/product.ts`: a function that takes the `Request` and its path and returns a
+   `Response`, or `undefined` for a path it doesn't serve. They run before the core's `/auth` and
+   `/setup` routes, so a sign-in path the core doesn't know reaches them, but never in place of
+   the health probes, the controls or the GraphQL path. `sessionOf(request)` from
+   `src/core/auth.ts` gives the signed-in session, and `json` and `refuse` from
+   `src/core/http.ts` build the answers.
 
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
    identity provider's flow), change `src/core/auth.ts` to match it, change the sign-in tests in

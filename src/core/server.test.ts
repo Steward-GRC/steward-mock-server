@@ -294,6 +294,49 @@ describe("controls", () => {
   });
 });
 
+describe("product routes and schema", () => {
+  it("serves the product's own routes, with the session", async () => {
+    const ben = await signIn(base, "ben");
+    const answer = await fetch(`${base}/fixture/whoami`, {
+      headers: headersFor(ben),
+    });
+    assert.deepEqual(await answer.json(), { personId: "person-ben" });
+    const anonymous = await fetch(`${base}/fixture/whoami`);
+    assert.deepEqual(await anonymous.json(), { personId: null });
+  });
+
+  it("runs product routes ahead of the core's /auth catch-all", async () => {
+    const answer = await fetch(`${base}/auth/fixture-start`, {
+      redirect: "manual",
+    });
+    assert.equal(answer.status, 302);
+    assert.equal(answer.headers.get("location"), "/signed-in");
+    assert.equal((await fetch(`${base}/auth/unknown`)).status, 404);
+  });
+
+  it("never lets a product route replace the core's own paths", async () => {
+    assert.equal((await fetch(`${base}/livez`)).status, 200);
+  });
+
+  it("answers 500 when a route throws, instead of leaving the client waiting", async () => {
+    const answer = await fetch(`${base}/fixture/boom`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(answer.status, 500);
+    assert.deepEqual(await answer.json(), { error: "internal" });
+  });
+
+  it("answers 501 when neither the core nor the product serves a path", async () => {
+    assert.equal((await fetch(`${base}/fixture/elsewhere`)).status, 501);
+  });
+
+  it("serves schema from a second SDL file", async () => {
+    const ben = await signIn(base, "ben");
+    const { body } = await query(base, "{ noteCount }", ben);
+    assert.deepEqual(body.data, { noteCount: 2 });
+  });
+});
+
 describe("first-run setup", () => {
   it("creates the first admin once", async () => {
     await control(base, { firstRun: true, kind: "fresh" });

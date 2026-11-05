@@ -67,6 +67,8 @@ file, `src/product/` stays Steward's.
   its helpers, so a build at load time would read the resolvers before they exist.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
+- A route that throws answers 500 `internal` (logged), never a hung request. Product routes run
+  after the health probes, the controls and the GraphQL path, and before `/auth` and `/setup`.
 - Anything the mock doesn't serve answers 501 `not_mocked`. Keep that: a client must find out at
   once that it called something nobody mocked.
 - Health probes never fail, whatever the controls armed.
