@@ -13,8 +13,8 @@ import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canEdit } from "#product/access.ts";
 import {
   cancelRuns,
-  policySubject,
   publishVersion,
+  versionSubject,
 } from "#product/resolvers/policies.ts";
 import {
   caller,
@@ -115,7 +115,7 @@ const advance = (run: Run, person: StewardPerson) => {
   const { policy, version } = partsOf(run);
   run.status = "APPROVAL_STATUS_PUBLISHED";
   publishVersion(policy, version);
-  record("policy.status_set", person, policySubject(policy));
+  record("policy.status_set", person, versionSubject(policy, version.id));
 };
 
 const reject = (run: Run) => {
@@ -159,7 +159,7 @@ export const workflowResolvers: Resolvers = {
         record(
           "workflow.withdrawn",
           person,
-          policySubject(partsOf(run).policy),
+          versionSubject(partsOf(run).policy, partsOf(run).version.id),
         );
         return true;
       }
@@ -169,7 +169,7 @@ export const workflowResolvers: Resolvers = {
         record(
           "workflow.signal.request_changes",
           person,
-          policySubject(partsOf(run).policy),
+          versionSubject(partsOf(run).policy, partsOf(run).version.id),
         );
         return true;
       }
@@ -183,7 +183,7 @@ export const workflowResolvers: Resolvers = {
       record(
         approve ? "workflow.decision.approved" : "workflow.decision.rejected",
         person,
-        policySubject(partsOf(run).policy),
+        versionSubject(partsOf(run).policy, partsOf(run).version.id),
       );
       if (approve) advance(run, person);
       else reject(run);
@@ -251,7 +251,7 @@ export const workflowResolvers: Resolvers = {
       data().runs.push(run);
       version.status = "IN_REVIEW";
       policy.updatedAt = run.submittedAt;
-      record("workflow.submitted", person, policySubject(policy));
+      record("workflow.submitted", person, versionSubject(policy, version.id));
       return { runId: run.id };
     },
   },

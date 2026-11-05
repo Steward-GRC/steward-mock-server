@@ -72,6 +72,14 @@ export const policySubject = (policy: Policy) => {
   };
 };
 
+/** A policy version as an audit subject: steward-core files draft saves, publishes and status
+ *  changes under it, and steward-workflow files every run event under it. */
+export const versionSubject = (policy: Policy, versionId: string) => ({
+  ...policySubject(policy),
+  id: versionId,
+  kind: "policy_version",
+});
+
 /** steward-core's category code: the slug in capitals, letters and digits only, six at most. */
 const codeOf = (slug: string): string =>
   slug
@@ -331,7 +339,12 @@ export const policyResolvers: Resolvers = {
         until,
         userId: person.id,
       });
-      record("policy.break_glass_revealed", person, policySubject(policy));
+      // steward-identity files the grant under the person it was granted to.
+      record("policy.break_glass_revealed", person, {
+        id: person.id,
+        kind: "user",
+        label: person.name,
+      });
       return { grantedUntil: new Date(until).toISOString() };
     },
     createPolicy: (
@@ -394,7 +407,11 @@ export const policyResolvers: Resolvers = {
       });
       data().policies.push(policy);
       record("policy.created", person, policySubject(policy));
-      record("policy.draft_saved", person, policySubject(policy));
+      record(
+        "policy.draft_saved",
+        person,
+        versionSubject(policy, policy.currentDraftVersionId ?? ""),
+      );
       return policyView(person, policy);
     },
     deleteAppendix: (_root, given: { id: string }, context: Context) => {
@@ -444,7 +461,7 @@ export const policyResolvers: Resolvers = {
       const draft = found(versionById(policy.currentDraftVersionId), "draft");
       cancelRuns(draft.id);
       publishVersion(policy, draft);
-      record("policy.published", person, policySubject(policy));
+      record("policy.published", person, versionSubject(policy, draft.id));
       return draft;
     },
     reorderAppendices: (
@@ -506,7 +523,7 @@ export const policyResolvers: Resolvers = {
       if (draft.status === "REJECTED" || draft.status === "WITHDRAWN")
         draft.status = "DRAFT";
       policy.updatedAt = at;
-      record("policy.draft_saved", person, policySubject(policy));
+      record("policy.draft_saved", person, versionSubject(policy, draft.id));
       return draft;
     },
     updateAppendix: (
