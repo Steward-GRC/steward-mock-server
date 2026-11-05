@@ -168,6 +168,10 @@ const cases: Record<string, Case> = {
       },
     },
   },
+  CreateMagicLink: {
+    as: READER,
+    variables: { policyVersionId: "version-11", sensitive: false },
+  },
   CreatePlatformGroup: {
     as: ADMIN,
     variables: { name: "Contractors", parentId: "group-1" },
@@ -222,6 +226,7 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { domain: "partner.example.net" },
   },
+  DeletePolicy: { as: AUTHOR, variables: { id: "policy-5" } },
   DeleteReference: { as: ADMIN, variables: { id: "reference-2" } },
   DeleteTemplate: { as: ADMIN, variables: { id: "template-3" } },
   DeleteUser: { as: ADMIN, variables: { userId: "user-frank" } },
@@ -284,12 +289,22 @@ const cases: Record<string, Case> = {
       newParentId: "category-information",
     },
   },
+  MovePolicy: {
+    as: ADMIN,
+    variables: { homeCategoryId: "category-travel", policyId: "policy-9" },
+  },
   MyAckSummary: { as: READER },
   MyDrafts: { as: AUTHOR },
   MyFactors: { as: READER },
   MyManagedGroups: { as: APPROVER },
   MyObligations: { as: READER },
   Organizations: { as: ADMIN },
+  // A one-step case can't export first, so the job is one delivery doesn't know.
+  PdfDownloadLink: {
+    as: READER,
+    refused: "PDF_EXPORT_NOT_FOUND",
+    variables: { jobId: "pdf-version-11-0" },
+  },
   PendingTasks: { as: APPROVER },
   PlatformGroups: { as: ADMIN, variables: { parentId: null } },
   Policies: {
@@ -373,6 +388,10 @@ const cases: Record<string, Case> = {
   },
   ReportCase: { as: OFFICER, variables: { caseId: "case-1" } },
   ReportCases: { as: OFFICER, variables: {} },
+  RequestPdfExport: {
+    as: READER,
+    variables: { policyVersionId: "version-11" },
+  },
   RequestStepUpOtp: { as: ADMIN },
   ResendWelcomeEmail: { as: ADMIN, variables: { userId: READER } },
   ResetUserPassword: {
@@ -383,7 +402,9 @@ const cases: Record<string, Case> = {
     as: READER,
     variables: { ids: [AUTHOR, "user-nobody"] },
   },
+  RetirePolicy: { as: AUTHOR, variables: { id: "policy-10" } },
   RetireTemplate: { as: ADMIN, variables: { id: "template-2" } },
+  RevokeMagicLink: { as: ADMIN, variables: { token: "a".repeat(64) } },
   RevokeRole: { as: ADMIN, variables: { role: "approver", userId: APPROVER } },
   RevokeUserSessions: {
     as: ADMIN,
@@ -485,6 +506,10 @@ const cases: Record<string, Case> = {
         maintenance: { enabled: false, message: "" },
       },
     },
+  },
+  SetPolicyOwner: {
+    as: ADMIN,
+    variables: { ownerUserId: APPROVER, policyId: "policy-1" },
   },
   SetReferenceArchived: {
     as: ADMIN,
@@ -716,7 +741,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 156);
+    assert.equal(webOperations.length, 164);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

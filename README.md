@@ -223,6 +223,8 @@ does: one entry per UTC day from `days - 1` days ago through today, oldest first
 included (a window of zero or less is 30 days). `acks` counts every acknowledgement of the version
 that day, and `views` counts the distinct people the policy asks to acknowledge who viewed it that
 day (`recordView` writes a view). The group is accepted and ignored, as obligations ignores it.
+`completionReport`'s `viewedNotAckedCount` comes from the same views: the people in that
+audience who ever viewed the version and haven't acknowledged it, so the chart and the report agree.
 The seed spreads acknowledgements and views by Alice, Dave, Grace and Heidi, and views by the
 others, over the last 90 days on the Desk Booking, Visitor Sign-in and Expense Claims policies,
 dated from when the mock starts, so 30- and 90-day charts both show bars. Erin, Bob and Charlie

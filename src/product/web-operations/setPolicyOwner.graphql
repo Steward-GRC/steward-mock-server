@@ -1,0 +1,5 @@
+mutation SetPolicyOwner($policyId: ID!, $ownerUserId: ID!) {
+  setPolicyOwner(policyId: $policyId, ownerUserId: $ownerUserId) {
+    id
+  }
+}

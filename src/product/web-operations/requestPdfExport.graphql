@@ -1,0 +1,5 @@
+mutation RequestPdfExport($policyVersionId: ID!) {
+  requestPDFExport(policyVersionId: $policyVersionId) {
+    jobId
+  }
+}

@@ -1,0 +1,6 @@
+query PdfDownloadLink($jobId: ID!) {
+  pdfDownloadLink(jobId: $jobId) {
+    signedUrl
+    expiresAt
+  }
+}

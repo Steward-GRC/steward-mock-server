@@ -1,0 +1,6 @@
+mutation CreateMagicLink($policyVersionId: ID!, $sensitive: Boolean!) {
+  createMagicLink(policyVersionId: $policyVersionId, sensitive: $sensitive) {
+    token
+    expiresAt
+  }
+}

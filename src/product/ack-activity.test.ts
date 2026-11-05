@@ -172,3 +172,43 @@ describe("ackActivity", () => {
     );
   });
 });
+
+const REPORT = `query ($id: ID!, $groupId: ID) {
+  completionReport(policyVersionId: $id, groupId: $groupId) { viewedNotAckedCount }
+}`;
+
+const viewedNotAcked = async (signed: Signed, id: string, groupId?: string) => {
+  const { body } = await query(base, REPORT, signed, { groupId, id });
+  assert.equal(body.errors, undefined);
+  return (body.data?.completionReport as { viewedNotAckedCount: number })
+    .viewedNotAckedCount;
+};
+
+describe("completionReport's viewed, not acknowledged", () => {
+  it("counts the audience who viewed the version and haven't acknowledged it, as obligations does", async () => {
+    const admin = await signInAs(base, "user-alice");
+    // Erin and Bob viewed Visitor Sign-in without acknowledging; the rest who viewed it did.
+    assert.equal(await viewedNotAcked(admin, "version-12"), 2);
+    assert.equal(await viewedNotAcked(admin, "version-12", "group-2"), 2);
+    const erin = await signInAs(base, "user-erin");
+    await query(
+      base,
+      'mutation { recordAck(policyVersionId: "version-12") { id } }',
+      erin,
+    );
+    assert.equal(await viewedNotAcked(admin, "version-12"), 1);
+  });
+
+  it("counts nobody on a version nobody has to acknowledge", async () => {
+    const erin = await signInAs(base, "user-erin");
+    await query(
+      base,
+      'mutation { recordView(policyVersionId: "version-7") }',
+      erin,
+    );
+    assert.equal(
+      await viewedNotAcked(await signInAs(base, "user-alice"), "version-7"),
+      0,
+    );
+  });
+});

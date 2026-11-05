@@ -1,0 +1,6 @@
+mutation MovePolicy($policyId: ID!, $homeCategoryId: ID!) {
+  movePolicy(policyId: $policyId, homeCategoryId: $homeCategoryId) {
+    id
+    number
+  }
+}
