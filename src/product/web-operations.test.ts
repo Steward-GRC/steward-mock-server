@@ -44,6 +44,10 @@ const AI_DOWN = "INTERNAL";
 const SECTION = { blocks: [], key: "purpose", order: 0, title: "Purpose" };
 
 const cases: Record<string, Case> = {
+  AckActivity: {
+    as: ADMIN,
+    variables: { days: 30, groupId: null, policyVersionId: "version-2" },
+  },
   AckRoster: { as: ADMIN, variables: { policyVersionId: "version-2" } },
   AckStatus: { as: READER, variables: { policyVersionId: "version-2" } },
   ActivateOrganization: {
@@ -785,7 +789,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 178);
+    assert.equal(webOperations.length, 179);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

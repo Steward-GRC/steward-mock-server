@@ -1,0 +1,7 @@
+query AckActivity($policyVersionId: ID!, $groupId: ID, $days: Int!) {
+  ackActivity(policyVersionId: $policyVersionId, groupId: $groupId, days: $days) {
+    date
+    acks
+    views
+  }
+}
