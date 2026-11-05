@@ -85,7 +85,7 @@ export const people = (): StewardPerson[] => [
   person({
     email: "charlie@example.org",
     id: "user-charlie",
-    idpGroups: ["platform-engineering"],
+    idpGroups: ["finance-staff"],
     localAccount: false,
     managedGroupIds: ["group-2"],
     memberships: [{ groupId: "group-2", source: "manual" }],

@@ -117,7 +117,7 @@ const publish = async (author: Signed, title: string, text: string) => {
   const created = (
     await call(base, author, "CreatePolicy", {
       documentType: "POLICY",
-      homeCategoryId: "category-reimbursement",
+      homeCategoryId: "category-expenses",
       sensitivity: "STANDARD",
       title,
     })
@@ -134,7 +134,7 @@ describe("searchPolicies", () => {
   it("finds a policy by a word only in its published text, with a marked snippet", async () => {
     const reader = await signIn(base, "erin");
     const page = await search(reader, { query: "INCURRED" });
-    assert.deepEqual(titles(page), ["Expense Claims"]);
+    assert.deepEqual(titles(page), ["Expense Claims Policy"]);
     const [hit] = page.hits;
     assert.ok(hit);
     assert.equal(hit.policy.number, EXPENSE_CLAIMS_NUMBER);
@@ -146,42 +146,42 @@ describe("searchPolicies", () => {
 
   it("finds a policy by its title and number, with no snippet when the text doesn't match", async () => {
     const reader = await signIn(base, "erin");
-    const byTitle = await search(reader, { query: "runbook" });
-    assert.deepEqual(titles(byTitle), ["Incident Response Runbook"]);
+    const byTitle = await search(reader, { query: "procedure" });
+    assert.deepEqual(titles(byTitle), ["Lost Device Procedure"]);
     assert.equal(byTitle.hits[0]?.snippet, null);
     const byNumber = await search(reader, { query: EXPENSE_CLAIMS_NUMBER });
-    assert.deepEqual(titles(byNumber), ["Expense Claims"]);
+    assert.deepEqual(titles(byNumber), ["Expense Claims Policy"]);
   });
 
   it("leaves out a policy the reader can't read", async () => {
     const reader = await signIn(base, "erin");
-    assert.deepEqual(titles(await search(reader, { query: "privileged" })), []);
+    assert.deepEqual(titles(await search(reader, { query: "archive" })), []);
     assert.deepEqual(
       titles(await search(reader, { query: "administrator" })),
       [],
     );
     const author = await signIn(base, "bob");
     assert.deepEqual(titles(await search(author, { query: "administrator" })), [
-      "Privileged Access",
+      "Archive Access Policy",
     ]);
   });
 
   it("matches an obfuscated viewer on title and number only, with no snippet", async () => {
     const admin = await signIn(base, "alice");
-    const byTitle = await search(admin, { query: "privileged" });
-    assert.deepEqual(titles(byTitle), ["Privileged Access"]);
+    const byTitle = await search(admin, { query: "archive" });
+    assert.deepEqual(titles(byTitle), ["Archive Access Policy"]);
     assert.equal(byTitle.hits[0]?.policy.viewerCan.contentObfuscated, true);
     assert.equal(byTitle.hits[0]?.snippet, null);
     assert.deepEqual(
-      titles(await search(admin, { query: "POL-USAGE-000002" })),
-      ["Privileged Access"],
+      titles(await search(admin, { query: "POL-RECORDS-000002" })),
+      ["Archive Access Policy"],
     );
     assert.deepEqual(
       titles(await search(admin, { query: "administrator" })),
       [],
     );
     assert.deepEqual(
-      titles(await search(admin, { query: "privileged quarter" })),
+      titles(await search(admin, { query: "archive quarter" })),
       [],
     );
   });
@@ -190,8 +190,8 @@ describe("searchPolicies", () => {
     const author = await signIn(base, "bob");
     assert.deepEqual(titles(await search(author, { query: "restricted" })), []);
     assert.deepEqual(titles(await search(author, { query: "dollars" })), []);
-    assert.deepEqual(titles(await search(author, { query: "remotely" })), []);
-    assert.deepEqual(titles(await search(author, { query: "remote" })), []);
+    assert.deepEqual(titles(await search(author, { query: "carry" })), []);
+    assert.deepEqual(titles(await search(author, { query: "annual" })), []);
 
     const web = await signInAs(base, "user-bob");
     await call(base, web, "SaveDraft", {
@@ -208,7 +208,7 @@ describe("searchPolicies", () => {
     const reader = await signIn(base, "erin");
     const page = await search(reader, { query: "claims" });
     assert.deepEqual(titles(page), [
-      "Expense Claims",
+      "Expense Claims Policy",
       "Hotel Stays",
       "Travel Booking",
     ]);
@@ -244,11 +244,15 @@ describe("searchPolicies", () => {
     const reader = await signIn(base, "erin");
     assert.deepEqual(
       titles(await search(reader, { documentType: "POLICY", query: "the" })),
-      ["Expense Claims"],
+      [
+        "Expense Claims Policy",
+        "Desk Booking Policy",
+        "Visitor Sign-in Policy",
+      ],
     );
     assert.deepEqual(
       titles(await search(reader, { documentType: "PROCEDURE", query: "the" })),
-      ["Incident Response Runbook"],
+      ["Lost Device Procedure"],
     );
   });
 

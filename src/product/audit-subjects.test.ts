@@ -85,7 +85,7 @@ describe("audit subjects", () => {
     const created = ok(
       await call(base, author, "CreatePolicy", {
         documentType: "POLICY",
-        homeCategoryId: "category-reimbursement",
+        homeCategoryId: "category-expenses",
         sensitivity: "STANDARD",
         title: "Travel Booking",
       }),
@@ -114,7 +114,7 @@ describe("audit subjects", () => {
     const draftId = await draftOf(author, "policy-1");
     const { body } = await query(base, SUBMIT, author, {
       ancestorCategoryIds: [],
-      categoryId: "category-reimbursement",
+      categoryId: "category-expenses",
       policyId: "policy-1",
       policyVersionId: draftId,
     });

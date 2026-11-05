@@ -11,6 +11,8 @@ export interface Category {
   approverRule: string[];
   /** RACI rules: who the category's author rule names. Descendants inherit them. */
   authorRule: string[];
+  /** steward-core's stored number code; a category without one derives it from its slug. */
+  code?: string;
   defaultTemplateId: null | string;
   defaultTemplateNone: boolean;
   defaultWorkflowId: null | string;
@@ -130,7 +132,11 @@ const category = (
   ...given,
 });
 
-/** Four top-level categories, each with subcategories; IT Security goes three levels deep. */
+/**
+ * The design brief's four top-level categories, two subcategories each; Devices goes a third level
+ * deep. Each carries the stored code its document numbers use, as steward-core keeps one per
+ * category, so numbers read POL-FACILITIES-000001 rather than a six-letter cut of the slug.
+ */
 export const categories = (): Category[] => [
   category({
     ackEveryone: true,
@@ -138,6 +144,7 @@ export const categories = (): Category[] => [
     ackTriggers: "ON_PUBLISH",
     approverRule: ["user-charlie"],
     authorRule: ["user-bob"],
+    code: "FINANCE",
     defaultTemplateId: "template-1",
     defaultWorkflowId: "workflow-1",
     id: "category-finance",
@@ -147,89 +154,108 @@ export const categories = (): Category[] => [
     slug: "finance",
   }),
   category({
+    code: "EXPENSES",
     defaultWorkflowId: "workflow-1",
-    id: "category-reimbursement",
-    name: "Reimbursement",
+    id: "category-expenses",
+    name: "Expenses",
     parentId: "category-finance",
-    slug: "reimbursement",
+    slug: "expenses",
+  }),
+  category({
+    code: "PURCHASING",
+    defaultWorkflowId: "workflow-1",
+    id: "category-purchasing",
+    name: "Purchasing",
+    parentId: "category-finance",
+    slug: "purchasing",
   }),
   category({
     ackTriggers: "ON_CHANGE",
     approverRule: ["user-charlie"],
     authorRule: ["user-bob"],
+    code: "PEOPLE",
     defaultWorkflowId: "workflow-1",
-    id: "category-hr",
-    name: "Human Resources",
-    slug: "human-resources",
+    id: "category-people",
+    name: "People",
+    slug: "people",
   }),
   category({
+    code: "LEAVE",
     defaultWorkflowId: "workflow-1",
+    id: "category-leave",
+    name: "Leave",
+    parentId: "category-people",
+    slug: "leave",
+  }),
+  category({
+    code: "CONDUCT",
+    defaultWorkflowId: "workflow-1",
+    id: "category-conduct",
+    name: "Conduct",
+    parentId: "category-people",
+    slug: "conduct",
+  }),
+  category({
+    approverRule: ["user-charlie"],
+    authorRule: ["user-bob"],
+    code: "INFORMATION",
+    defaultTemplateId: "template-1",
+    defaultWorkflowId: "workflow-1",
+    id: "category-information",
+    idpGroupIds: ["information-staff"],
+    name: "Information",
+    owners: ["user-charlie"],
+    reviewCadence: "BIENNIAL",
+    slug: "information",
+  }),
+  category({
+    code: "RECORDS",
+    defaultWorkflowId: "workflow-1",
+    id: "category-records",
+    name: "Records",
+    parentId: "category-information",
+    slug: "records",
+  }),
+  category({
+    code: "DEVICES",
+    defaultTemplateId: "template-2",
+    defaultWorkflowId: "workflow-1",
+    id: "category-devices",
+    name: "Devices",
+    parentId: "category-information",
+    slug: "devices",
+  }),
+  category({
+    code: "PHONES",
+    defaultTemplateNone: true,
+    exclusionGroupIds: [],
+    id: "category-phones",
+    name: "Phones",
+    parentId: "category-devices",
+    slug: "phones",
+  }),
+  category({
+    approverRule: ["user-charlie"],
+    authorRule: ["user-bob"],
+    code: "WORKPLACE",
     id: "category-workplace",
     name: "Workplace",
-    parentId: "category-hr",
     slug: "workplace",
   }),
   category({
-    defaultWorkflowId: "workflow-1",
-    id: "category-ethics",
-    name: "Ethics",
-    parentId: "category-hr",
-    slug: "ethics",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    defaultTemplateId: "template-1",
-    defaultWorkflowId: "workflow-1",
-    id: "category-itsec",
-    idpGroupIds: ["it-security-staff"],
-    name: "IT Security",
-    owners: ["user-charlie"],
-    reviewCadence: "BIENNIAL",
-    slug: "it-security",
-  }),
-  category({
-    defaultWorkflowId: "workflow-1",
-    id: "category-usage",
-    name: "Usage",
-    parentId: "category-itsec",
-    slug: "usage",
-  }),
-  category({
+    code: "FACILITIES",
     defaultWorkflowId: "workflow-2",
-    id: "category-data-governance",
-    name: "Data Governance",
-    parentId: "category-itsec",
-    slug: "data-governance",
+    id: "category-facilities",
+    name: "Facilities",
+    parentId: "category-workplace",
+    slug: "facilities",
   }),
   category({
-    defaultTemplateId: "template-2",
-    defaultWorkflowId: "workflow-1",
-    id: "category-operations",
-    name: "Operations",
-    parentId: "category-itsec",
-    slug: "operations",
-  }),
-  category({
-    defaultTemplateNone: true,
-    exclusionGroupIds: [],
-    id: "category-infrastructure",
-    name: "Infrastructure",
-    parentId: "category-operations",
-    slug: "infrastructure",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    id: "category-procurement",
-    name: "Procurement",
-    slug: "procurement",
-  }),
-  category({
-    id: "category-due-diligence",
-    name: "Due Diligence",
-    parentId: "category-procurement",
-    slug: "due-diligence",
+    code: "TRAVEL",
+    id: "category-travel",
+    name: "Travel",
+    parentId: "category-workplace",
+    slug: "travel",
   }),
 ];
 
@@ -237,14 +263,14 @@ export const templates = (): Template[] => [
   {
     code: "TPL-001",
     id: "template-1",
-    name: "Standard policy",
+    name: "Standard Policy",
     ownerCategoryId: "category-finance",
     retiredAt: null,
   },
   {
     code: "TPL-002",
     id: "template-2",
-    name: "Procedure runbook",
+    name: "Step-by-step Procedure",
     ownerCategoryId: null,
     retiredAt: null,
   },
@@ -280,7 +306,7 @@ export const templateVersions = (): TemplateVersion[] => [
     id: "template-version-2",
     sections: [
       section("steps", "Steps", 0),
-      section("rollback", "Rollback", 1, false),
+      section("afterwards", "Afterwards", 1, false),
     ],
     status: "published",
     templateId: "template-2",
@@ -323,28 +349,28 @@ const stage = (
 export const workflowDefs = (): Workflow[] => [
   {
     archived: false,
-    description: "A single named approver signs off.",
+    description: "Finance's approver signs off in one step.",
     id: "workflow-1",
-    name: "Single approver",
+    name: "Finance sign-off",
     stages: [
       stage({
         approvers: ["user-charlie"],
         id: "workflow-stage-1",
-        name: "Approval",
+        name: "Finance sign-off",
       }),
     ],
     version: 1,
   },
   {
     archived: false,
-    description: "A review board, then a final sign-off.",
+    description: "A review by the approvers, then a final approval.",
     id: "workflow-2",
-    name: "Security review board",
+    name: "Standard 2-stage",
     stages: [
       stage({
         approvers: ["user-charlie", "user-alice"],
         id: "workflow-stage-2",
-        name: "Board review",
+        name: "Review",
         quorum: "majority",
         rejectOnSlaBreach: true,
         slaDays: 5,
@@ -352,7 +378,7 @@ export const workflowDefs = (): Workflow[] => [
       stage({
         approvers: ["user-alice"],
         id: "workflow-stage-3",
-        name: "Final sign-off",
+        name: "Final approval",
         pinnedLast: true,
       }),
     ],
@@ -459,7 +485,7 @@ export const references = (): Reference[] => [
 export const definitions = (): Definition[] => [
   {
     archived: false,
-    categoryId: "category-itsec",
+    categoryId: "category-information",
     createdByUserId: "user-alice",
     definition:
       "The maximum tolerable time to restore a system after an incident.",
@@ -468,7 +494,7 @@ export const definitions = (): Definition[] => [
   },
   {
     archived: false,
-    categoryId: "category-itsec",
+    categoryId: "category-information",
     createdByUserId: "user-alice",
     definition: "The maximum tolerable amount of data loss, measured in time.",
     id: "definition-2",
@@ -476,7 +502,7 @@ export const definitions = (): Definition[] => [
   },
   {
     archived: true,
-    categoryId: "category-itsec",
+    categoryId: "category-information",
     createdByUserId: "user-alice",
     definition: 'Superseded by "RTO".',
     id: "definition-3",

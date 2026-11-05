@@ -1,10 +1,11 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // The policies and procedures, their versions, what each links to, the approval runs and the
-// acknowledgements. Between them they cover every state the library and the reader show: a
-// published policy with an earlier version and a pending acknowledgement, a sensitive draft, a
-// draft in review waiting on an approver, a retired policy, a withdrawn draft, a published
-// procedure and a rejected one.
+// acknowledgements. The design brief's five documents are here, in the states its frames show
+// where the flows allow; the others are in the same style. Between them they cover every state the library and the reader
+// show: a published policy with earlier versions and a pending acknowledgement, mandatory-read
+// policies, a sensitive draft, a draft in review waiting on an approver, a retired policy, a
+// withdrawn draft, a published procedure and a rejected one.
 
 export interface Acknowledgement {
   ackedAt: string;
@@ -94,8 +95,11 @@ export interface Seat {
   userId: string;
 }
 
-/** steward-core's rendered number for the seeded Expense Claims policy. */
-export const EXPENSE_CLAIMS_NUMBER = "POL-REIMBU-000001";
+/** steward-core's rendered number for the seeded Expense Claims Policy. */
+export const EXPENSE_CLAIMS_NUMBER = "POL-EXPENSES-000002";
+
+/** steward-core's rendered number for the seeded Travel Booking Procedure, the draft in review. */
+export const TRAVEL_BOOKING_NUMBER = "PRC-TRAVEL-000003";
 
 /** A version's content as the reader reads it: one entry per section, in order. */
 const sections = (...entries: [string, string, string][]): string =>
@@ -165,85 +169,111 @@ export const policies = (): Policy[] => [
     ackTriggers: "ON_PUBLISH",
     createdAt: "2025-06-02T09:00:00Z",
     currentPublishedVersionId: "version-2",
-    homeCategoryId: "category-reimbursement",
+    homeCategoryId: "category-expenses",
     id: "policy-1",
     number: EXPENSE_CLAIMS_NUMBER,
     templateId: "template-1",
     templateNone: false,
-    title: "Expense Claims",
+    title: "Expense Claims Policy",
     updatedAt: "2026-08-12T00:00:00Z",
   }),
   policy({
     createdAt: "2026-09-02T00:00:00Z",
     currentDraftVersionId: "version-3",
-    homeCategoryId: "category-usage",
+    homeCategoryId: "category-records",
     id: "policy-2",
-    number: "POL-USAGE-000001",
+    number: "POL-RECORDS-000001",
     sensitivity: "SENSITIVE",
-    title: "Acceptable Use",
+    title: "Records Retention Policy",
     updatedAt: "2026-09-02T00:00:00Z",
   }),
   policy({
     createdAt: "2026-09-13T14:30:00Z",
     currentDraftVersionId: "version-4",
-    homeCategoryId: "category-data-governance",
+    documentType: "PROCEDURE",
+    homeCategoryId: "category-travel",
     id: "policy-3",
-    number: "POL-DATAGO-000001",
+    number: TRAVEL_BOOKING_NUMBER,
     sensitivity: "SENSITIVE",
-    title: "Data Classification",
+    title: "Travel Booking Procedure",
     updatedAt: "2026-09-20T00:00:00Z",
+    workflowDefId: "workflow-2",
   }),
   policy({
     createdAt: "2026-04-20T09:15:00Z",
     currentPublishedVersionId: "version-5",
-    homeCategoryId: "category-workplace",
+    homeCategoryId: "category-leave",
     id: "policy-4",
-    number: "POL-WORKPL-000001",
+    number: "POL-LEAVE-000001",
     retiredAt: "2026-09-01T00:00:00Z",
-    title: "Remote Work",
+    title: "Annual Leave Policy",
     updatedAt: "2026-09-01T00:00:00Z",
   }),
   policy({
     createdAt: "2026-02-10T00:00:00Z",
     currentDraftVersionId: "version-6",
-    homeCategoryId: "category-due-diligence",
+    homeCategoryId: "category-travel",
     id: "policy-5",
-    number: "POL-DUEDIL-000001",
+    number: "POL-TRAVEL-000001",
     ownerUserId: "user-alice",
-    title: "Vendor Onboarding",
+    title: "Car Mileage Policy",
     updatedAt: "2026-03-18T00:00:00Z",
   }),
   policy({
     createdAt: "2026-09-20T00:00:00Z",
     currentPublishedVersionId: "version-7",
     documentType: "PROCEDURE",
-    homeCategoryId: "category-operations",
+    homeCategoryId: "category-devices",
     id: "policy-6",
-    number: "PRC-OPERAT-000001",
+    number: "PRC-DEVICES-000001",
     templateId: "template-2",
     templateNone: false,
-    title: "Incident Response Runbook",
+    title: "Lost Device Procedure",
     updatedAt: "2026-09-28T00:00:00Z",
   }),
   policy({
     createdAt: "2026-06-25T09:15:00Z",
     currentDraftVersionId: "version-8",
     documentType: "PROCEDURE",
-    homeCategoryId: "category-ethics",
+    homeCategoryId: "category-conduct",
     id: "policy-7",
-    number: "PRC-ETHICS-000001",
-    title: "Gift Disclosure",
+    number: "PRC-CONDUCT-000001",
+    title: "Gifts and Hospitality Procedure",
     updatedAt: "2026-07-09T00:00:00Z",
   }),
   policy({
     createdAt: "2026-05-04T00:00:00Z",
     currentPublishedVersionId: "version-9",
-    homeCategoryId: "category-usage",
+    homeCategoryId: "category-records",
     id: "policy-8",
-    number: "POL-USAGE-000002",
+    number: "POL-RECORDS-000002",
     sensitivity: "SENSITIVE",
-    title: "Privileged Access",
+    title: "Archive Access Policy",
     updatedAt: "2026-05-04T00:00:00Z",
+  }),
+  policy({
+    ackTriggers: "ON_PUBLISH",
+    createdAt: "2026-09-15T10:00:00Z",
+    currentPublishedVersionId: "version-11",
+    homeCategoryId: "category-facilities",
+    id: "policy-9",
+    number: "POL-FACILITIES-000001",
+    templateId: "template-1",
+    templateNone: false,
+    title: "Desk Booking Policy",
+    updatedAt: "2026-10-02T14:02:00Z",
+  }),
+  policy({
+    ackTriggers: "ON_PUBLISH",
+    createdAt: "2026-09-01T09:00:00Z",
+    currentPublishedVersionId: "version-12",
+    homeCategoryId: "category-facilities",
+    id: "policy-10",
+    number: "POL-FACILITIES-000004",
+    templateId: "template-1",
+    templateNone: false,
+    title: "Visitor Sign-in Policy",
+    updatedAt: "2026-09-29T00:00:00Z",
   }),
 ];
 
@@ -279,6 +309,24 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
+    contentJson: sections(
+      ["purpose", "Purpose", "How staff claim back business expenses."],
+      ["scope", "Scope", "Everyone who travels or buys for the organisation."],
+      [
+        "policy-statement",
+        "Policy statement",
+        "File a claim within 60 days of spending the money and post the original receipts to Finance.",
+      ],
+    ),
+    createdAt: "2025-11-03T09:00:00Z",
+    id: "version-10",
+    policyId: "policy-1",
+    publishedAt: "2025-11-20T00:00:00Z",
+    status: "SUPERSEDED",
+    templateVersionId: "template-version-1",
+    versionNo: 2,
+  }),
+  version({
     appendices: [
       {
         contentJson: JSON.stringify({
@@ -297,7 +345,7 @@ export const versions = (): PolicyVersion[] => [
       [
         "policy-statement",
         "Policy statement",
-        "Claims are paid at the rate set for the country the cost was incurred in, within 30 days of a complete claim.",
+        "File your claim within 30 days of spending the money, using the expenses page. Attach a clear photo of each receipt; you don't need to post the originals. Claims are paid at the rate set for the country the cost was incurred in.",
       ],
     ),
     createdAt: "2026-07-29T09:15:00Z",
@@ -306,13 +354,13 @@ export const versions = (): PolicyVersion[] => [
     publishedAt: "2026-08-12T00:00:00Z",
     status: "PUBLISHED",
     templateVersionId: "template-version-1",
-    versionNo: 2,
+    versionNo: 3,
   }),
   version({
     appendices: [
       {
         contentJson: JSON.stringify({
-          text: "Reviewed annually by IT Security.",
+          text: "Reviewed annually by the records owner.",
         }),
         id: "appendix-2",
         letter: "A",
@@ -321,18 +369,20 @@ export const versions = (): PolicyVersion[] => [
         title: "Review notes",
       },
       {
-        contentJson: JSON.stringify({ text: "Laptops, phones and tablets." }),
+        contentJson: JSON.stringify({
+          text: "Contracts, invoices and personnel files.",
+        }),
         id: "appendix-3",
         letter: "B",
         orderIndex: 1,
         policyVersionId: "version-3",
-        title: "Covered devices",
+        title: "Covered records",
       },
     ],
     contentJson: lexical(
       [
         "Purpose",
-        "This policy sets out how organisation-owned systems may be used.",
+        "This policy sets out how long the organisation keeps its records.",
       ],
       ["Scope", ""],
     ),
@@ -342,11 +392,15 @@ export const versions = (): PolicyVersion[] => [
   }),
   version({
     contentJson: sections(
-      ["purpose", "Purpose", "How information is labelled by sensitivity."],
       [
-        "policy-statement",
-        "Policy statement",
-        "Every record is Public, Internal, Confidential or Restricted.",
+        "steps",
+        "Steps",
+        "Book trains, flights and hotels on the travel booking site at least 14 days ahead.",
+      ],
+      [
+        "afterwards",
+        "Afterwards",
+        "Business-class fares are restricted to journeys over six hours.",
       ],
     ),
     createdAt: "2026-09-13T14:30:00Z",
@@ -358,7 +412,7 @@ export const versions = (): PolicyVersion[] => [
     contentJson: sections([
       "policy-statement",
       "Policy statement",
-      "Staff may work remotely up to three days a week with their manager's agreement.",
+      "Staff may carry over up to five days of unused leave with their manager's agreement.",
     ]),
     createdAt: "2026-04-20T09:15:00Z",
     id: "version-5",
@@ -371,7 +425,7 @@ export const versions = (): PolicyVersion[] => [
     contentJson: sections([
       "policy-statement",
       "Policy statement",
-      "New vendors pass due diligence before their first order.",
+      "Mileage in a private car is paid at the rate Finance sets each April.",
     ]),
     createdAt: "2026-02-10T00:00:00Z",
     id: "version-6",
@@ -383,12 +437,12 @@ export const versions = (): PolicyVersion[] => [
       [
         "steps",
         "Steps",
-        "Contain the incident, tell the security lead, then preserve evidence.",
+        "Tell the IT Service Desk as soon as you notice the device is missing, then change your password from another device.",
       ],
       [
-        "rollback",
-        "Rollback",
-        "Restore from the last known-good backup once the cause is found.",
+        "afterwards",
+        "Afterwards",
+        "If it turns up, bring it to the service desk to be checked before you use it again.",
       ],
     ),
     createdAt: "2026-09-20T00:00:00Z",
@@ -403,7 +457,7 @@ export const versions = (): PolicyVersion[] => [
     contentJson: sections([
       "policy-statement",
       "Policy statement",
-      "Disclose any gift worth more than a modest amount.",
+      "Declare any gift or hospitality worth more than a modest amount.",
     ]),
     createdAt: "2026-06-25T09:15:00Z",
     id: "version-8",
@@ -415,7 +469,7 @@ export const versions = (): PolicyVersion[] => [
       [
         "purpose",
         "Purpose",
-        "Who may hold administrator access, and how it is granted.",
+        "Who may hold administrator access to stored records, and how it is granted.",
       ],
       [
         "policy-statement",
@@ -428,6 +482,42 @@ export const versions = (): PolicyVersion[] => [
     policyId: "policy-8",
     publishedAt: "2026-05-10T00:00:00Z",
     status: "PUBLISHED",
+    versionNo: 1,
+  }),
+  version({
+    contentJson: sections(
+      ["purpose", "Purpose", "How staff book a desk in the office."],
+      ["scope", "Scope", "Everyone who works from an organisation office."],
+      [
+        "policy-statement",
+        "Policy statement",
+        "Book a desk up to two weeks ahead on the booking page. Cancel the booking by 10:00 if your plans change, so a colleague can use the desk.",
+      ],
+    ),
+    createdAt: "2026-09-15T10:00:00Z",
+    id: "version-11",
+    policyId: "policy-9",
+    publishedAt: "2026-10-02T14:02:00Z",
+    status: "PUBLISHED",
+    templateVersionId: "template-version-1",
+    versionNo: 1,
+  }),
+  version({
+    contentJson: sections(
+      ["purpose", "Purpose", "How visitors are welcomed and kept safe."],
+      ["scope", "Scope", "Everyone who invites a visitor to an office."],
+      [
+        "policy-statement",
+        "Policy statement",
+        "Every visitor signs in at the front desk, wears a visitor badge and is met by their host. The host signs them out when they leave.",
+      ],
+    ),
+    createdAt: "2026-09-01T09:00:00Z",
+    id: "version-12",
+    policyId: "policy-10",
+    publishedAt: "2026-09-29T00:00:00Z",
+    status: "PUBLISHED",
+    templateVersionId: "template-version-1",
     versionNo: 1,
   }),
 ];
@@ -467,12 +557,12 @@ export const runs = (): Run[] => [
     policyVersionId: "version-4",
     stages: [
       {
-        name: "Board review",
+        name: "Review",
         quorum: "majority",
         seats: [seat("task-1", "user-charlie"), seat("task-2", "user-alice")],
       },
       {
-        name: "Final sign-off",
+        name: "Final approval",
         quorum: "one",
         seats: [seat("task-3", "user-alice")],
       },
@@ -489,12 +579,12 @@ export const runs = (): Run[] => [
     policyVersionId: "version-8",
     stages: [
       {
-        name: "Approval",
+        name: "Finance sign-off",
         quorum: "one",
         seats: [
           seat("task-4", "user-charlie", {
             at: "2026-07-09T00:00:00Z",
-            comment: "Needs the disclosure threshold spelled out.",
+            comment: "Needs the value threshold spelled out.",
             state: "rejected",
           }),
         ],
@@ -521,6 +611,11 @@ export const acknowledgements = (): Acknowledgement[] => [
   {
     ackedAt: "2026-05-03T10:00:00Z",
     policyVersionId: "version-5",
+    userId: "user-erin",
+  },
+  {
+    ackedAt: "2026-10-03T09:00:00Z",
+    policyVersionId: "version-11",
     userId: "user-erin",
   },
 ];

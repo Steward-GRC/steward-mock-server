@@ -67,7 +67,7 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: {
       connectionId: "connection-1",
-      idpGroupClaimValue: "infrastructure",
+      idpGroupClaimValue: "facilities",
       targetGroupId: "group-3",
     },
   },
@@ -116,7 +116,10 @@ const cases: Record<string, Case> = {
     variables: { policyId: "policy-8", reason: "Incident review" },
   },
   Category: { as: ADMIN, variables: { id: "category-finance" } },
-  CategoryChildren: { as: READER, variables: { parentId: "category-itsec" } },
+  CategoryChildren: {
+    as: READER,
+    variables: { parentId: "category-information" },
+  },
   CategoryTree: { as: READER },
   ChangeOrgProtocol: {
     as: ADMIN,
@@ -164,7 +167,7 @@ const cases: Record<string, Case> = {
     as: AUTHOR,
     variables: {
       documentType: "POLICY",
-      homeCategoryId: "category-reimbursement",
+      homeCategoryId: "category-expenses",
       sensitivity: "STANDARD",
       templateId: "template-1",
       title: "Travel Booking",
@@ -182,7 +185,7 @@ const cases: Record<string, Case> = {
   },
   CreateTemplate: {
     as: ADMIN,
-    variables: { name: "Short policy", ownerCategoryId: "category-hr" },
+    variables: { name: "Short policy", ownerCategoryId: "category-people" },
   },
   CreateTemplateVersion: {
     as: ADMIN,
@@ -197,10 +200,10 @@ const cases: Record<string, Case> = {
   },
   Definitions: {
     as: AUTHOR,
-    variables: { categoryId: "category-itsec", includeArchived: true },
+    variables: { categoryId: "category-information", includeArchived: true },
   },
   DeleteAppendix: { as: AUTHOR, variables: { id: "appendix-2" } },
-  DeleteCategory: { as: ADMIN, variables: { id: "category-infrastructure" } },
+  DeleteCategory: { as: ADMIN, variables: { id: "category-phones" } },
   DeleteDefinition: { as: ADMIN, variables: { id: "definition-2" } },
   DeleteGroupMapping: {
     as: ADMIN,
@@ -261,8 +264,8 @@ const cases: Record<string, Case> = {
   MoveCategory: {
     as: ADMIN,
     variables: {
-      categoryId: "category-infrastructure",
-      newParentId: "category-itsec",
+      categoryId: "category-phones",
+      newParentId: "category-information",
     },
   },
   MyDrafts: { as: AUTHOR },
@@ -316,14 +319,14 @@ const cases: Record<string, Case> = {
   RenameCategory: {
     as: ADMIN,
     variables: {
-      id: "category-procurement",
-      name: "Purchasing",
-      slug: "purchasing",
+      id: "category-workplace",
+      name: "Offices",
+      slug: "offices",
     },
   },
   RenameTemplate: {
     as: ADMIN,
-    variables: { id: "template-1", name: "Standard policy, 2026" },
+    variables: { id: "template-1", name: "Standard Policy, 2026" },
   },
   ReorderAppendices: {
     as: AUTHOR,
@@ -362,7 +365,7 @@ const cases: Record<string, Case> = {
       defaultTemplateId: "template-1",
       defaultTemplateNone: false,
       defaultWorkflowId: "workflow-1",
-      id: "category-hr",
+      id: "category-people",
     },
   },
   SetCategoryGovernance: {
@@ -370,7 +373,7 @@ const cases: Record<string, Case> = {
     variables: {
       ackEveryone: true,
       ackTriggers: "ON_PUBLISH",
-      id: "category-hr",
+      id: "category-people",
       owners: [AUTHOR],
       reviewCadence: "ANNUAL",
     },
@@ -479,7 +482,7 @@ const cases: Record<string, Case> = {
     variables: {
       id: "definition-1",
       input: {
-        categoryId: "category-itsec",
+        categoryId: "category-information",
         definition: "The longest a system may stay down after an incident.",
         term: "RTO",
       },
@@ -520,12 +523,12 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: {
       id: "workflow-1",
-      name: "Single approver",
+      name: "Finance sign-off",
       stages: [
         {
           approvers: [APPROVER],
           id: "workflow-stage-1",
-          name: "Approval",
+          name: "Finance sign-off",
           quorum: "one",
         },
       ],

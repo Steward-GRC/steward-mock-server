@@ -66,19 +66,19 @@ describe("the policy read model", () => {
   it("lets a reader see published, non-sensitive policies only", async () => {
     const reader = await as("user-erin");
     const usage = await call(base, reader, "Policies", {
-      categoryId: "category-usage",
+      categoryId: "category-records",
     });
-    // Privileged Access is published but SENSITIVE; Acceptable Use is a sensitive draft.
+    // Archive Access Policy is published but SENSITIVE; Records Retention Policy is a sensitive draft.
     assert.deepEqual(titles(usage.data.policies), []);
     const finance = await call(base, reader, "Policies", {
-      categoryId: "category-reimbursement",
+      categoryId: "category-expenses",
     });
-    assert.deepEqual(titles(finance.data.policies), ["Expense Claims"]);
+    assert.deepEqual(titles(finance.data.policies), ["Expense Claims Policy"]);
     const row = (finance.data.policies as Row[])[0];
     assert.equal(row?.viewerCan.edit, false);
     assert.equal(row?.viewerCan.read, true);
     const sensitive = await call(base, reader, "PolicyByNumber", {
-      number: "POL-USAGE-000002",
+      number: "POL-RECORDS-000002",
     });
     assert.equal(sensitive.refused, "NotFound");
   });
@@ -86,7 +86,7 @@ describe("the policy read model", () => {
   it("hides a draft from everyone who can't edit it", async () => {
     const reader = await as("user-erin");
     const governance = await call(base, reader, "Policies", {
-      categoryId: "category-due-diligence",
+      categoryId: "category-travel",
     });
     assert.deepEqual(titles(governance.data.policies), []);
     const draft = await call(base, reader, "PolicyVersion", {
@@ -98,14 +98,14 @@ describe("the policy read model", () => {
   it("shows the author their drafts, sensitive ones included", async () => {
     const author = await as("user-bob");
     const usage = await call(base, author, "Policies", {
-      categoryId: "category-usage",
+      categoryId: "category-records",
     });
     assert.deepEqual(titles(usage.data.policies), [
-      "Acceptable Use",
-      "Privileged Access",
+      "Archive Access Policy",
+      "Records Retention Policy",
     ]);
     const draft = (usage.data.policies as Row[]).find(
-      (p) => p.title === "Acceptable Use",
+      (p) => p.title === "Records Retention Policy",
     );
     assert.equal(draft?.currentDraftVersionId, "version-3");
     assert.equal(draft?.viewerCan.edit, true);
@@ -114,7 +114,7 @@ describe("the policy read model", () => {
   it("obfuscates a sensitive policy for a site admin until they break glass", async () => {
     const admin = await as("user-alice");
     const policy = await call(base, admin, "PolicyByNumber", {
-      number: "POL-USAGE-000002",
+      number: "POL-RECORDS-000002",
     });
     const row = policy.data.policyByNumber as Row;
     assert.equal(row.viewerCan.contentObfuscated, true);
@@ -145,7 +145,7 @@ describe("the policy read model", () => {
     });
     const row = found.data.policyByNumber as Row;
     assert.equal(row.currentVersionStatus, "PUBLISHED");
-    assert.equal(row.currentVersionNo, 2);
+    assert.equal(row.currentVersionNo, 3);
     assert.equal(row.viewerCan.ack, true);
     const versions = await call(base, reader, "PolicyVersions", {
       policyId: "policy-1",
@@ -154,7 +154,7 @@ describe("the policy read model", () => {
       (versions.data.policyVersions as { versionNo: number }[]).map(
         (v) => v.versionNo,
       ),
-      [1, 2],
+      [1, 2, 3],
     );
   });
 });
@@ -177,7 +177,7 @@ describe("refusals", () => {
       "user-erin",
       "CreatePolicy",
       {
-        homeCategoryId: "category-reimbursement",
+        homeCategoryId: "category-expenses",
         sensitivity: "STANDARD",
         title: "Not mine to write",
       },

@@ -66,7 +66,7 @@ describe("me", () => {
       roles: ["author"],
       // Earned through the category author rules that name Bob, as the gateway adds them.
       scopes: {
-        author: ["Finance", "Human Resources", "IT Security", "Procurement"],
+        author: ["Finance", "People", "Information", "Workplace"],
       },
       userId: "user-bob",
       username: "bob",

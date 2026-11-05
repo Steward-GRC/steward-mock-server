@@ -10,7 +10,10 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 import type { Signed } from "#product/test-client.ts";
 
-import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
+import {
+  EXPENSE_CLAIMS_NUMBER,
+  TRAVEL_BOOKING_NUMBER,
+} from "#product/data/policies.ts";
 import { query, startForTests, startFresh } from "#product/test-client.ts";
 import { type Answer, call, signInAs } from "#product/web-client.ts";
 
@@ -121,9 +124,7 @@ const createTravel = async (author: Signed, documentType = "POLICY") =>
     await call(base, author, "CreatePolicy", {
       documentType,
       homeCategoryId:
-        documentType === "POLICY"
-          ? "category-reimbursement"
-          : "category-ethics",
+        documentType === "POLICY" ? "category-expenses" : "category-conduct",
       sensitivity: "STANDARD",
       title: "Travel Booking",
     }),
@@ -132,10 +133,10 @@ const createTravel = async (author: Signed, documentType = "POLICY") =>
 describe("the reader follows the author's writes", () => {
   it("numbers a new policy and procedure the way steward-core does", async () => {
     const author = await as("user-bob");
-    assert.equal((await createTravel(author)).number, "POL-REIMBU-000002");
+    assert.equal((await createTravel(author)).number, "POL-EXPENSES-000003");
     assert.equal(
       (await createTravel(author, "PROCEDURE")).number,
-      "PRC-ETHICS-000002",
+      "PRC-CONDUCT-000002",
     );
   });
 
@@ -181,7 +182,7 @@ describe("the reader follows the author's writes", () => {
     assert.equal(mine.policy.currentDraftVersionId, saved.id);
     const theirs = await byNumber(reader, EXPENSE_CLAIMS_NUMBER);
     assert.equal(theirs.policy.currentDraftVersionId, null);
-    assert.equal(theirs.policy.currentVersionNo, 2);
+    assert.equal(theirs.policy.currentVersionNo, 3);
 
     ok(await call(base, author, "DiscardDraft", { policyId: "policy-1" }));
     const discarded = await byNumber(author, EXPENSE_CLAIMS_NUMBER);
@@ -217,7 +218,7 @@ describe("submitting a draft for review", () => {
     const reader = await as("user-erin");
     const { refused } = await submit(
       reader,
-      { homeCategoryId: "category-usage", id: "policy-2" },
+      { homeCategoryId: "category-records", id: "policy-2" },
       "version-3",
     );
     assert.equal(refused, "PermissionDenied");
@@ -227,7 +228,7 @@ describe("submitting a draft for review", () => {
     const admin = await as("user-alice");
     const { refused } = await submit(
       admin,
-      { homeCategoryId: "category-due-diligence", id: "policy-5" },
+      { homeCategoryId: "category-travel", id: "policy-5" },
       "version-6",
     );
     assert.equal(refused, "FailedPrecondition");
@@ -250,7 +251,7 @@ describe("deciding an approval", () => {
         .currentDraftVersionId ?? "";
     await submit(
       author,
-      { homeCategoryId: "category-reimbursement", id: "policy-1" },
+      { homeCategoryId: "category-expenses", id: "policy-1" },
       draftId,
     );
     const task = (await tasksOf(approver)).find(
@@ -265,7 +266,7 @@ describe("deciding an approval", () => {
     );
     const published = await byNumber(reader, EXPENSE_CLAIMS_NUMBER);
     assert.equal(published.policy.currentPublishedVersionId, draftId);
-    assert.equal(published.policy.currentVersionNo, 3);
+    assert.equal(published.policy.currentVersionNo, 4);
     assert.ok(
       !(await tasksOf(approver)).some((t) => t.policyVersionId === draftId),
     );
@@ -277,7 +278,7 @@ describe("deciding an approval", () => {
     const admin = await as("user-alice");
     const first = { policyVersionId: "version-4", runId: "run-1" };
 
-    // Board review wants a majority of its two approvers.
+    // Review wants a majority of its two approvers.
     ok(
       await decide(
         approver,
@@ -297,7 +298,8 @@ describe("deciding an approval", () => {
     assert.equal(second.currentStageIdx, 1);
     assert.equal(second.status, "APPROVAL_STATUS_IN_REVIEW");
     assert.equal(
-      (await byNumber(author, "POL-DATAGO-000001")).policy.currentVersionStatus,
+      (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy
+        .currentVersionStatus,
       "IN_REVIEW",
     );
 
@@ -312,7 +314,7 @@ describe("deciding an approval", () => {
       (await status(author, "version-4")).status,
       "APPROVAL_STATUS_PUBLISHED",
     );
-    const policy = (await byNumber(author, "POL-DATAGO-000001")).policy;
+    const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
     assert.equal(policy.currentPublishedVersionId, "version-4");
     assert.equal(policy.currentVersionStatus, "PUBLISHED");
     assert.equal(policy.currentVersionNo, 1);
@@ -332,7 +334,7 @@ describe("deciding an approval", () => {
     );
     const run = await status(author, "version-4");
     assert.equal(run.status, "APPROVAL_STATUS_REJECTED");
-    const policy = (await byNumber(author, "POL-DATAGO-000001")).policy;
+    const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
     assert.equal(policy.currentVersionStatus, "REJECTED");
     assert.equal(policy.currentPublishedVersionId, null);
     // A rejection ends the other seats: nobody else has the task any more.

@@ -80,7 +80,10 @@ export const versionSubject = (policy: Policy, versionId: string) => ({
   kind: "policy_version",
 });
 
-/** steward-core's category code: the slug in capitals, letters and digits only, six at most. */
+/**
+ * steward-core's derived code, for a category with no stored one: the slug in capitals, letters
+ * and digits only, six at most.
+ */
 const codeOf = (slug: string): string =>
   slug
     .toUpperCase()
@@ -93,9 +96,8 @@ const numberFor = (
   documentType: Policy["documentType"],
 ): string => {
   const prefix = documentType === "PROCEDURE" ? "PRC" : "POL";
-  const code = codeOf(
-    data().categories.find((c) => c.id === categoryId)?.slug ?? "",
-  );
+  const category = data().categories.find((c) => c.id === categoryId);
+  const code = category?.code ?? codeOf(category?.slug ?? "");
   const stem = `${prefix}-${code}-`;
   const taken = data()
     .policies.filter((p) => p.number.startsWith(stem))
