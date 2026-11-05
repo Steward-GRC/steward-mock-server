@@ -13,12 +13,10 @@ import { answerHealth } from "#core/health.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { answerPage } from "#core/page.ts";
+import { settings } from "#core/product.ts";
 import { answerSetup } from "#core/setup.ts";
 
 const log = createLogger("http");
-
-/** The GraphQL path, for HTTP and the websocket alike. */
-export const GRAPHQL_PATH = "/query";
 
 /** Origins allowed to call with credentials, from MOCK_CORS_ORIGINS (comma separated). */
 const allowedOrigins = () =>
@@ -118,7 +116,7 @@ const answerGraphql = async (request: Request, url: URL): Promise<Response> => {
 const route = async (request: Request, url: URL): Promise<Response> => {
   const path = url.pathname;
   if (
-    path === GRAPHQL_PATH &&
+    path === settings().graphqlPath &&
     (request.method === "POST" || request.method === "GET")
   ) {
     return answerGraphql(request, url);

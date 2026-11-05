@@ -5,9 +5,11 @@
 import { readFileSync } from "node:fs";
 
 import { WRONG_CODE, WRONG_PASSWORD } from "#core/auth.ts";
-import { GRAPHQL_PATH } from "#core/handle.ts";
+import { settings, useProduct } from "#core/product.ts";
 import { startMockServer } from "#core/server.ts";
-import { product } from "#product/product.ts";
+import { example } from "#product/product.ts";
+
+useProduct(example);
 
 const httpsPort = process.env.HTTPS_PORT;
 const certificate = process.env.MOCK_TLS_CERT;
@@ -15,7 +17,7 @@ const key = process.env.MOCK_TLS_KEY;
 
 const server = await startMockServer({
   host: process.env.HOST,
-  port: Number(process.env.PORT ?? product.port),
+  port: Number(process.env.PORT ?? settings().port),
   tls:
     httpsPort && certificate && key
       ? {
@@ -27,13 +29,13 @@ const server = await startMockServer({
 });
 
 const base = `http://localhost:${String(server.port)}`;
-console.log(`${product.name} mock gateway ready ${base}`);
+console.log(`${settings().name} mock gateway ready ${base}`);
 if (server.https) {
   const { port } = server.https.address() as { port: number };
   console.log(`  https    https://localhost:${String(port)}`);
 }
 console.log(
-  `  graphql  ${base}${GRAPHQL_PATH} (POST, and the websocket on the same path)`,
+  `  graphql  ${base}${settings().graphqlPath} (POST, and the websocket on the same path)`,
 );
 console.log(`  controls ${base}/_mock`);
 console.log(

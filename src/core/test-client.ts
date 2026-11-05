@@ -4,7 +4,9 @@
 
 import { WebSocket } from "ws";
 
+import { type Product, settings, useProduct } from "#core/product.ts";
 import { type RunningMockServer, startMockServer } from "#core/server.ts";
+import { fixture } from "#core/test-fixture.ts";
 
 export interface Signed {
   cookie: string;
@@ -14,10 +16,14 @@ export interface Signed {
 
 export const GOOD_CODE = "123456";
 
-export const startForTests = async (): Promise<{
+/** Hand the core a product (the test fixture unless a test names another) and start it on a free port. */
+export const startForTests = async (
+  product: Product = fixture,
+): Promise<{
   base: string;
   server: RunningMockServer;
 }> => {
+  useProduct(product);
   const server = await startMockServer({ port: 0 });
   return { base: `http://127.0.0.1:${String(server.port)}`, server };
 };
@@ -73,7 +79,7 @@ export const query = async (
 ) => {
   const answer = await post(
     base,
-    "/query",
+    settings().graphqlPath,
     { query: text, variables },
     signed ? headersFor(signed) : {},
   );
@@ -98,7 +104,7 @@ export const openSocket = async (
   headers: Record<string, string> = {},
 ) => {
   const socket = new WebSocket(
-    `${base.replace("http", "ws")}/query`,
+    `${base.replace("http", "ws")}${settings().graphqlPath}`,
     protocol,
     { headers },
   );

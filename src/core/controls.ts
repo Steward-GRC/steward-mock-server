@@ -10,6 +10,7 @@
 
 import { issueSession } from "#core/auth.ts";
 import { json, readJson, refuse } from "#core/http.ts";
+import { product, settings } from "#core/product.ts";
 import {
   endSessions,
   mockState,
@@ -17,8 +18,6 @@ import {
   resetData,
   startFresh,
 } from "#core/state.ts";
-import { productActions, productSummary } from "#product/controls.ts";
-import { product } from "#product/product.ts";
 
 /** One button on the controls page: it posts `body` (plus `kind`) to /_mock/controls. */
 export interface Action {
@@ -78,19 +77,19 @@ const CORE_ACTIONS: Action[] = [
 
 const snapshot = () => ({
   actions: [
-    ...productActions.map(({ run: _run, ...action }) => action),
+    ...product().actions.map(({ run: _run, ...action }) => action),
     ...CORE_ACTIONS,
   ],
   failNext: mockState.failNext,
   freshAt: mockState.freshAt,
   needsSetup: mockState.needsSetup,
-  product: product.name,
+  product: settings().name,
   sessions: [...mockState.sessions.values()].map(({ personId, startedAt }) => ({
     personId,
     startedAt,
   })),
   startedAt: mockState.startedAt,
-  summary: productSummary(),
+  summary: product().summary(),
 });
 
 const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
@@ -137,9 +136,10 @@ const control = async (request: Request) => {
   return json({ ...snapshot(), ...(result === undefined ? {} : { result }) });
 };
 
-let loaded: Record<string, ProductControl> | undefined;
-const productControls = () =>
-  (loaded ??= Object.fromEntries(productActions.map((a) => [a.kind, a.run])));
+const productControls = (): Record<string, ProductControl> =>
+  Object.fromEntries(
+    product().actions.map((action) => [action.kind, action.run]),
+  );
 
 export const answerControls = (
   request: Request,

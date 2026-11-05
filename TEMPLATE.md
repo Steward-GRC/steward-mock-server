@@ -10,13 +10,14 @@ file.
 
 ## 🧾 What a product fills in
 
-| File                         | What it holds                                                                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `src/product/product.ts`     | The product's name, default port, session cookie name, version header, and the root fields anyone may read before signing in. |
-| `src/product/schema.graphql` | The gateway's GraphQL schema, or the part of it the mock serves. Copy it from the gateway; don't write one by hand.           |
-| `src/product/data.ts`        | The invented data, made fresh on every reset: the people who can sign in, and the product's own records.                      |
-| `src/product/resolvers.ts`   | What each field answers, by type and field name, reading and changing `mockState.data`.                                       |
-| `src/product/controls.ts`    | The product's own buttons on `/_mock`, and the counts it shows.                                                               |
+| File                          | What it holds                                                                                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/product/product.ts`      | The one object the core is handed: the settings (name, default port, GraphQL path, session cookie, version header, the root fields anyone may read before signing in) and the four files below. |
+| `src/product/schema.graphql`  | The gateway's GraphQL schema, or the part of it the mock serves. Copy it from the gateway; don't write one by hand.                                                                             |
+| `src/product/data.ts`         | The invented data, made fresh on every reset: the people who can sign in, and the product's own records.                                                                                        |
+| `src/product/resolvers.ts`    | What each field answers, by type and field name, reading and changing `mockState.data`.                                                                                                         |
+| `src/product/controls.ts`     | The product's own buttons on `/_mock`, and the counts it shows.                                                                                                                                 |
+| `src/product/product.test.ts` | The product's own tests, through the core. Replace them with tests for what the product fills in.                                                                                               |
 
 Everything in `src/product/` today is a small invented example (items with an owner and a status)
 that exercises every path: a public field, signed-in reads, a role-gated mutation and a
@@ -38,15 +39,14 @@ subscription. Replace it; don't build around it.
    npm ci --ignore-scripts
    ```
 
-2. Re-brand it. In `src/product/product.ts`, set `name`, `port` (one no other product's mock
-   uses, since several often run at once), `sessionCookie` (the real gateway's cookie name) and
+2. Re-brand it. In the settings in `src/product/product.ts`, set `name`, `port` (one no other
+   product's mock uses, since several often run at once), `graphqlPath` (the real gateway's,
+   `/query` on a gqlgen gateway), `sessionCookie` (the real gateway's cookie name) and
    `versionHeader` (the real gateway's). In `package.json`, set `name`, `description`, the
    `repository`, `homepage` and `bugs` URLs, and rename the `mock-server` command under `bin` to
    `<product>-mock-server`. Put the product's name in the README's title and first lines.
 
-3. Copy the gateway's schema into `src/product/schema.graphql`. When the gateway's GraphQL path
-   isn't `/query`, change `GRAPHQL_PATH` in `src/core/handle.ts` and say so in the PR: it's the one
-   core value a product may change.
+3. Copy the gateway's schema into `src/product/schema.graphql`.
 
 4. Write the invented data in `src/product/data.ts`. Keep the people's shape (the sign-in routes
    read `username`, `email`, `roles`, `secondFactor` and `disabled`), use example.org addresses,
@@ -62,11 +62,16 @@ subscription. Replace it; don't build around it.
    that a client needs to see happen (a new record arriving, an approval coming in).
 
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
-   identity provider's flow), change `src/core/auth.ts` to match it, keep the tests in
-   `src/core/server.test.ts` passing for what still applies, and say in the PR which part of the
-   core moved. That's the one part of the core a product is expected to change.
+   identity provider's flow), change `src/core/auth.ts` to match it, change the sign-in tests in
+   `src/core/server.test.ts` to match, and say in the PR which part of the core moved. That's the
+   one part of the core a product is expected to change; every other file in `src/core/` stays the
+   template's, byte for byte.
 
-8. Run the checks, then commit in one PR and say in its body which template commit the product
+8. Replace the sample's tests in `src/product/product.test.ts` with the product's own. The core's
+   tests run against a fixture product of their own (`src/core/test-fixture.ts`), never
+   `src/product/`, so they pass unchanged whatever the product is.
+
+9. Run the checks, then commit in one PR and say in its body which template commit the product
    started from (`git log -1 --format=%H` before step 2). That commit is where the next sync
    starts.
 

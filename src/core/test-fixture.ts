@@ -1,0 +1,167 @@
+// Copyright 2026 The template-node-mock-server Authors
+// SPDX-License-Identifier: Apache-2.0
+// A small product that exists only for the core tests. The core tests hand the core this product
+// and never the one in src/product, so they pass unchanged in every product that cloned the
+// template, whatever its own schema and data are. It differs from the sample on purpose (other
+// names, other records, another GraphQL path), so a core test that leaned on the sample would fail
+// here first.
+
+import type { ControlBody } from "#core/controls.ts";
+import type { Product, ProductData } from "#core/product.ts";
+
+import { publish, subscribe } from "#core/events.ts";
+import { type Context, MockError, signedIn, withRole } from "#core/graphql.ts";
+import { newId } from "#core/http.ts";
+import { mockState, personById } from "#core/state.ts";
+
+export interface Note {
+  authorId: string;
+  id: string;
+  text: string;
+}
+
+interface FixtureData extends ProductData {
+  notes: Note[];
+}
+
+const NOTE_ADDED = "fixture:note-added";
+
+const data = () => mockState.data as FixtureData;
+
+const addNote = (authorId: string, text: string): Note => {
+  const note = { authorId, id: newId("note"), text };
+  data().notes.push(note);
+  publish(NOTE_ADDED, note);
+  return note;
+};
+
+const SCHEMA = `
+type Query {
+  status: Status!
+  me: Person!
+  notes: [Note!]!
+  note(id: ID!): Note
+}
+type Mutation {
+  addNote(text: String!): Note!
+  removeNote(id: ID!): Boolean!
+}
+type Subscription {
+  noteAdded: Note!
+}
+type Status { name: String! version: String! }
+type Person { id: ID! username: String! name: String! }
+type Note { id: ID! text: String! author: Person! }
+`;
+
+export const FIXTURE_VERSION = "v9.9.9-fixture";
+
+export const fixture: Product = {
+  actions: [
+    {
+      kind: "add-note",
+      label: "Add a note",
+      run: (body: ControlBody) => ({
+        id: addNote(
+          "person-ben",
+          typeof body.text === "string" ? body.text : "From the controls",
+        ).id,
+      }),
+      section: "Notes",
+    },
+  ],
+  resolvers: {
+    Mutation: {
+      addNote: (_root, given: { text: string }, context: Context) => {
+        const person = signedIn(context);
+        if (!given.text.trim())
+          throw new MockError("BAD_USER_INPUT", "Write something.");
+        return addNote(person.id, given.text.trim());
+      },
+      removeNote: (_root, given: { id: string }, context: Context) => {
+        withRole(context, "ADMIN");
+        const before = data().notes.length;
+        data().notes = data().notes.filter((note) => note.id !== given.id);
+        if (data().notes.length === before)
+          throw new MockError("NOT_FOUND", "No such note.");
+        return true;
+      },
+    },
+    Note: {
+      author: (note) => personById((note as Note).authorId),
+    },
+    Query: {
+      me: (_root, _given, context: Context) => signedIn(context),
+      note: (_root, given: { id: string }, context: Context) => {
+        signedIn(context);
+        return data().notes.find((note) => note.id === given.id) ?? null;
+      },
+      notes: (_root, _given, context: Context) => {
+        signedIn(context);
+        return data().notes;
+      },
+      status: () => ({ name: "Fixture", version: FIXTURE_VERSION }),
+    },
+    Subscription: {
+      noteAdded: {
+        resolve: (note) => note,
+        subscribe: (_root, _given, context: Context) => {
+          signedIn(context);
+          return subscribe<Note>(NOTE_ADDED);
+        },
+      },
+    },
+  },
+  schema: SCHEMA,
+  seed: (): FixtureData => ({
+    notes: [
+      { authorId: "person-ada", id: "note-1", text: "First note" },
+      { authorId: "person-ben", id: "note-2", text: "Second note" },
+    ],
+    people: [
+      {
+        email: "ada@example.org",
+        id: "person-ada",
+        name: "Ada Admin",
+        roles: ["ADMIN"],
+        secondFactor: true,
+        username: "ada",
+      },
+      {
+        email: "ben@example.org",
+        id: "person-ben",
+        name: "Ben Staff",
+        roles: ["STAFF"],
+        secondFactor: true,
+        username: "ben",
+      },
+      {
+        email: "cy@example.org",
+        id: "person-cy",
+        name: "Cy Phone",
+        roles: ["STAFF"],
+        secondFactor: false,
+        username: "cy",
+      },
+      {
+        disabled: true,
+        email: "dot@example.org",
+        id: "person-dot",
+        name: "Dot Disabled",
+        roles: ["STAFF"],
+        secondFactor: false,
+        username: "dot",
+      },
+    ],
+  }),
+  settings: {
+    graphqlPath: "/gql",
+    name: "Fixture",
+    port: 5999,
+    publicFields: ["status"],
+    sessionCookie: "fixture_session",
+    version: FIXTURE_VERSION,
+    versionHeader: "Fixture-Version",
+  },
+  summary: () => ({ notes: data().notes.length }),
+};

@@ -12,9 +12,9 @@ import {
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 
-import { GRAPHQL_PATH, handle } from "#core/handle.ts";
+import { handle } from "#core/handle.ts";
+import { settings } from "#core/product.ts";
 import { createWebSocketServer } from "#core/websocket.ts";
-import { product } from "#product/product.ts";
 
 export interface MockServerOptions {
   /** Where to listen. Loopback by default: the controls have no sign-in. */
@@ -80,7 +80,7 @@ const closeServer = (server: Server) =>
 /** Start the mock gateway on a port. */
 export const startMockServer = async ({
   host = "127.0.0.1",
-  port = product.port,
+  port = settings().port,
   tls,
 }: MockServerOptions = {}): Promise<RunningMockServer> => {
   const sockets = createWebSocketServer();
@@ -88,7 +88,7 @@ export const startMockServer = async ({
     server.on("upgrade", (incoming: IncomingMessage, socket, head) => {
       if (
         new URL(incoming.url ?? "/", "https://mock.invalid").pathname !==
-        GRAPHQL_PATH
+        settings().graphqlPath
       ) {
         socket.destroy();
         return;

@@ -111,8 +111,8 @@ Between test cases, `POST /_mock/controls` with `{"kind":"fresh"}` puts everythi
 doesn't run TypeScript from inside `node_modules`, so installing the mock as a dependency won't
 start it; a clone beside the client, or a container, will.
 
-Inside this repo, `src/index.ts` exports `startMockServer`, `handle` and `startFresh` for tests
-that run it in-process.
+Inside this repo, `src/index.ts` exports `useProduct`, `startMockServer`, `handle` and `startFresh`
+for tests that run it in-process: hand it a product first, then start it.
 
 ## 🧩 Start a product's mock from it
 

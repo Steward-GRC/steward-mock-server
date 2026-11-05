@@ -5,7 +5,7 @@
 // the server restarts, from the controls page, and between tests.
 
 import { publish, SESSIONS_ENDED } from "#core/events.ts";
-import { type ProductData, seed } from "#product/data.ts";
+import { onProductChange, product, type ProductData } from "#core/product.ts";
 
 /** The fail-next control's armed failure, spent on the next GraphQL call. */
 export interface Failure {
@@ -52,7 +52,7 @@ const startedAt = new Date().toISOString();
 
 export const mockState = {
   /** The product's invented data: people and everything its schema serves. */
-  data: seed() as ProductData,
+  data: { people: [] } as ProductData,
   failNext: null as Failure | null,
   /** When Start fresh last ran. */
   freshAt: null as null | string,
@@ -71,7 +71,7 @@ export const personById = (id: string): Person | undefined =>
 
 /** Put the invented data back. Whoever is signed in stays signed in. */
 export const resetData = (): void => {
-  mockState.data = seed();
+  mockState.data = product().seed();
   mockState.failNext = null;
 };
 
@@ -94,3 +94,9 @@ export const startFresh = (firstRun = false): void => {
   mockState.needsSetup = firstRun;
   mockState.freshAt = new Date().toISOString();
 };
+
+// A new product starts on its own seed data, with nobody signed in.
+onProductChange(() => {
+  startFresh(process.env.MOCK_FRESH_INSTALL === "1");
+  mockState.freshAt = null;
+});
