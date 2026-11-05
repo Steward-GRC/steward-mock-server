@@ -1,4 +1,4 @@
-// Copyright 2026 The template-node-mock-server Authors
+// Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // The people who can sign in, managed from the controls: add one, change their details or
 // password, or remove them. A change counts from the next sign-in, and a removed person's sessions
