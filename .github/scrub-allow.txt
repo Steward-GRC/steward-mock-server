@@ -1,0 +1,3 @@
+# The template core's placeholder base URL for building in-process requests and for parsing a
+# path off a bare request line. .invalid is reserved (RFC 2606) and never resolves.
+fqdn mock.invalid src/core/*
