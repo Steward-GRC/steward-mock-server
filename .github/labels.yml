@@ -1,4 +1,4 @@
-# The repo's label set. job-label-sync.yaml reconciles the
+# Canonical label set for every governed repo. job-label-sync.yaml reconciles a
 # repo to exactly this set (it also deletes labels not listed here). Aligned to
 # the release-drafter categories + version-resolver and the conventional-commit
 # prefixes the autolabeler maps from PR titles.

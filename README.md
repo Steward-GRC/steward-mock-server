@@ -111,6 +111,11 @@ npm run typecheck  # tsc
 npm test           # node --test, against a real server on a free port
 ```
 
+## 🙏 Acknowledgements
+
+Steward was originally written by [@Bugs5382](https://github.com/Bugs5382). This repo started
+from [template-node-mock-server](https://github.com/the-rabbit-hole-tech/template-node-mock-server).
+
 ## ⚖️ License
 
-MIT (c) 2026 Shane
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
