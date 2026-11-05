@@ -113,13 +113,13 @@ on, and `GET /_mock/state` the whole state.
 
 The maintenance cycle has its own kinds, and its own card on the page:
 
-| Kind                   | Body                            | What it does                                                                                                                                 |
-| ---------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `maintenance-announce` | `startsAt`, `endsAt`, `message` | A window ahead, which every client reads.                                                                                                    |
-| `maintenance-start`    | `endsAt`, `message` (optional)  | Maintenance on now, gated the way steward-gateway gates it (below). `/readyz` isn't ready; `/livez`, `/healthz` and `/_mock` keep answering. |
-| `maintenance-update`   | `startsAt`, `endsAt`, `message` | Extend or change the window, announced or on.                                                                                                |
-| `maintenance-end`      |                                 | Back to normal.                                                                                                                              |
-| `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                    |
+| Kind                   | Body                            | What it does                                                                                                                        |
+| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `maintenance-announce` | `startsAt`, `endsAt`, `message` | A window ahead, which every client reads.                                                                                           |
+| `maintenance-start`    | `endsAt`, `message` (optional)  | Maintenance on now, gated the way steward-gateway gates it (below): only GraphQL operations are refused, and `/readyz` stays ready. |
+| `maintenance-update`   | `startsAt`, `endsAt`, `message` | Extend or change the window, announced or on.                                                                                       |
+| `maintenance-end`      |                                 | Back to normal.                                                                                                                     |
+| `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                           |
 
 Reset and start fresh put it back to no maintenance. Steward answers the window the way
 steward-gateway does:
@@ -130,9 +130,12 @@ steward-gateway does:
 - **On:** `globalSettings.maintenance` reports `enabled: true` with the message. GraphQL answers
   only operations whose root fields are all on the gateway's whitelist (`globalSettings`, `me`,
   `__schema`, `__type`); anything else answers 200 with the gateway's `MAINTENANCE` error. A site
-  admin runs every operation, as on the gateway, so the admin console stays open to them. Sign-in
-  (`/auth`), `/setup`, the SSO admin routes and `GET /maintenance` keep answering; new websockets
-  get a 503.
+  admin runs every operation, as on the gateway, so the admin console stays open to them. The same
+  goes for each operation on the GraphQL websocket: a site admin's subscription runs, and anyone
+  else's beyond the whitelist fails with `MAINTENANCE`.
+- **Everything else stays open,** as the gateway's gate is GraphQL only: sign-in (`/auth`),
+  `/setup`, the SSO admin routes, `GET /maintenance`, every other route, new websockets (GraphQL
+  and co-editing), and `/readyz`, which stays ready.
 - `GET /maintenance` answers `{enabled, message}`, as the gateway's public route does.
 - A site admin's `setGlobalSettings` is the gateway's maintenance switch: saving
   `maintenance.enabled` true starts maintenance with its message, and saving it false ends it,
