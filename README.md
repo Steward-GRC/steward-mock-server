@@ -66,7 +66,7 @@ frame: the Workplace, People, Finance and Information categories; documents such
 Booking Policy (`POL-FACILITIES-000001`) and the Expense Claims Policy (`POL-EXPENSES-000002`); the
 Finance team, Facilities team, All staff and Approvers groups; the Standard 2-stage and Finance
 sign-off workflows; and the Standard Policy and Step-by-step Procedure templates. The people are
-the seven below.
+the eight below.
 
 Every document's content is a Lexical document, as the editor saves it and steward-core reads it,
 with real headings: the Desk Booking Policy is the design's reader frame (Purpose, Scope, Booking a
@@ -77,15 +77,40 @@ per section of the pinned template, keyed and word-diffed as core does.
 
 ### Who to sign in as
 
-| Username  | Role            | What they see                                                                                                                                                                                          |
-| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. The root admin. Asks for a second factor (an authenticator app, "Work phone").                                                       |
-| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                                                                                                           |
-| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has an authenticator app and a passkey ("MacBook Touch ID").                                        |
-| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first. Has a deny exception on the Lost Device Procedure.                                                                                          |
-| `erin`    | reader          | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. Has an allow exception on the Archive Access Policy. |
-| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                                                                                                         |
-| `heidi`   | group manager   | Manages the Facilities team (My groups: Dave, Erin and Heidi), with no second factor.                                                                                                                  |
+| Username  | Role                              | What they see                                                                                                                                                                                          |
+| --------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `alice`   | site admin                        | Everything; sensitive policies obfuscated until they break glass. The root admin. Asks for a second factor (an authenticator app, "Work phone").                                                       |
+| `bob`     | author                            | The library, their drafts (sensitive ones too), authoring in every category.                                                                                                                           |
+| `charlie` | approver                          | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has an authenticator app and a passkey ("MacBook Touch ID").                                        |
+| `dave`    | privacy officer, compliance admin | The report case queue and the compliance screens. Has to enrol a second factor first. Has a deny exception on the Lost Device Procedure.                                                               |
+| `erin`    | reader                            | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. Has an allow exception on the Archive Access Policy. |
+| `frank`   | none                              | Disabled: sign-in fails as the gateway's does.                                                                                                                                                         |
+| `grace`   | template admin                    | The templates. Signs in with no second factor.                                                                                                                                                         |
+| `heidi`   | group manager                     | Manages the Facilities team (My groups: Dave, Erin and Heidi), with no second factor.                                                                                                                  |
+
+Everyone signs in with `<username>-password`.
+
+### Roles and groups
+
+Who someone is and what they may do comes from the mock's own store of people, which you edit in
+the Users card on `/_mock`: each person's **roles** (the template's field) and **groups** (Steward's
+own). Both are read on every request, so an edit applies to the next call with no new sign-in.
+
+- **Roles** are Steward's: `site-admin`, `author`, `approver`, `privacy-officer`,
+  `compliance-admin` and `template-admin`. They decide permissions as identity's do. `root` among
+  them makes the person a root admin, which the User type reports as `isRoot` rather than a role.
+- **Groups** are free text. Each one is an IdP group, which the category access rules match, and
+  a membership of the platform group with the same name ("All staff", "Finance team", "Facilities
+  team", "Approvers"). "Manages <group>" makes the person that platform group's manager instead;
+  that's mock only, since identity keeps managers apart. No group grants a role, as on the gateway.
+- An edit on `/_mock` writes the store as it is: no Steward rules, checks or audit entries. When
+  it changes someone's groups, roles, password or disabled flag, or adds or removes a person, the
+  mock publishes this on `liveEvents`, so a signed-in app can refresh them:
+  `{"type": "user.permissions_changed", "entityId": "user:<id>", "groupId": null, "actorUserId": null, "at": "<RFC 3339>"}`.
+  `liveEvents` needs the audit log's read permission, as on the gateway.
+- Steward's own admin mutations (`grantRole`, `grantRoot`, `addUserToGroup` and the rest) keep the
+  gateway's rules and audit, and write the same roles and groups, so either side's change shows on
+  the other.
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with

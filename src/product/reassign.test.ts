@@ -10,6 +10,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { stewardData } from "#product/data.ts";
+import { membershipsOf } from "#product/groups.ts";
+import { people } from "#product/resolvers/shared.ts";
 import { startForTests, startFresh } from "#product/test-client.ts";
 import { call, signInAs } from "#product/web-client.ts";
 
@@ -93,12 +95,8 @@ describe("reassignUserPolicies", () => {
 
 describe("the Facilities team", () => {
   it("has the three members A22's frame shows", () => {
-    const members = stewardData()
-      .people.filter((p) =>
-        (p as { memberships?: { groupId: string }[] }).memberships?.some(
-          (m) => m.groupId === "group-3",
-        ),
-      )
+    const members = people()
+      .filter((p) => membershipsOf(p).some((m) => m.groupId === "group-3"))
       .map((p) => p.id)
       .toSorted();
     assert.deepEqual(members, ["user-dave", "user-erin", "user-heidi"]);

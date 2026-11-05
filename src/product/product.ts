@@ -11,6 +11,7 @@ import type { Product } from "#core/product.ts";
 import { collabSockets } from "#product/collab.ts";
 import { productActions, productSummary } from "#product/controls.ts";
 import { seed } from "#product/data.ts";
+import "#product/groups.ts";
 import { stewardMaintenance } from "#product/maintenance.ts";
 import { resolvers } from "#product/resolvers.ts";
 import { stewardRoutes } from "#product/routes.ts";
@@ -22,6 +23,18 @@ export const steward: Product = {
   actions: productActions,
   /** The gateway's maintenance gate (src/product/maintenance.ts). */
   maintenance: stewardMaintenance,
+  /**
+   * Each person's free-text groups, edited in /_mock's Users card beside the template's roles
+   * (src/product/groups.ts says what they mean).
+   */
+  personFields: [
+    {
+      hint: "All staff, Facilities team, Manages Facilities team",
+      key: "groups",
+      kind: "list",
+      label: "Groups",
+    },
+  ],
   resolvers,
   routes: stewardRoutes,
   schema: [read("schema.graphql"), read("schema-pending.graphql")],

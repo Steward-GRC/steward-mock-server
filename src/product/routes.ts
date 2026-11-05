@@ -206,13 +206,12 @@ const bootstrap = async (request: Request) => {
   if (!username?.trim() || !email?.trim() || !password)
     return refuse(400, "username, email, and password are required");
   // identity makes the first site admin a root admin too.
-  const admin: { root: boolean } & Person = {
+  const admin: Person = {
     email: email.trim().toLowerCase(),
     id: newId("user"),
     name: name?.trim() || username.trim(),
     password,
-    roles: ["site-admin"],
-    root: true,
+    roles: ["site-admin", "root"],
     secondFactor: false,
     username: username.trim().toLowerCase(),
   };

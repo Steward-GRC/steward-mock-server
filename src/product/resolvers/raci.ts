@@ -16,6 +16,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { type Category, type RaciRule } from "#product/data/library.ts";
+import { idpGroupsOf } from "#product/groups.ts";
 import {
   caller,
   data,
@@ -270,7 +271,7 @@ export const raciResolvers: Resolvers = {
         "user",
       );
       return resolve(chain, rulesOf, {
-        groups: person.idpGroups,
+        groups: idpGroupsOf(person),
         userId: person.id,
       });
     },
