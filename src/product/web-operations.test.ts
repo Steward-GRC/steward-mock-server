@@ -87,6 +87,8 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { groupId: "group-2", userId: READER },
   },
+  // AI isn't mocked: the settings answer as the gateway does with the ai service down.
+  AiConfig: { as: ADMIN, refused: AI_DOWN },
   AiHealth: { as: READER },
   AiJob: { as: AUTHOR, refused: AI_DOWN, variables: { jobId: "ai-job-1" } },
   AiJobResultContent: {
@@ -400,6 +402,17 @@ const cases: Record<string, Case> = {
     variables: { question: "How do I book a desk?" },
   },
   SearchUsers: { as: AUTHOR, variables: { limit: 5, query: "charlie" } },
+  SetAiEnabled: { as: ADMIN, refused: AI_DOWN, variables: { enabled: true } },
+  SetAiProviderCredential: {
+    as: ADMIN,
+    refused: AI_DOWN,
+    variables: { credential: "sk-mock-0000" },
+  },
+  SetAiRetrievalConfig: {
+    as: ADMIN,
+    refused: AI_DOWN,
+    variables: { topK: 6 },
+  },
   SetCaseDiscoveryDate: {
     as: OFFICER,
     variables: { caseId: "case-1", discoveredOn: "2026-04-01" },
@@ -682,7 +695,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 150);
+    assert.equal(webOperations.length, 154);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

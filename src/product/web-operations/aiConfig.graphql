@@ -1,0 +1,10 @@
+query AiConfig {
+  aiConfig {
+    enabled
+    provider
+    model
+    credentialSet
+    credentialLast4
+    topK
+  }
+}

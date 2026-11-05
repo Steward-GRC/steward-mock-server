@@ -1,0 +1,3 @@
+mutation SetAiEnabled($enabled: Boolean!) {
+  setAIEnabled(enabled: $enabled)
+}
