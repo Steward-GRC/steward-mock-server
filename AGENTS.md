@@ -1,26 +1,20 @@
-# AGENTS.md - template-node-mock-server
+# AGENTS.md - steward-mock-server
 
 Guide for AI agents working in this repository. Pair with `CLAUDE.md` (the working agreement).
 Keep this file current when the layout, the wire protocol or the commands change.
 
 ## What this is
 
-Starting point for a product's mock gateway: a standalone Node server that speaks the gateway's
-wire protocol with resettable invented data. It's a public template: products clone it into their
-own `<product>-mock-server` repo and fill in `src/product/`. Two things to understand before
-changing it:
-
-- **`src/core/` is shared, `src/product/` is not.** Nothing in `src/core/` may name a product or
-  read a product's records directly; it reaches the product only through the five files in
-  `src/product/`. A fix to the core lands here and goes to every product as a cherry-pick
-  (TEMPLATE.md), so keep core files and their names stable.
-- **Every answer goes through the product's schema.** Resolvers return plain data; GraphQL
-  execution against `src/product/schema.graphql` shapes it. Don't build response bodies for
-  `/query` by hand.
+Steward's mock gateway: a standalone Node server that answers steward-gateway's wire protocol
+(GraphQL at `/query`, sign-in under `/auth`, first run under `/setup`, the probes) from invented,
+resettable data, on port 5175. steward-web's apps run in their normal live mode against it with
+`GATEWAY_URL=http://localhost:5175/query`. The schema in `src/product/schema.graphql` is copied
+from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
+`bash scripts/schema-copy.sh`, and commit both, keeping the ref the same as steward-web's.
 
 ## Layout
 
-- `bin/mock-server.mjs` - the command: reads `--port` and `--https-port`, then loads
+- `bin/steward-mock-server.mjs` - the command: reads `--port` and `--https-port`, then loads
   `src/serve.ts`.
 - `src/serve.ts` - starts the server and prints the ready lines.
 - `src/index.ts` - what in-process tests import.
@@ -49,6 +43,10 @@ changing it:
   ones. Log the person's id instead.
 
 ## Template sync
+
+Known divergence from the template's `src/core/`: `server.test.ts` is rewritten onto Steward's
+people and fields, because the template's core tests use its example product. Drop the
+divergence once the template's core tests run against their own fixture product.
 
 This repo started from `the-rabbit-hole-tech/template-node-mock-server` at commit
 `14159069615ceda41559fcbf38fffca3178b3f7d`. Take later

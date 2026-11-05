@@ -49,10 +49,10 @@ jobs:
       - name: Start the mock and call it
         run: |
           set -euo pipefail
-          node bin/mock-server.mjs --port 5180 > mock.log 2>&1 &
+          node bin/steward-mock-server.mjs --port 5180 > mock.log 2>&1 &
           for _ in $(seq 1 50); do curl -sf http://127.0.0.1:5180/livez > /dev/null && break; sleep 0.2; done
           curl -sf http://127.0.0.1:5180/readyz
           curl -sf http://127.0.0.1:5180/query -H 'content-type: application/json' \
-            -d '{"query":"{ serverInfo { name version } }"}' | grep -q '"serverInfo"'
+            -d '{"query":"{ globalSettings { maintenance { enabled } } }"}' | grep -q '"globalSettings"'
           curl -sf http://127.0.0.1:5180/_mock | grep -q 'Mock controls'
           cat mock.log

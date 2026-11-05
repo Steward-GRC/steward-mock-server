@@ -1,13 +1,12 @@
-# template-node-mock-server 🧩
+# steward-mock-server 🧩
 
-> 🧭 Starting point for a product's mock gateway: a standalone Node server that speaks the gateway's wire protocol with resettable invented data.
+> 🧭 Standalone in-memory mock of the whole Steward gateway API, shared by web, iOS and Android.
 
-A product's clients (a staff web app, an admin console, a phone app) all talk to one gateway. Before
-that gateway exists, or when nobody wants a whole cluster running to work on a screen, they talk to
-this instead: one Node process on its own port that answers the same paths in the same shapes, from
-invented data that every client shares and anyone can put back with one click. 🏷️ **A product
-keeps the server and swaps the product:** the schema, the data and the resolvers live in
-`src/product/`, and nothing in `src/core/` names a product.
+Steward's staff and admin apps talk to steward-gateway. To work on a screen without the whole
+backend running, they talk to this instead: one Node process on port 5175 that answers the
+gateway's paths in the gateway's shapes (`/query`, `/auth/*`, `/setup/*`, the probes), from
+invented data that every client shares and anyone can put back with one click at `/_mock`. The
+schema is steward-gateway's own, pinned to one commit in `schema-refs.env`.
 
 ## ✨ Highlights
 
@@ -88,7 +87,7 @@ The sample product adds `add-item` and `finish-items`.
 From another repo, run it as its own process and point the client at the port it prints:
 
 ```bash
-node ../<product>-mock-server/bin/mock-server.mjs --port 0
+node ../steward-mock-server/bin/steward-mock-server.mjs --port 0
 ```
 
 Between test cases, `POST /_mock/controls` with `{"kind":"fresh"}` puts everything back. Node
