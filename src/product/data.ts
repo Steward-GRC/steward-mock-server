@@ -50,10 +50,11 @@ const people = (): Person[] => [
   },
   {
     email: "margaret.hamilton@example.org",
+    enrolSecondFactor: true,
     id: "user-mhamilton",
     name: "Margaret Hamilton",
     roles: ["privacy-officer"],
-    secondFactor: true,
+    secondFactor: false,
     username: "mhamilton",
   },
   {

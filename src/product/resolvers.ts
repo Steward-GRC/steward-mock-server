@@ -52,13 +52,62 @@ const firstAndLast = (name: string) => {
   return { firstName: first, lastName: rest.join(" ") };
 };
 
-/** A person as the gateway's User type, for the fields the mock knows so far. */
-const asUser = (person: Person) => ({
+/**
+ * steward-authz's role grants, as steward-web mirrors them (packages/auth/src/catalog.ts).
+ * Reader is implicit: everyone who can sign in may read.
+ */
+const ALL_PERMISSIONS = [
+  "admin.manage",
+  "audit.read",
+  "compliance.manage",
+  "group.manage",
+  "policy.approve",
+  "policy.author",
+  "policy.read",
+  "policy.read_sensitive",
+  "reporting.manage",
+  "session.manage",
+  "settings.manage",
+  "template.manage",
+  "user.manage",
+];
+const ROLE_GRANTS: Record<string, readonly string[]> = {
+  approver: ["policy.read", "policy.approve"],
+  author: ["policy.read", "policy.author"],
+  "compliance-admin": ["policy.read", "compliance.manage", "audit.read"],
+  "privacy-officer": ["policy.read", "reporting.manage"],
+  "site-admin": ALL_PERMISSIONS,
+  "template-admin": ["policy.read", "template.manage"],
+};
+
+/** The permissions a set of roles grants, reader's included, in grant order. */
+export const permissionsOf = (roles: readonly string[]): string[] => [
+  ...new Set([
+    "policy.read",
+    ...roles.flatMap((role) => ROLE_GRANTS[role] ?? []),
+  ]),
+];
+
+/** A person as the gateway's User type. */
+export const asUser = (person: Person) => ({
   ...firstAndLast(person.name),
+  deletedAt: null,
   email: person.email,
   enabled: !person.disabled,
+  groupIds: [],
+  idpGroups: [],
+  isRoot: person.id === mockState.data.people[0]?.id,
+  localAccount: true,
+  locale: "en",
+  managedGroupIds: [],
+  memberships: [],
+  mergedIntoUserId: null,
   name: person.name,
+  needsOnboarding: false,
+  permissions: permissionsOf(person.roles),
+  policyOverrides: [],
   roles: person.roles,
+  scopes: { approver: [], author: [] },
   userId: person.id,
   username: person.username,
 });

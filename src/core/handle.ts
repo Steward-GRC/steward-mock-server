@@ -6,7 +6,7 @@
 // Anything the mock doesn't serve answers 501 not_mocked, loudly, so a client that calls a route
 // nobody mocked finds out at once instead of reaching past the mock to a real server.
 
-import { answerAuth, sessionOf } from "#core/auth.ts";
+import { answerAuth, refuseWithoutSession, sessionOf } from "#core/auth.ts";
 import { answerControls } from "#core/controls.ts";
 import { armedFailure, type Operation, prepare, run } from "#core/graphql.ts";
 import { answerHealth } from "#core/health.ts";
@@ -80,6 +80,9 @@ const answerGraphql = async (request: Request, url: URL): Promise<Response> => {
   }
   const session = sessionOf(request);
   const prepared = prepare(input, session);
+  // The gateway refuses a call that needs a session before GraphQL runs, in plain JSON.
+  if (!prepared.ok && prepared.status === 401)
+    return refuseWithoutSession(request);
   if (!prepared.ok) return json({ errors: prepared.errors }, prepared.status);
   if (prepared.operation.operation === "subscription") {
     return json(

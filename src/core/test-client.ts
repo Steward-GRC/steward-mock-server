@@ -47,8 +47,9 @@ export const signIn = async (
   });
   let body = (await answer.json()) as Record<string, string>;
   if (body.mfaRequired) {
-    answer = await post(base, "/auth/verify", {
+    answer = await post(base, "/auth/mfa/verify", {
       code: GOOD_CODE,
+      kind: "totp",
       pendingId: body.pendingId,
       token,
     });
@@ -127,4 +128,5 @@ export const openSocket = async (
 };
 
 export { WRONG_CODE } from "#core/auth.ts";
+export { SETUP_TOKEN } from "#core/setup.ts";
 export { startFresh } from "#core/state.ts";
