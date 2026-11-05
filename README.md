@@ -66,7 +66,9 @@ schema is steward-gateway's own, pinned to one commit in `schema-refs.env`.
 | `hlamarr`    | none            | Disabled: sign-in fails as the gateway's does.                                                    |
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
-its editors', and the case queue is the officers' alone. Steward AI isn't mocked: `aiHealth` says
+its editors', and the case queue is the officers' alone. A draft goes for review with
+`submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
+the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Steward AI isn't mocked: `aiHealth` says
 `ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
 
 ### Settings

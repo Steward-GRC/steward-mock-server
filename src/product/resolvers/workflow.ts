@@ -1,13 +1,32 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Approval runs, as steward-workflow keeps them: each stage has a seat per approver, the caller's
-// pending seats are their tasks, and a decision lands on the caller's own pending seat.
+// Approval runs, as steward-workflow keeps them. submitWorkflow starts a run on the policy's own
+// workflow or its home category's (steward-workflow doesn't look at ancestors), with a seat per
+// approver on each stage. The caller's pending seats on the current stage are their tasks. An
+// approval that meets the stage's quorum moves the run on, and the last stage's publishes the
+// version; a rejection ends the run, the other seats and the version; a seat decides once.
 
 import type { StewardPerson } from "#product/data/people.ts";
-import type { Run } from "#product/data/policies.ts";
+import type { Run, RunStage } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
-import { caller, data, personOf, refuse } from "#product/resolvers/shared.ts";
+import { canEdit } from "#product/access.ts";
+import {
+  cancelRuns,
+  policySubject,
+  publishVersion,
+} from "#product/resolvers/policies.ts";
+import {
+  caller,
+  data,
+  forbidden,
+  found,
+  newId,
+  now,
+  personOf,
+  record,
+  refuse,
+} from "#product/resolvers/shared.ts";
 
 const EMPTY_STATUS = {
   currentStageIdx: 0,
@@ -55,6 +74,72 @@ const SIGNALS_NEEDING_COMMENT = new Set([
   "SIGNAL_TYPE_REJECT",
 ]);
 
+/** Approvals a stage needs: one, a majority, or all of its seats. */
+const required = (stage: RunStage): number => {
+  const seats = stage.seats.length;
+  if (stage.quorum === "all") return seats;
+  if (stage.quorum === "majority") return Math.floor(seats / 2) + 1;
+  return 1;
+};
+
+/** Seats nobody needs any more once a stage or the run is settled. */
+const closePending = (stages: RunStage[]) => {
+  for (const stage of stages)
+    for (const seat of stage.seats)
+      if (seat.state === "pending") seat.state = "cancelled";
+};
+
+const partsOf = (run: Run) => {
+  const policy = found(
+    data().policies.find((p) => p.id === run.policyId),
+    "policy",
+  );
+  const version = found(
+    data().versions.find((v) => v.id === run.policyVersionId),
+    "policy version",
+  );
+  return { policy, version };
+};
+
+/** Move a run on after an approval: the next stage, or publish after the last. */
+const advance = (run: Run, person: StewardPerson) => {
+  const stage = run.stages[run.currentStageIdx];
+  if (!stage) return;
+  const approvals = stage.seats.filter((s) => s.state === "approved").length;
+  if (approvals < required(stage)) return;
+  closePending([stage]);
+  if (run.currentStageIdx < run.stages.length - 1) {
+    run.currentStageIdx += 1;
+    return;
+  }
+  const { policy, version } = partsOf(run);
+  run.status = "APPROVAL_STATUS_PUBLISHED";
+  publishVersion(policy, version);
+  record("policy.status_set", person, policySubject(policy));
+};
+
+const reject = (run: Run) => {
+  closePending(run.stages);
+  run.status = "APPROVAL_STATUS_REJECTED";
+  partsOf(run).version.status = "REJECTED";
+};
+
+const withdraw = (run: Run) => {
+  closePending(run.stages);
+  run.status = "APPROVAL_STATUS_WITHDRAWN";
+  partsOf(run).version.status = "DRAFT";
+};
+
+const openRunFor = (policyVersionId: string): Run => {
+  const run = runFor(policyVersionId);
+  if (run?.status !== IN_REVIEW)
+    throw refuse(
+      "FAILED_PRECONDITION",
+      "This approval is no longer active; refresh your inbox.",
+    );
+  return run;
+};
+
 export const workflowResolvers: Resolvers = {
   Mutation: {
     signalWorkflow: (
@@ -68,17 +153,106 @@ export const workflowResolvers: Resolvers = {
           "BAD_USER_INPUT",
           "A comment is required for this decision.",
         );
-      const { seat } = pendingSeatOf(person, given.policyVersionId);
-      if (
-        given.signal === "SIGNAL_TYPE_APPROVE" ||
-        given.signal === "SIGNAL_TYPE_REJECT"
-      ) {
-        seat.state =
-          given.signal === "SIGNAL_TYPE_APPROVE" ? "approved" : "rejected";
-        seat.comment = given.comment;
-        seat.decidedAt = new Date().toISOString();
+      if (given.signal === "SIGNAL_TYPE_WITHDRAW") {
+        const run = openRunFor(given.policyVersionId);
+        withdraw(run);
+        record(
+          "workflow.withdrawn",
+          person,
+          policySubject(partsOf(run).policy),
+        );
+        return true;
       }
+      if (given.signal === "SIGNAL_TYPE_REQUEST_CHANGES") {
+        // steward-workflow records no seat for it; the stage stays pending.
+        const run = openRunFor(given.policyVersionId);
+        record(
+          "workflow.signal.request_changes",
+          person,
+          policySubject(partsOf(run).policy),
+        );
+        return true;
+      }
+      if (!SIGNALS_NEEDING_COMMENT.has(given.signal))
+        throw refuse("BAD_USER_INPUT", `${given.signal} isn't a decision.`);
+      const { run, seat } = pendingSeatOf(person, given.policyVersionId);
+      const approve = given.signal === "SIGNAL_TYPE_APPROVE";
+      seat.state = approve ? "approved" : "rejected";
+      seat.comment = given.comment;
+      seat.decidedAt = now();
+      record(
+        approve ? "workflow.decision.approved" : "workflow.decision.rejected",
+        person,
+        policySubject(partsOf(run).policy),
+      );
+      if (approve) advance(run, person);
+      else reject(run);
       return true;
+    },
+    submitWorkflow: (
+      _root,
+      given: { policyId: string; policyVersionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const policy = found(
+        data().policies.find((p) => p.id === given.policyId),
+        "policy",
+      );
+      if (!canEdit(person, policy)) throw forbidden();
+      const version = data().versions.find(
+        (v) => v.id === given.policyVersionId && v.policyId === policy.id,
+      );
+      if (!version || policy.currentDraftVersionId !== version.id)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "Only the policy's current draft can go for review.",
+        );
+      const home = data().categories.find(
+        (c) => c.id === policy.homeCategoryId,
+      );
+      const workflowId = policy.workflowDefId ?? home?.defaultWorkflowId;
+      const workflow = data().workflowDefs.find(
+        (w) => w.id === workflowId && !w.archived,
+      );
+      if (!workflow)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "No approval workflow is attached to this policy's category.",
+        );
+      const unstaffed = workflow.stages.find((s) => s.approvers.length === 0);
+      if (unstaffed)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          `The "${unstaffed.name}" stage has no approver.`,
+        );
+      cancelRuns(version.id);
+      const run: Run = {
+        currentStageIdx: 0,
+        id: newId("run"),
+        policyId: policy.id,
+        policyVersionId: version.id,
+        stages: workflow.stages.map((stage) => ({
+          name: stage.name,
+          quorum: stage.quorum,
+          seats: stage.approvers.map((userId) => ({
+            comment: null,
+            decidedAt: null,
+            state: "pending",
+            taskId: newId("task"),
+            userId,
+          })),
+        })),
+        status: IN_REVIEW,
+        submittedAt: now(),
+        submittedBy: person.id,
+        workflowDefId: workflow.id,
+      };
+      data().runs.push(run);
+      version.status = "IN_REVIEW";
+      policy.updatedAt = run.submittedAt;
+      record("workflow.submitted", person, policySubject(policy));
+      return { runId: run.id };
     },
   },
   Query: {
