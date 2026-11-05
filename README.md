@@ -51,10 +51,10 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
    npm start
    ```
 
-   It listens on `http://localhost:5180`. Pass `-- --port 0` for a free port; the ready line says
+   It listens on `http://localhost:5175`. Pass `-- --port 0` for a free port; the ready line says
    which one it got.
 
-3. Open the controls at `http://localhost:5180/_mock`, or sign in from a client: any person listed
+3. Open the controls at `http://localhost:5175/_mock`, or sign in from a client: any person listed
    at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
 
 ### Who to sign in as
@@ -80,7 +80,7 @@ checkpoints the way steward-collab does: the editor's Save button writes the dra
 
 | Variable                                      | What it does                                                                                                                            |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                        | The HTTP port (default 5180). `--port` on the command line wins.                                                                        |
+| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                        |
 | `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network. |
 | `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                  |
 | `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                 |
