@@ -35,7 +35,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   options and the mock passkeys), `sso.ts` (`/auth/discover`, the pass-through SSO sign-in at
   `/auth/sso/start`, the IdP test link, and the `/admin/idp/*` imports
   from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
-  `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
+  `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain; `resolvers/raci.ts` is category access and
+  the simulator, a port of steward-authz's Resolve);
   `access.ts` is the policy read model (who reads, edits and approves what); `audit-actions.ts`
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
   the co-editing relay at `/collab/ws/<draftId>` (the product's `sockets` hook) and the tokens

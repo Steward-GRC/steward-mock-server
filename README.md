@@ -144,6 +144,26 @@ steward-gateway does:
 Steward adds `idp-test-outcome`, `expire-test-links`, `needs-onboarding` and `sign-in-methods`
 below.
 
+### Category access
+
+Each category keeps its own access rules (`categoryRuleset`, `setCategoryRuleset`), as
+steward-core stores them; the admin console shows an ancestor's rules by reading that category's.
+The seed follows the design's A5 frame:
+
+- **Workplace:** Everyone may read.
+- **Workplace › Facilities:** the Facilities team may do everything; All staff may read and
+  acknowledge, and may not author.
+- **Finance:** Everyone may read. Alice owns it.
+- **Finance › Expenses:** the Finance team may do everything; Erin may not approve or author; All
+  staff may read.
+
+Group rules match a person's IdP groups: Bob is in All staff, Charlie in the Finance team and All
+staff, and Erin in All staff and the Facilities team. `simulateCategory` evaluates the chain as
+steward-authz does, with its reasons ("rule #2 deny group All staff", "↳ Workplace #1 allow
+everyone", "owner (auto read/approve/author)", "no rule → default deny"); an empty `userId` is the
+baseline for no one in particular. The rules drive the simulator only: who reads, approves and
+authors elsewhere in the mock still follows each category's owners and approve and author lists.
+
 ### Onboarding
 
 `needs-onboarding` with `personId` (and `needsOnboarding: false` to clear it) marks a person as

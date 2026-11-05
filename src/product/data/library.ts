@@ -24,8 +24,38 @@ export interface Category {
   parentId: null | string;
   reviewCadence: "ANNUAL" | "BIENNIAL" | "NONE" | "ON_DATE";
   reviewDate: null | string;
+  /** The category's own access rules, top-down; its ancestors' apply after them. */
+  rules: RaciRule[];
   slug: string;
 }
+
+/** A RACI cell: BLANK leaves the action to the next rule, then to the default deny. */
+export type RaciGrant = "ALLOW" | "BLANK" | "DENY";
+
+/** One row of a category's access rules, as steward-core stores it (CategoryRule). */
+export interface RaciRule {
+  ack: RaciGrant;
+  approve: RaciGrant;
+  author: RaciGrant;
+  read: RaciGrant;
+  subjectKind: "EVERYONE" | "GROUP" | "USER";
+  /** A group's IdP name, a user's id, or empty for everyone. */
+  subjectRef: string;
+}
+
+const raci = (
+  subjectKind: RaciRule["subjectKind"],
+  subjectReference: string,
+  [read, ack, approve, author]: RaciGrant[],
+): RaciRule =>
+  ({
+    ack,
+    approve,
+    author,
+    read,
+    subjectKind,
+    subjectRef: subjectReference,
+  }) as RaciRule;
 
 export interface ContactBlock {
   archived: boolean;
@@ -129,6 +159,7 @@ const category = (
   parentId: null,
   reviewCadence: "NONE",
   reviewDate: null,
+  rules: [],
   ...given,
 });
 
@@ -151,6 +182,7 @@ export const categories = (): Category[] => [
     name: "Finance",
     owners: ["user-alice"],
     reviewCadence: "ANNUAL",
+    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
     slug: "finance",
   }),
   category({
@@ -159,6 +191,11 @@ export const categories = (): Category[] => [
     id: "category-expenses",
     name: "Expenses",
     parentId: "category-finance",
+    rules: [
+      raci("GROUP", "Finance team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
+      raci("USER", "user-erin", ["BLANK", "BLANK", "DENY", "DENY"]),
+      raci("GROUP", "All staff", ["ALLOW", "BLANK", "BLANK", "BLANK"]),
+    ],
     slug: "expenses",
   }),
   category({
@@ -240,6 +277,7 @@ export const categories = (): Category[] => [
     code: "WORKPLACE",
     id: "category-workplace",
     name: "Workplace",
+    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
     slug: "workplace",
   }),
   category({
@@ -248,6 +286,10 @@ export const categories = (): Category[] => [
     id: "category-facilities",
     name: "Facilities",
     parentId: "category-workplace",
+    rules: [
+      raci("GROUP", "Facilities team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
+      raci("GROUP", "All staff", ["ALLOW", "ALLOW", "BLANK", "DENY"]),
+    ],
     slug: "facilities",
   }),
   category({

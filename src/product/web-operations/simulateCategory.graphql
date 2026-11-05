@@ -1,0 +1,12 @@
+query SimulateCategory($categoryId: ID!, $userId: ID!, $draftRules: [RaciRuleInput!]) {
+  simulateCategory(categoryId: $categoryId, userId: $userId, draftRules: $draftRules) {
+    read
+    readReason
+    ack
+    ackReason
+    approve
+    approveReason
+    author
+    authorReason
+  }
+}

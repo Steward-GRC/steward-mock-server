@@ -84,6 +84,7 @@ export const people = (): StewardPerson[] => [
   person({
     email: "bob@example.org",
     id: "user-bob",
+    idpGroups: ["All staff"],
     name: "Bob Author",
     readSensitive: true,
     roles: ["author"],
@@ -92,7 +93,7 @@ export const people = (): StewardPerson[] => [
   person({
     email: "charlie@example.org",
     id: "user-charlie",
-    idpGroups: ["finance-staff"],
+    idpGroups: ["finance-staff", "Finance team", "All staff"],
     localAccount: false,
     managedGroupIds: ["group-2"],
     memberships: [{ groupId: "group-2", source: "manual" }],
@@ -117,6 +118,7 @@ export const people = (): StewardPerson[] => [
   person({
     email: "erin@example.org",
     id: "user-erin",
+    idpGroups: ["All staff", "Facilities team"],
     memberships: [{ groupId: "group-3", source: "manual" }],
     name: "Erin Reader",
     roles: [],

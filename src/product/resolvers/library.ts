@@ -327,6 +327,7 @@ export const libraryResolvers: Resolvers = {
         parentId,
         reviewCadence: "NONE",
         reviewDate: null,
+        rules: [],
         slug: given.slug,
       };
       data().categories.push(created);

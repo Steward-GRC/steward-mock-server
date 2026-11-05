@@ -1,0 +1,8 @@
+fragment RaciRuleFields on RaciRule {
+  subjectKind
+  subjectRef
+  read
+  ack
+  approve
+  author
+}
