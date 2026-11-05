@@ -83,6 +83,9 @@ drafts.
   its helpers, so a build at load time would read the resolvers before they exist.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
+- While maintenance is on (`src/core/maintenance.ts`), the gateway paths and new websockets get
+  the product's maintenance refusal and `/readyz` says not ready; `/livez`, `/healthz`, `/_mock`
+  and the product's maintenance fields keep answering.
 - A route that throws answers 500 `internal` (logged), never a hung request. A websocket upgrade
   on any path but the GraphQL one goes to the product's `sockets` hook; nothing there answers 404.
   Product routes run after the health probes, the controls and the GraphQL path, and before

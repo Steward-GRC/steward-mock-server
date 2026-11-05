@@ -15,6 +15,7 @@ import { sessionOf, sessionOfCookie } from "#core/auth.ts";
 import { publish, subscribe } from "#core/events.ts";
 import { type Context, MockError, signedIn, withRole } from "#core/graphql.ts";
 import { json, newId } from "#core/http.ts";
+import { maintenance, maintenanceAnswer } from "#core/maintenance.ts";
 import { mockState, personById } from "#core/state.ts";
 
 export interface Note {
@@ -67,6 +68,19 @@ extend type Query {
 }
 `;
 
+/** The fixture's maintenance banner query, which keeps answering while maintenance is on. */
+const MAINTENANCE_SCHEMA = `
+type MaintenanceInfo {
+  state: String!
+  message: String
+  startsAt: String
+  endsAt: String
+}
+extend type Query {
+  maintenance: MaintenanceInfo!
+}
+`;
+
 export const FIXTURE_VERSION = "v9.9.9-fixture";
 
 export const fixture: Product = {
@@ -83,6 +97,16 @@ export const fixture: Product = {
       section: "Notes",
     },
   ],
+  // Its banner query keeps answering during maintenance, and its refusal carries a header of its
+  // own on top of the core's default answer.
+  maintenance: {
+    answer: (_request, _path, window) => {
+      const answer = maintenanceAnswer(window);
+      answer.headers.set("x-fixture-maintenance", "on");
+      return answer;
+    },
+    fields: ["maintenance"],
+  },
   resolvers: {
     Mutation: {
       addNote: (_root, given: { text: string }, context: Context) => {
@@ -104,6 +128,7 @@ export const fixture: Product = {
       author: (note) => personById((note as Note).authorId),
     },
     Query: {
+      maintenance: () => maintenance(),
       me: (_root, _given, context: Context) => signedIn(context),
       note: (_root, given: { id: string }, context: Context) => {
         signedIn(context);
@@ -145,7 +170,7 @@ export const fixture: Product = {
     if (path === "/livez") return new Response(null, { status: 418 });
     return;
   },
-  schema: [SCHEMA, PENDING_SCHEMA],
+  schema: [SCHEMA, PENDING_SCHEMA, MAINTENANCE_SCHEMA],
   seed: (): FixtureData => ({
     notes: [
       { authorId: "person-ada", id: "note-1", text: "First note" },
@@ -191,7 +216,7 @@ export const fixture: Product = {
     graphqlPath: "/gql",
     name: "Fixture",
     port: 5999,
-    publicFields: ["status"],
+    publicFields: ["status", "maintenance"],
     sessionCookie: "fixture_session",
     version: FIXTURE_VERSION,
     versionHeader: "Fixture-Version",
