@@ -1,0 +1,8 @@
+query DiffVersions($fromVersionId: ID!, $toVersionId: ID!) {
+  diffVersions(fromVersionId: $fromVersionId, toVersionId: $toVersionId) {
+    sectionKey
+    sectionTitle
+    changeType
+    wordDiffHtml
+  }
+}

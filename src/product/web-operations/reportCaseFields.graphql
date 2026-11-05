@@ -1,0 +1,66 @@
+fragment ReportCaseFields on ReportCase {
+  id
+  caseCode
+  kind
+  status
+  details {
+    whatHappened
+    occurred
+    location
+    informationKinds
+    stillHappening
+  }
+  reporterUserId
+  assigneeUserId
+  receivedAt
+  discoveredOn
+  attachments {
+    id
+    filename
+    contentType
+    sizeBytes
+    metadataStripped
+  }
+  thread {
+    id
+    author
+    officerUserId
+    body
+    createdAt
+  }
+  notes {
+    id
+    authorUserId
+    body
+    createdAt
+  }
+  assessment {
+    factors {
+      information
+      recipient
+      viewed
+      mitigation
+    }
+    suggestion
+    decision
+    reason
+    decidedByUserId
+    decidedAt
+  }
+  notices {
+    id
+    recipient
+    label
+    method
+    daysAllowed
+    dueOn
+    status
+    sentOn
+  }
+  outcome
+  correctiveActions {
+    description
+    policyId
+  }
+  closedAt
+}

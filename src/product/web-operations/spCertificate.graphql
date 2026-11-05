@@ -1,0 +1,9 @@
+query SpCertificate {
+  spCertificate {
+    active
+    certPem
+    notAfter
+    serial
+    spMetadataXml
+  }
+}

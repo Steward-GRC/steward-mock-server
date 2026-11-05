@@ -1,0 +1,5 @@
+query CategoryTree($rootId: ID) {
+  categoryTree(rootId: $rootId) {
+    ...CategoryFields
+  }
+}

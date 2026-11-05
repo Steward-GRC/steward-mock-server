@@ -1,0 +1,5 @@
+query TemplateVersions($templateId: ID!) {
+  templateVersions(templateId: $templateId) {
+    ...TemplateVersionFields
+  }
+}

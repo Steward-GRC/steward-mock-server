@@ -1,0 +1,7 @@
+query MyManagedGroups {
+  myManagedGroups {
+    id
+    name
+    parentId
+  }
+}

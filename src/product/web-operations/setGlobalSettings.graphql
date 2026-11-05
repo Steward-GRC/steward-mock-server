@@ -1,0 +1,13 @@
+mutation SetGlobalSettings($input: GlobalSettingsInput!) {
+  setGlobalSettings(input: $input) {
+    announcement {
+      enabled
+      level
+      message
+    }
+    maintenance {
+      enabled
+      message
+    }
+  }
+}

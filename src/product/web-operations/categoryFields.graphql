@@ -1,0 +1,17 @@
+fragment CategoryFields on Category {
+  id
+  name
+  slug
+  parentId
+  defaultTemplateId
+  defaultTemplateNone
+  defaultWorkflowId
+  owners
+  idpGroupIds
+  exclusionGroupIds
+  ackTriggers
+  ackEveryone
+  ackEveryoneSet
+  reviewCadence
+  reviewDate
+}

@@ -1,0 +1,5 @@
+query WorkflowDef($id: ID!) {
+  workflowDef(id: $id) {
+    ...WorkflowDefFields
+  }
+}

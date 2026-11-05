@@ -1,0 +1,5 @@
+mutation SetCaseDiscoveryDate($caseId: ID!, $discoveredOn: String!) {
+  setCaseDiscoveryDate(caseId: $caseId, discoveredOn: $discoveredOn) {
+    ...ReportCaseFields
+  }
+}

@@ -1,0 +1,3 @@
+mutation RevokeUserSessions($userId: ID!, $reason: String) {
+  revokeUserSessions(userId: $userId, reason: $reason)
+}

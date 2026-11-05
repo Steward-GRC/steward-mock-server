@@ -1,0 +1,5 @@
+mutation RecordAck($policyVersionId: ID!) {
+  recordAck(policyVersionId: $policyVersionId) {
+    ackedAt
+  }
+}

@@ -1,0 +1,13 @@
+fragment PolicyVersionFields on PolicyVersion {
+  id
+  policyId
+  versionNo
+  status
+  templateVersionId
+  contentJson
+  createdAt
+  publishedAt
+  appendices {
+    ...AppendixFields
+  }
+}

@@ -1,0 +1,8 @@
+query GroupMappings($connectionId: ID!) {
+  groupMappings(connectionId: $connectionId) {
+    connectionId
+    id
+    idpGroupClaimValue
+    targetGroupId
+  }
+}

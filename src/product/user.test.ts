@@ -63,7 +63,10 @@ describe("me", () => {
       name: "Ada Lovelace",
       permissions: ["policy.read", "policy.author"],
       roles: ["author"],
-      scopes: { author: [] },
+      // Earned through the category author rules that name her, as the gateway adds them.
+      scopes: {
+        author: ["Finance", "Human Resources", "IT Security", "Procurement"],
+      },
       userId: "user-alovelace",
       username: "alovelace",
     });

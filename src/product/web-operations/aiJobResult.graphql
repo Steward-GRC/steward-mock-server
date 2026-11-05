@@ -1,0 +1,9 @@
+subscription AiJobResult($jobId: ID!) {
+  aiJobResult(jobId: $jobId) {
+    jobId
+    phase
+    resultRef
+    error
+    finishedAt
+  }
+}

@@ -1,0 +1,5 @@
+mutation GrantRole($userId: ID!, $role: String!) {
+  grantRole(userId: $userId, role: $role) {
+    ...UserFields
+  }
+}

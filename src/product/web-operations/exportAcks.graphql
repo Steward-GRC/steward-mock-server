@@ -1,0 +1,6 @@
+query ExportAcks($policyVersionId: ID!, $format: String!) {
+  exportAcks(policyVersionId: $policyVersionId, format: $format) {
+    data
+    contentType
+  }
+}

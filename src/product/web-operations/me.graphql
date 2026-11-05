@@ -1,0 +1,16 @@
+query Me {
+  me {
+    userId
+    username
+    name
+    firstName
+    lastName
+    email
+    roles
+    permissions
+    managedGroupIds
+    scopes {
+      author
+    }
+  }
+}

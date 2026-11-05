@@ -1,0 +1,15 @@
+query ContactBlocks($includeArchived: Boolean) {
+  contactBlocks(includeArchived: $includeArchived) {
+    id
+    label
+    name
+    role
+    department
+    email
+    phone
+    hours
+    notes
+    archived
+    usedByCount
+  }
+}

@@ -1,0 +1,11 @@
+mutation SetDefinitionArchived($id: ID!, $archived: Boolean!) {
+  setDefinitionArchived(id: $id, archived: $archived) {
+    id
+    categoryId
+    term
+    definition
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

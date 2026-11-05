@@ -1,0 +1,5 @@
+mutation SaveDraft($policyId: ID!, $contentJson: String!, $templateVersionId: ID) {
+  saveDraft(policyId: $policyId, contentJson: $contentJson, templateVersionId: $templateVersionId) {
+    ...PolicyVersionFields
+  }
+}

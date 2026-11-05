@@ -1,0 +1,16 @@
+query AckRoster($policyVersionId: ID!, $groupId: ID) {
+  ackRoster(policyVersionId: $policyVersionId, groupId: $groupId) {
+    acked {
+      userId
+      email
+      userName
+      ackedAt
+    }
+    pending {
+      userId
+      email
+      userName
+      ackedAt
+    }
+  }
+}

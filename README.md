@@ -54,6 +54,21 @@ schema is steward-gateway's own, pinned to one commit in `schema-refs.env`.
 3. Open the controls at `http://localhost:5180/_mock`, or sign in from a client: any person listed
    at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
 
+### Who to sign in as
+
+| Username     | Role            | What they see                                                                                     |
+| ------------ | --------------- | ------------------------------------------------------------------------------------------------- |
+| `demo-admin` | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.       |
+| `alovelace`  | author          | The library, her drafts (sensitive ones too), authoring in every category.                        |
+| `ghopper`    | approver        | Published policies, the Data Classification approval waiting on her, the IT Security staff group. |
+| `mhamilton`  | privacy officer | The report case queue. Has to enrol a second factor first.                                        |
+| `kjohnson`   | reader          | Published, non-sensitive policies only.                                                           |
+| `hlamarr`    | none            | Disabled: sign-in fails as the gateway's does.                                                    |
+
+Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
+its editors', and the case queue is the officers' alone. Steward AI isn't mocked: `aiHealth` says
+`ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
+
 ### Settings
 
 | Variable                                      | What it does                                                                                                                            |

@@ -1,0 +1,7 @@
+mutation CreatePlatformGroup($name: String!, $parentId: ID) {
+  createPlatformGroup(name: $name, parentId: $parentId) {
+    id
+    name
+    parentId
+  }
+}

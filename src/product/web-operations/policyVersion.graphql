@@ -1,0 +1,5 @@
+query PolicyVersion($id: ID!) {
+  policyVersion(id: $id) {
+    ...PolicyVersionFields
+  }
+}

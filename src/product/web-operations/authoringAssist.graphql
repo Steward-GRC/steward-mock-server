@@ -1,0 +1,6 @@
+query AuthoringAssist($input: AuthoringAssistInput!) {
+  authoringAssist(input: $input) {
+    suggestion
+    operationId
+  }
+}

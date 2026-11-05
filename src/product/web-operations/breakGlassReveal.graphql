@@ -1,0 +1,5 @@
+mutation BreakGlassReveal($policyId: ID!, $reason: String!) {
+  breakGlassReveal(policyId: $policyId, reason: $reason) {
+    grantedUntil
+  }
+}

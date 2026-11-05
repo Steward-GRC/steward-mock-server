@@ -1,0 +1,13 @@
+mutation CreateReference($input: ReferenceInput!) {
+  createReference(input: $input) {
+    id
+    label
+    kind
+    clause
+    body
+    url
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

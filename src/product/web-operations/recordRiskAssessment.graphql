@@ -1,0 +1,20 @@
+mutation RecordRiskAssessment(
+  $caseId: ID!
+  $factors: RiskFactorsInput!
+  $decision: BreachDecision!
+  $reason: String!
+) {
+  recordRiskAssessment(caseId: $caseId, factors: $factors, decision: $decision, reason: $reason) {
+    factors {
+      information
+      recipient
+      viewed
+      mitigation
+    }
+    suggestion
+    decision
+    reason
+    decidedByUserId
+    decidedAt
+  }
+}

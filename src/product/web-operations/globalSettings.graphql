@@ -1,0 +1,13 @@
+query GlobalSettings {
+  globalSettings {
+    announcement {
+      enabled
+      level
+      message
+    }
+    maintenance {
+      enabled
+      message
+    }
+  }
+}

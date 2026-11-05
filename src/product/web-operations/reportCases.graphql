@@ -1,0 +1,18 @@
+query ReportCases($statuses: [CaseStatus!], $assigneeUserId: ID) {
+  reportCases(statuses: $statuses, assigneeUserId: $assigneeUserId) {
+    cases {
+      id
+      caseCode
+      kind
+      status
+      summary
+      assigneeUserId
+      receivedAt
+      nextDeadline
+    }
+    counts {
+      status
+      count
+    }
+  }
+}

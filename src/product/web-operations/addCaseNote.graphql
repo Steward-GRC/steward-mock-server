@@ -1,0 +1,8 @@
+mutation AddCaseNote($caseId: ID!, $body: String!) {
+  addCaseNote(caseId: $caseId, body: $body) {
+    id
+    authorUserId
+    body
+    createdAt
+  }
+}

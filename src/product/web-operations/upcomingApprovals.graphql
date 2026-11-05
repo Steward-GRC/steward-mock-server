@@ -1,0 +1,8 @@
+query UpcomingApprovals {
+  upcomingApprovals {
+    policyVersionId
+    policyTitle
+    stageIndex
+    stageName
+  }
+}

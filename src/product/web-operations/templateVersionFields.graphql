@@ -1,0 +1,17 @@
+fragment TemplateVersionFields on TemplateVersion {
+  id
+  templateId
+  versionNo
+  status
+  sections {
+    key
+    title
+    order
+    level
+    required
+    blocks {
+      type
+      contentJson
+    }
+  }
+}

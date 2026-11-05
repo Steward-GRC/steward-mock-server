@@ -1,0 +1,17 @@
+mutation AddCaseNotice(
+  $caseId: ID!
+  $recipient: NoticeRecipient!
+  $label: String
+  $method: String
+) {
+  addCaseNotice(caseId: $caseId, recipient: $recipient, label: $label, method: $method) {
+    id
+    recipient
+    label
+    method
+    daysAllowed
+    dueOn
+    status
+    sentOn
+  }
+}

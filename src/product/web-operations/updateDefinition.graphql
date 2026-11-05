@@ -1,0 +1,11 @@
+mutation UpdateDefinition($id: ID!, $input: DefinitionEntryInput!) {
+  updateDefinition(id: $id, input: $input) {
+    id
+    categoryId
+    term
+    definition
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

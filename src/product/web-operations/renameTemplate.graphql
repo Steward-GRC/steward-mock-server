@@ -1,0 +1,5 @@
+mutation RenameTemplate($id: ID!, $name: String!) {
+  renameTemplate(id: $id, name: $name) {
+    ...TemplateFields
+  }
+}

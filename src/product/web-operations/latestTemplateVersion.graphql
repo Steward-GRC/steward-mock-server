@@ -1,0 +1,5 @@
+query LatestTemplateVersion($templateId: ID!) {
+  latestTemplateVersion(templateId: $templateId) {
+    ...TemplateVersionFields
+  }
+}

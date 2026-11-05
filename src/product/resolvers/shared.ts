@@ -1,0 +1,137 @@
+// Copyright 2026 The Steward Authors
+// SPDX-License-Identifier: Apache-2.0
+// What every domain's resolvers share: the gateway's refusals, the signed-in person, new ids,
+// and the audit trail, which every domain change writes to and announces on liveEvents.
+
+import { GraphQLError } from "graphql";
+
+import { publish } from "#core/events.ts";
+import { type Context, signedIn } from "#core/graphql.ts";
+import { mockState } from "#core/state.ts";
+import { chained } from "#product/data/admin.ts";
+import { asSteward, type StewardPerson } from "#product/data/people.ts";
+
+export const LIVE_EVENTS = "live-events";
+
+export interface LiveEvent {
+  actorUserId: null | string;
+  at: string;
+  entityId: null | string;
+  groupId: null | string;
+  type: string;
+}
+
+/**
+ * The codes the mock refuses with, in the core's spelling: the gateway relays a service's gRPC
+ * status (FailedPrecondition, AlreadyExists) and the web reads them by these names.
+ */
+export type RefusalCode =
+  | "ALREADY_EXISTS"
+  | "BAD_USER_INPUT"
+  | "FAILED_PRECONDITION"
+  | "FORBIDDEN"
+  | "INTERNAL"
+  | "NOT_FOUND";
+
+export const refuse = (code: RefusalCode, message: string): GraphQLError =>
+  new GraphQLError(message, { extensions: { code } });
+
+export const forbidden = (): GraphQLError =>
+  refuse("FORBIDDEN", "You don't have permission to do that.");
+
+export const notFound = (what: string): GraphQLError =>
+  refuse("NOT_FOUND", `${what} not found`);
+
+/** The signed-in person, as Steward's directory keeps them. */
+export const caller = (context: Context): StewardPerson =>
+  asSteward(signedIn(context));
+
+export const isSiteAdmin = (person: StewardPerson): boolean =>
+  person.roles.includes("site-admin");
+
+/** The caller when they hold any of `roles` (site-admin holds every permission), else FORBIDDEN. */
+export const withAnyRole = (
+  context: Context,
+  ...roles: string[]
+): StewardPerson => {
+  const person = caller(context);
+  if (isSiteAdmin(person) || roles.some((role) => person.roles.includes(role)))
+    return person;
+  throw forbidden();
+};
+
+export const siteAdmin = (context: Context): StewardPerson =>
+  withAnyRole(context);
+
+export const data = () => mockState.data;
+
+export const people = (): StewardPerson[] =>
+  mockState.data.people.map(asSteward);
+
+export const personOf = (id: null | string | undefined) =>
+  id ? people().find((p) => p.id === id) : undefined;
+
+/** A new record's id: the kind and a number past every seeded one. */
+export const newId = (kind: string): string => {
+  const next = mockState.data.next[kind] ?? 100;
+  mockState.data.next[kind] = next + 1;
+  return `${kind}-${String(next)}`;
+};
+
+export const now = (): string => new Date().toISOString();
+
+/** Find a record or answer NOT_FOUND. */
+export const found = <T>(record: T | undefined, what: string): T => {
+  if (record === undefined) throw notFound(what);
+  return record;
+};
+
+/** Publish a domain event, as the gateway does for each audit entry. */
+export const announce = (
+  type: string,
+  actor: { id: string } | null | StewardPerson,
+  entityId: null | string = null,
+  groupId: null | string = null,
+): void => {
+  const event: LiveEvent = {
+    actorUserId: actor?.id ?? null,
+    at: now(),
+    entityId,
+    groupId,
+    type,
+  };
+  publish(LIVE_EVENTS, event);
+};
+
+/** What an audit entry is about: `kind:id` and the label the log shows for it. */
+export interface Subject {
+  groupId?: string;
+  groupName?: null | string;
+  id: string;
+  kind: string;
+  label: null | string;
+}
+
+/** Write an audit entry with the gateway's action name, and announce it. */
+export const record = (
+  action: string,
+  actor: StewardPerson,
+  subject: Subject,
+): void => {
+  const trail = mockState.data.audit;
+  trail.push(
+    chained(trail, {
+      action,
+      actorName: actor.name,
+      actorUserId: actor.id,
+      groupId: subject.groupId ?? "",
+      groupName: subject.groupName ?? null,
+      legalBasisExempt: false,
+      occurredAt: now(),
+      subject: `${subject.kind}:${subject.id}`,
+      subjectLabel: subject.label,
+      tier: "audit",
+    }),
+  );
+  announce(action, actor, subject.id, subject.groupId ?? null);
+};

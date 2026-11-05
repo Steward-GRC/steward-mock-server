@@ -1,0 +1,5 @@
+mutation ActivateOrganization($domain: String!) {
+  activateOrganization(domain: $domain) {
+    ...OrganizationFields
+  }
+}

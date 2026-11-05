@@ -1,0 +1,5 @@
+mutation CreateTemplate($name: String!, $ownerCategoryId: ID) {
+  createTemplate(name: $name, ownerCategoryId: $ownerCategoryId) {
+    ...TemplateFields
+  }
+}

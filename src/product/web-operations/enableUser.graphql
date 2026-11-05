@@ -1,0 +1,5 @@
+mutation EnableUser($userId: ID!) {
+  enableUser(userId: $userId) {
+    ...UserFields
+  }
+}

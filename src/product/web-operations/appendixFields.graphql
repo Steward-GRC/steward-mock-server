@@ -1,0 +1,8 @@
+fragment AppendixFields on Appendix {
+  id
+  policyVersionId
+  title
+  contentJson
+  orderIndex
+  letter
+}

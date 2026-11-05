@@ -1,140 +1,35 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// What the mock answers for each field of steward-gateway's schema. Resolvers read and change
-// mockState.data, throw MockError with the gateway's codes, and publish live events so every
-// open liveEvents subscription, from every client, hears them. Fields with no resolver answer
-// null, or an error where the schema says non-null.
+// What the mock answers for each field of steward-gateway's schema, merged from one module per
+// domain in resolvers/. Resolvers read and change mockState.data, refuse with the gateway's
+// codes, and write each change to the audit trail, which publishes it to every open liveEvents
+// subscription from every client. Fields with no resolver answer null, or an error where the
+// schema says non-null.
 
-import type { Person } from "#core/state.ts";
-import type { GlobalSettings } from "#product/data.ts";
-
-import { publish, subscribe } from "#core/events.ts";
+import { subscribe } from "#core/events.ts";
 import {
   type Context,
   MockError,
   type Resolvers,
   signedIn,
-  withRole,
 } from "#core/graphql.ts";
-import { mockState } from "#core/state.ts";
+import { adminResolvers } from "#product/resolvers/admin.ts";
+import { aiResolvers } from "#product/resolvers/ai.ts";
+import { caseResolvers } from "#product/resolvers/cases.ts";
+import { complianceResolvers } from "#product/resolvers/compliance.ts";
+import { libraryResolvers } from "#product/resolvers/library.ts";
+import { policyResolvers } from "#product/resolvers/policies.ts";
+import { LIVE_EVENTS, type LiveEvent } from "#product/resolvers/shared.ts";
+import { userResolvers } from "#product/resolvers/users.ts";
+import { workflowResolvers } from "#product/resolvers/workflow.ts";
 
-const LIVE_EVENTS = "live-events";
+export { announce, type LiveEvent } from "#product/resolvers/shared.ts";
+export { asUser, permissionsOf } from "#product/resolvers/users.ts";
 
 /** The roles steward-authz grants audit.read, which liveEvents needs. */
 const AUDIT_READERS = new Set(["compliance-admin", "site-admin"]);
 
-export interface LiveEvent {
-  actorUserId: null | string;
-  at: string;
-  entityId: null | string;
-  groupId: null | string;
-  type: string;
-}
-
-/** Publish a domain event, as the gateway does for each audit entry. */
-export const announce = (
-  type: string,
-  actor: null | Person,
-  entityId: null | string = null,
-) => {
-  const event: LiveEvent = {
-    actorUserId: actor?.id ?? null,
-    at: new Date().toISOString(),
-    entityId,
-    groupId: null,
-    type,
-  };
-  publish(LIVE_EVENTS, event);
-};
-
-const firstAndLast = (name: string) => {
-  const [first = "", ...rest] = name.split(" ");
-  return { firstName: first, lastName: rest.join(" ") };
-};
-
-/**
- * steward-authz's role grants, as steward-web mirrors them (packages/auth/src/catalog.ts).
- * Reader is implicit: everyone who can sign in may read.
- */
-const ALL_PERMISSIONS = [
-  "admin.manage",
-  "audit.read",
-  "compliance.manage",
-  "group.manage",
-  "policy.approve",
-  "policy.author",
-  "policy.read",
-  "policy.read_sensitive",
-  "reporting.manage",
-  "session.manage",
-  "settings.manage",
-  "template.manage",
-  "user.manage",
-];
-const ROLE_GRANTS: Record<string, readonly string[]> = {
-  approver: ["policy.read", "policy.approve"],
-  author: ["policy.read", "policy.author"],
-  "compliance-admin": ["policy.read", "compliance.manage", "audit.read"],
-  "privacy-officer": ["policy.read", "reporting.manage"],
-  "site-admin": ALL_PERMISSIONS,
-  "template-admin": ["policy.read", "template.manage"],
-};
-
-/** The permissions a set of roles grants, reader's included, in grant order. */
-export const permissionsOf = (roles: readonly string[]): string[] => [
-  ...new Set([
-    "policy.read",
-    ...roles.flatMap((role) => ROLE_GRANTS[role] ?? []),
-  ]),
-];
-
-/** A person as the gateway's User type. */
-export const asUser = (person: Person) => ({
-  ...firstAndLast(person.name),
-  deletedAt: null,
-  email: person.email,
-  enabled: !person.disabled,
-  groupIds: [],
-  idpGroups: [],
-  isRoot: person.id === mockState.data.people[0]?.id,
-  localAccount: true,
-  locale: "en",
-  managedGroupIds: [],
-  memberships: [],
-  mergedIntoUserId: null,
-  name: person.name,
-  needsOnboarding: false,
-  permissions: permissionsOf(person.roles),
-  policyOverrides: [],
-  roles: person.roles,
-  scopes: { approver: [], author: [] },
-  userId: person.id,
-  username: person.username,
-});
-
-export const resolvers: Resolvers = {
-  Mutation: {
-    setGlobalSettings: (
-      _root,
-      given: { input: GlobalSettings },
-      context: Context,
-    ) => {
-      const admin = withRole(context, "site-admin");
-      const { announcement, maintenance } = given.input;
-      if (announcement.enabled && !announcement.message.trim())
-        throw new MockError(
-          "BAD_USER_INPUT",
-          "An enabled announcement needs a message.",
-        );
-      mockState.data.settings = { announcement, maintenance };
-      announce("settings.updated", admin);
-      return mockState.data.settings;
-    },
-  },
-  Query: {
-    globalSettings: () => mockState.data.settings,
-    me: (_root, _arguments, context: Context) => asUser(signedIn(context)),
-  },
+const liveResolvers: Resolvers = {
   Subscription: {
     liveEvents: {
       resolve: (event) => event,
@@ -165,3 +60,32 @@ export const resolvers: Resolvers = {
     },
   },
 };
+
+const domains: Resolvers[] = [
+  adminResolvers,
+  aiResolvers,
+  caseResolvers,
+  complianceResolvers,
+  libraryResolvers,
+  liveResolvers,
+  policyResolvers,
+  userResolvers,
+  workflowResolvers,
+];
+
+/** Every domain's fields, by type; a field two domains both answer is a mistake. */
+const merge = (maps: Resolvers[]): Resolvers => {
+  const merged: Record<string, Record<string, unknown>> = {};
+  for (const map of maps)
+    for (const [type, fields] of Object.entries(map)) {
+      const into = (merged[type] ??= {});
+      for (const [field, resolver] of Object.entries(fields ?? {})) {
+        if (field in into)
+          throw new Error(`two resolver modules answer ${type}.${field}`);
+        into[field] = resolver;
+      }
+    }
+  return merged as Resolvers;
+};
+
+export const resolvers: Resolvers = merge(domains);

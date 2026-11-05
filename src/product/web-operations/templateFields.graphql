@@ -1,0 +1,7 @@
+fragment TemplateFields on Template {
+  id
+  code
+  name
+  ownerCategoryId
+  retiredAt
+}

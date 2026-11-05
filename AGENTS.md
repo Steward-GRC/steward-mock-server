@@ -22,9 +22,14 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   CORS), `graphql.ts` (schema, execution, error codes), `websocket.ts` (both subscription
   protocols), `auth.ts` (`/auth/*`, cookie and bearer sessions), `setup.ts` (`/setup/*`),
   `health.ts`, `controls.ts` and `page.ts` (`/_mock`), `state.ts`, `events.ts`, `log.ts`.
-- `src/product/` - `product.ts`, `schema.graphql`, `data.ts`, `resolvers.ts`, `controls.ts`.
+- `src/product/` - `product.ts`, `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
+  `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
+  `access.ts` is the policy read model (who reads, edits and approves what).
+- `src/product/web-operations/` - steward-web's operations, byte for byte at the commit its README
+  names; `web-operations.test.ts` sends every one of them. Keep the folder out of the formatter.
 - `src/core/server.test.ts` - the tests, against a real server on a free port;
-  `src/core/test-client.ts` holds their helpers.
+  `src/core/test-client.ts` holds their helpers, and `src/product/web-client.ts` the product
+  tests' (call a web operation by name as a sample person).
 
 ## Build, test, lint
 

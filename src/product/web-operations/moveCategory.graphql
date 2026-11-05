@@ -1,0 +1,5 @@
+mutation MoveCategory($categoryId: ID!, $newParentId: ID) {
+  moveCategory(categoryId: $categoryId, newParentId: $newParentId) {
+    ...CategoryFields
+  }
+}

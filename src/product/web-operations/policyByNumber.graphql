@@ -1,0 +1,5 @@
+query PolicyByNumber($number: String!) {
+  policyByNumber(number: $number) {
+    ...AuthoringPolicyFields
+  }
+}

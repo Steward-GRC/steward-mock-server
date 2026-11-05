@@ -1,0 +1,5 @@
+mutation CreateCategory($name: String!, $slug: String!, $parentId: ID) {
+  createCategory(name: $name, slug: $slug, parentId: $parentId) {
+    ...CategoryFields
+  }
+}

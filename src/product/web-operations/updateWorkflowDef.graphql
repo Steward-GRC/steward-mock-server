@@ -1,0 +1,10 @@
+mutation UpdateWorkflowDef(
+  $id: ID!
+  $name: String!
+  $description: String
+  $stages: [WorkflowStageInput!]!
+) {
+  updateWorkflowDef(id: $id, name: $name, description: $description, stages: $stages) {
+    ...WorkflowDefFields
+  }
+}

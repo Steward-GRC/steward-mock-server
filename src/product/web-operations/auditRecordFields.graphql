@@ -1,0 +1,16 @@
+fragment AuditRecordFields on AuditRecord {
+  id
+  recordUuid
+  tier
+  action
+  actorUserId
+  subject
+  groupId
+  occurredAt
+  prevHash
+  recordHash
+  legalBasisExempt
+  actorName
+  groupName
+  subjectLabel
+}

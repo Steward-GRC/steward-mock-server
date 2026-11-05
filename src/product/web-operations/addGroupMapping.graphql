@@ -1,0 +1,12 @@
+mutation AddGroupMapping($connectionId: ID!, $idpGroupClaimValue: String!, $targetGroupId: ID!) {
+  addGroupMapping(
+    connectionId: $connectionId
+    idpGroupClaimValue: $idpGroupClaimValue
+    targetGroupId: $targetGroupId
+  ) {
+    connectionId
+    id
+    idpGroupClaimValue
+    targetGroupId
+  }
+}

@@ -1,0 +1,10 @@
+mutation SetEmailServiceConfig($input: EmailServiceConfigInput!) {
+  setEmailServiceConfig(input: $input) {
+    apiKeySet
+    provider
+    domain
+    region
+    fromAddress
+    enabled
+  }
+}
