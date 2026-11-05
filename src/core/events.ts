@@ -60,3 +60,6 @@ export const subscribe = <T>(topic: string): AsyncIterableIterator<T> => {
 
 /** The core topic every open connection hears when sessions end (Start fresh, expire). */
 export const SESSIONS_ENDED = "mock:sessions-ended";
+
+/** The core topic a product hears when the maintenance window changes (its payload is the window). */
+export const MAINTENANCE_CHANGED = "mock:maintenance-changed";

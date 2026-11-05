@@ -78,6 +78,13 @@ subscription. Replace it; don't build around it.
    that gets the accepted socket. `sessionOfCookie(request)` reads the session from the upgrade.
    The GraphQL path's websocket stays the core's.
 
+   For the gateway's maintenance cycle, add `maintenance` to the product: `fields`, the root
+   fields that keep answering while maintenance is on (the product's maintenance banner query),
+   and `answer`, the response its gateway gives during maintenance when that isn't the core's
+   default (503, a Retry-After until the window ends, and the message; `maintenanceAnswer` in
+   `src/core/maintenance.ts` builds it, so a product can start from it). Its resolvers read the
+   window with `maintenance()` and can push banner changes from `MAINTENANCE_CHANGED`.
+
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
    identity provider's flow), change `src/core/auth.ts` to match it, change the sign-in tests in
    `src/core/server.test.ts` to match, and say in the PR which part of the core moved. That's the

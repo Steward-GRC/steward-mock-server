@@ -4,7 +4,7 @@
 // a phone) talks to the same state, so a change one makes is what the others read. It resets when
 // the server restarts, from the controls page, and between tests.
 
-import { publish, SESSIONS_ENDED } from "#core/events.ts";
+import { MAINTENANCE_CHANGED, publish, SESSIONS_ENDED } from "#core/events.ts";
 import { onProductChange, product, type ProductData } from "#core/product.ts";
 
 /** The fail-next control's armed failure, spent on the next GraphQL call. */
@@ -12,6 +12,17 @@ export interface Failure {
   /** "graphql" answers a GraphQL error at 200; "http" answers the status with no body. */
   mode: "graphql" | "http";
   status: number;
+}
+
+/**
+ * The gateway's maintenance window: nothing planned, announced ahead, or on now. While it's on,
+ * the gateway paths answer the product's maintenance refusal (src/core/maintenance.ts).
+ */
+export interface MaintenanceWindow {
+  endsAt: null | string;
+  message: null | string;
+  startsAt: null | string;
+  state: "active" | "announced" | "none";
 }
 
 /** Someone who can sign in. The product's seed data lists them. */
@@ -35,6 +46,13 @@ export interface Session {
   startedAt: number;
 }
 
+export const noMaintenance = (): MaintenanceWindow => ({
+  endsAt: null,
+  message: null,
+  startsAt: null,
+  state: "none",
+});
+
 const startedAt = new Date().toISOString();
 
 export const mockState = {
@@ -43,6 +61,8 @@ export const mockState = {
   failNext: null as Failure | null,
   /** When Start fresh last ran. */
   freshAt: null as null | string,
+  /** The maintenance window every client sees. */
+  maintenance: noMaintenance(),
   /** A new install: the clients walk first-run setup until /setup/complete. */
   needsSetup: process.env.MOCK_FRESH_INSTALL === "1",
   /** Password checks waiting for their second factor, by pending id. */
@@ -60,6 +80,8 @@ export const personById = (id: string): Person | undefined =>
 export const resetData = (): void => {
   mockState.data = product().seed();
   mockState.failNext = null;
+  mockState.maintenance = noMaintenance();
+  publish(MAINTENANCE_CHANGED, noMaintenance());
 };
 
 /** End sessions (all of them, or one person's), and tell open connections. */

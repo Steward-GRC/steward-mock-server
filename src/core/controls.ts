@@ -10,6 +10,7 @@
 
 import { issueSession } from "#core/auth.ts";
 import { json, readJson, refuse } from "#core/http.ts";
+import { maintenanceControls } from "#core/maintenance.ts";
 import { product, settings } from "#core/product.ts";
 import {
   endSessions,
@@ -82,6 +83,7 @@ const snapshot = () => ({
   ],
   failNext: mockState.failNext,
   freshAt: mockState.freshAt,
+  maintenance: mockState.maintenance,
   needsSetup: mockState.needsSetup,
   product: settings().name,
   sessions: [...mockState.sessions.values()].map(({ personId, startedAt }) => ({
@@ -93,6 +95,7 @@ const snapshot = () => ({
 });
 
 const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
+  ...maintenanceControls,
   "expire-session": (body) => {
     endSessions(typeof body.personId === "string" ? body.personId : undefined);
   },

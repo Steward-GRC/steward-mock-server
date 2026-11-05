@@ -12,6 +12,11 @@ import { armedFailure, type Operation, prepare, run } from "#core/graphql.ts";
 import { answerHealth } from "#core/health.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
+import {
+  maintenanceAllows,
+  maintenanceOn,
+  maintenanceRefusal,
+} from "#core/maintenance.ts";
 import { answerPage } from "#core/page.ts";
 import { product, settings } from "#core/product.ts";
 import { answerSetup } from "#core/setup.ts";
@@ -78,6 +83,14 @@ const answerGraphql = async (request: Request, url: URL): Promise<Response> => {
   }
   const session = sessionOf(request);
   const prepared = prepare(input, session);
+  // During maintenance only the product's banner fields answer; everything else gets the
+  // maintenance refusal, signed in or not, as the gateway answers in front of a stopped service.
+  if (
+    maintenanceOn() &&
+    !(prepared.ok && maintenanceAllows(prepared.operation))
+  ) {
+    return maintenanceRefusal(request, url.pathname) as Response;
+  }
   if (!prepared.ok) return json({ errors: prepared.errors }, prepared.status);
   if (prepared.operation.operation === "subscription") {
     return json(
@@ -118,13 +131,15 @@ const route = async (request: Request, url: URL): Promise<Response> => {
   ) {
     return answerGraphql(request, url);
   }
-  // In order: the core's own paths, then the product's routes, then the core's /auth and /setup
+  // In order: the core's own paths, the maintenance refusal while maintenance is on, then the
+  // product's routes, then the core's /auth and /setup
   // (whose catch-alls answer 404 for paths they don't know). Each is awaited before the next is
   // asked, so a route that answers nothing asynchronously still falls through.
   const answerers = [
     answerHealth,
     answerPage,
     answerControls,
+    maintenanceRefusal,
     product().routes,
     answerAuth,
     answerSetup,

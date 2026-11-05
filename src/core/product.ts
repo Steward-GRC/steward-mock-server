@@ -9,11 +9,17 @@ import type { WebSocket } from "ws";
 
 import type { Action, ProductControl } from "#core/controls.ts";
 import type { Resolvers } from "#core/graphql.ts";
-import type { Person } from "#core/state.ts";
+import type { MaintenanceWindow, Person } from "#core/state.ts";
 
 export interface Product {
   /** The product's own controls. */
   actions: ProductAction[];
+  /**
+   * The product's maintenance behaviour: how its gateway answers while maintenance is on, and
+   * which fields keep answering for its banner. Its resolvers read the window with
+   * `maintenance()` from src/core/maintenance.ts and hear changes on MAINTENANCE_CHANGED.
+   */
+  maintenance?: ProductMaintenance;
   /** What each field of the schema answers, by type and field name. */
   resolvers: Resolvers;
   /**
@@ -49,6 +55,21 @@ export type ProductAction = { run: ProductControl } & Action;
 /** The invented data a product serves. People are the part the sign-in routes read. */
 export interface ProductData {
   people: Person[];
+}
+
+/** How a product's gateway behaves during maintenance (see Product.maintenance). */
+export interface ProductMaintenance {
+  /**
+   * The answer a gateway call gets while maintenance is on. Without one, the core answers 503
+   * with a Retry-After (`maintenanceAnswer` in src/core/maintenance.ts, which this can build on).
+   */
+  answer?: (
+    request: Request,
+    path: string,
+    window: MaintenanceWindow,
+  ) => Response;
+  /** Root fields that keep answering during maintenance: the product's maintenance banner query. */
+  fields?: string[];
 }
 
 /** A product's own HTTP routes (see Product.routes). */

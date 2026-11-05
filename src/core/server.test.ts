@@ -9,7 +9,9 @@ import { WebSocket } from "ws";
 
 import type { RunningMockServer } from "#core/server.ts";
 
+import { listen } from "#core/events.ts";
 import { handle } from "#core/handle.ts";
+import { MAINTENANCE_CHANGED } from "#core/maintenance.ts";
 import {
   control,
   GOOD_CODE,
@@ -289,9 +291,97 @@ describe("controls", () => {
     );
   });
 
-  it("serves its page under the product's name", async () => {
-    const page = await fetch(`${base}/_mock`);
-    assert.match(await page.text(), /Mock controls · Fixture/);
+  it("serves its page under the product's name and version", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<title>Mock controls · Fixture<\/title>/);
+    assert.match(html, /class="brand__name">Fixture</);
+    assert.ok(html.includes(FIXTURE_VERSION));
+  });
+
+  it("is reachable by keyboard and at phone width", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<meta name="viewport" content="width=device-width, initial-scale=1">/,
+    );
+    assert.match(html, /<a class="skip-link" href="#main">/);
+    assert.match(html, /<main [^>]*id="main"/);
+    assert.match(
+      html,
+      /<button [^>]*aria-controls="sidebar"[^>]*aria-label="Open menu"/,
+    );
+    assert.match(html, /:focus-visible/);
+  });
+
+  it("follows the system theme until a theme is saved", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<html lang="en" data-theme="light" data-theme-choice="system">/,
+    );
+    assert.match(html, /prefers-color-scheme: dark/);
+  });
+
+  it("saves the theme setting and serves the page in it", async () => {
+    const saved = await post(base, "/_mock/theme", { theme: "dark" });
+    assert.equal(saved.status, 204);
+    const cookie =
+      (saved.headers.get("set-cookie") ?? "").split(";", 1)[0] ?? "";
+    assert.equal(cookie, "mock_theme=dark");
+    const html = await (
+      await fetch(`${base}/_mock`, { headers: { cookie } })
+    ).text();
+    assert.match(
+      html,
+      /<html lang="en" data-theme="dark" data-theme-choice="dark">/,
+    );
+    assert.match(html, /aria-label="Switch to light theme"/);
+  });
+
+  it("refuses a theme it doesn't know", async () => {
+    assert.equal(
+      (await post(base, "/_mock/theme", { theme: "sepia" })).status,
+      400,
+    );
+  });
+
+  it("puts each section on its own full-width row", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /\.cards \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/,
+    );
+    assert.doesNotMatch(
+      html,
+      /\.(?:card|cards|tiles|head|main) \{[^}]*max-width/,
+    );
+  });
+
+  it("shows the product's summary as tiles", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<div class="tile"><span class="tile__label">notes<\/span><span class="tile__value">2<\/span><\/div>/,
+    );
+  });
+
+  it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<span class="badge badge--env">Mock<\/span>/);
+    assert.match(
+      html,
+      /<aside class="sidebar" id="sidebar" aria-label="Sidebar">/,
+    );
+    assert.match(
+      html,
+      /<span class="eyebrow">Mock gateway<\/span><h1 class="title">Controls<\/h1>/,
+    );
+  });
+
+  it("still drives the controls from the page", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /fetch\("\/_mock\/controls"/);
+    assert.match(html, /kind: "sign-in"/);
   });
 });
 
@@ -394,6 +484,189 @@ describe("product websockets", () => {
     await new Promise((settle) => setTimeout(settle, 50));
     assert.deepEqual(heard, []);
     for (const socket of [one, two, other]) socket.close();
+  });
+});
+
+const hour = 3_600_000;
+
+/** A maintenance window starting `fromNow` milliseconds ahead and lasting `length`. */
+const window = (fromNow: number, length: number) => ({
+  endsAt: new Date(Date.now() + fromNow + length).toISOString(),
+  startsAt: new Date(Date.now() + fromNow).toISOString(),
+});
+
+/** The fixture's maintenance banner, as a client reads it before signing in. */
+const banner = async () =>
+  (await query(base, "{ maintenance { state message startsAt endsAt } }")).body
+    .data?.maintenance as Record<string, unknown>;
+
+describe("maintenance", () => {
+  it("announces a window that every client reads, and answers as normal meanwhile", async () => {
+    const ahead = window(hour, hour);
+    const state = await control(base, {
+      kind: "maintenance-announce",
+      message: "Upgrading the database",
+      ...ahead,
+    });
+    assert.deepEqual(
+      (state.maintenance as Record<string, unknown>).state,
+      "announced",
+    );
+    assert.deepEqual(await banner(), {
+      message: "Upgrading the database",
+      state: "announced",
+      ...ahead,
+    });
+    const ben = await signIn(base, "ben");
+    assert.equal((await query(base, "{ notes { id } }", ben)).status, 200);
+    assert.equal((await fetch(`${base}/readyz`)).status, 200);
+  });
+
+  it("refuses a window that ends before it starts", async () => {
+    const backwards = {
+      endsAt: new Date().toISOString(),
+      kind: "maintenance-announce",
+      startsAt: new Date(Date.now() + hour).toISOString(),
+    };
+    assert.equal((await post(base, "/_mock/controls", backwards)).status, 400);
+  });
+
+  it("answers the gateway paths the product's way while maintenance is on", async () => {
+    const ben = await signIn(base, "ben");
+    await control(base, {
+      kind: "maintenance-start",
+      message: "Back soon",
+      ...window(0, hour),
+    });
+    const refused = await post(
+      base,
+      "/gql",
+      { query: "{ notes { id } }" },
+      headersFor(ben),
+    );
+    assert.equal(refused.status, 503);
+    assert.equal(refused.headers.get("x-fixture-maintenance"), "on");
+    const retry = Number(refused.headers.get("retry-after"));
+    assert.ok(retry > 3500 && retry <= 3600, `retry-after ${String(retry)}`);
+    assert.deepEqual(await refused.json(), {
+      error: "maintenance",
+      message: "Back soon",
+    });
+    assert.equal(
+      (await post(base, "/auth/login", { password: "x", username: "ben" }))
+        .status,
+      503,
+    );
+    assert.equal((await fetch(`${base}/fixture/whoami`)).status, 503);
+  });
+
+  it("keeps the health of the process, the controls and the product's banner answering", async () => {
+    await control(base, { kind: "maintenance-start", message: "Back soon" });
+    assert.equal((await fetch(`${base}/readyz`)).status, 503);
+    assert.equal((await fetch(`${base}/livez`)).status, 200);
+    assert.equal((await fetch(`${base}/_mock/controls`)).status, 200);
+    assert.equal((await fetch(`${base}/_mock`)).status, 200);
+    assert.equal((await banner()).state, "active");
+  });
+
+  it("refuses new websockets while it's on", async () => {
+    const ben = await signIn(base, "ben");
+    await control(base, { kind: "maintenance-start" });
+    assert.equal(
+      (await connect("/fixture/relay/draft-1", { cookie: ben.cookie })).status,
+      503,
+    );
+  });
+
+  it("extends the window, and the retry follows it", async () => {
+    await control(base, { kind: "maintenance-start", ...window(0, hour) });
+    const later = new Date(Date.now() + 2 * hour).toISOString();
+    await control(base, {
+      endsAt: later,
+      kind: "maintenance-update",
+      message: "Taking longer",
+    });
+    assert.deepEqual(
+      { endsAt: (await banner()).endsAt, message: (await banner()).message },
+      { endsAt: later, message: "Taking longer" },
+    );
+    const retry = Number(
+      (await fetch(`${base}/readyz`)).headers.get("retry-after"),
+    );
+    assert.ok(retry > 7100 && retry <= 7200, `retry-after ${String(retry)}`);
+  });
+
+  it("ends maintenance and answers as normal again", async () => {
+    await control(base, { kind: "maintenance-start" });
+    await control(base, { kind: "maintenance-end" });
+    assert.equal((await banner()).state, "none");
+    assert.equal((await fetch(`${base}/readyz`)).status, 200);
+    const ben = await signIn(base, "ben");
+    assert.equal((await query(base, "{ notes { id } }", ben)).status, 200);
+  });
+
+  it("cancels an announcement, but not maintenance that's already on", async () => {
+    await control(base, {
+      kind: "maintenance-announce",
+      ...window(hour, hour),
+    });
+    await control(base, { kind: "maintenance-cancel" });
+    assert.equal((await banner()).state, "none");
+    await control(base, { kind: "maintenance-start" });
+    assert.equal(
+      (await post(base, "/_mock/controls", { kind: "maintenance-cancel" }))
+        .status,
+      409,
+    );
+  });
+
+  it("goes back to none on reset and on start fresh", async () => {
+    await control(base, { kind: "maintenance-start" });
+    await control(base, { kind: "reset" });
+    assert.equal((await banner()).state, "none");
+    await control(base, { kind: "maintenance-start" });
+    await control(base, { kind: "fresh" });
+    assert.equal((await banner()).state, "none");
+  });
+
+  it("tells the product when the window changes", async () => {
+    const heard: unknown[] = [];
+    const stop = listen(MAINTENANCE_CHANGED, (window) => heard.push(window));
+    await control(base, { kind: "maintenance-start", message: "Now" });
+    await control(base, { kind: "maintenance-end" });
+    stop();
+    assert.deepEqual(
+      heard.map((change) => (change as { state: string }).state),
+      ["active", "none"],
+    );
+  });
+
+  it("shows the window as a banner across the page", async () => {
+    const quiet = await (await fetch(`${base}/_mock`)).text();
+    assert.doesNotMatch(quiet, /class="banner/);
+    await control(base, {
+      kind: "maintenance-announce",
+      message: "Upgrading the database",
+      ...window(hour, hour),
+    });
+    const announced = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      announced,
+      /<div class="banner banner--announced" role="region" aria-label="Maintenance">/,
+    );
+    assert.match(announced, /Upgrading the database/);
+    await control(base, { kind: "maintenance-start" });
+    const on = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      on,
+      /<div class="banner banner--active" role="region" aria-label="Maintenance">/,
+    );
+  });
+
+  it("puts the maintenance card on the page", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /id="maintenance"/);
+    assert.match(html, /kind: "maintenance-announce"/);
   });
 });
 

@@ -102,7 +102,17 @@ on, and `GET /_mock/state` the whole state.
 | `reset`          |                                        | The sample data back; everyone stays signed in.                                       |
 | `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true. |
 
-The sample product adds `add-item` and `finish-items`.
+The maintenance cycle has its own kinds, and its own card on the page:
+
+| Kind                   | Body                            | What it does                                                                                                                                                                        |
+| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maintenance-announce` | `startsAt`, `endsAt`, `message` | A window ahead, which every client reads.                                                                                                                                           |
+| `maintenance-start`    | `endsAt`, `message` (optional)  | Maintenance on now: the gateway paths answer 503 with a Retry-After and `/readyz` isn't ready, while `/livez`, `/healthz`, `/_mock` and the product's banner fields keep answering. |
+| `maintenance-update`   | `startsAt`, `endsAt`, `message` | Extend or change the window, announced or on.                                                                                                                                       |
+| `maintenance-end`      |                                 | Back to normal.                                                                                                                                                                     |
+| `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                                                           |
+
+Reset and start fresh put it back to no maintenance. The sample product adds `add-item` and `finish-items`.
 
 ## 📦 Use it from a client's tests
 
