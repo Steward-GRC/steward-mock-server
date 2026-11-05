@@ -110,6 +110,13 @@ export const fixture: Product = {
     },
     fields: ["maintenance"],
   },
+  // Its own person fields, and one that tries to shadow a core field and is left out.
+  personFields: [
+    { key: "team", kind: "text", label: "Team" },
+    { hint: "night, weekend", key: "tags", kind: "list", label: "Tags" },
+    { key: "onCall", kind: "boolean", label: "On call" },
+    { key: "name", kind: "text", label: "Shadow" },
+  ],
   resolvers: {
     Mutation: {
       addNote: (_root, given: { text: string }, context: Context) => {

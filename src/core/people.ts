@@ -3,9 +3,11 @@
 // The people who can sign in, managed from the controls: add one, change their details or
 // password, or remove them. A change counts from the next sign-in, and a removed person's sessions
 // end with them. Passwords go in and never come out: the list says only whether one is set, so a
-// dev quick-login widget can read who to offer without seeing anyone's password.
+// dev quick-login widget can read who to offer without seeing anyone's password. A product adds
+// fields of its own (Product.personFields), edited the same way and stored on the person.
 
 import { refuse } from "#core/http.ts";
+import { type PersonField, product } from "#core/product.ts";
 import {
   endSessions,
   mockState,
@@ -61,6 +63,47 @@ const username = (value: unknown, self?: Person): Response | string => {
   return wanted;
 };
 
+/** The core's own person fields, which a product field can't take over. */
+const CORE_FIELDS = new Set([
+  "disabled",
+  "email",
+  "hasPassword",
+  "id",
+  "name",
+  "password",
+  "roles",
+  "secondFactor",
+  "username",
+]);
+
+/** The product's own person fields, without any that would shadow the core's. */
+export const personFields = (): PersonField[] =>
+  (product().personFields ?? []).filter((field) => !CORE_FIELDS.has(field.key));
+
+/** A product field's value from the controls, or undefined when the body doesn't name it. */
+const fieldValue = (field: PersonField, value: unknown): unknown => {
+  if (field.kind === "boolean") return flag(value);
+  if (field.kind === "list") return roles(value);
+  return typeof value === "string" ? value.trim() : undefined;
+};
+
+const emptyValue = (field: PersonField): unknown => {
+  if (field.kind === "boolean") return false;
+  if (field.kind === "list") return [];
+  return "";
+};
+
+/** Lay the body's product fields on the person; on a new person, fill the rest with empties. */
+const applyFields = (person: Person, body: Body, fresh: boolean) => {
+  const fields = person as unknown as Record<string, unknown>;
+  for (const field of personFields()) {
+    const value = fieldValue(field, body[field.key]);
+    if (value !== undefined) fields[field.key] = value;
+    else if (fresh && fields[field.key] === undefined)
+      fields[field.key] = emptyValue(field);
+  }
+};
+
 const capitalised = (word: string) =>
   word.charAt(0).toUpperCase() + word.slice(1);
 
@@ -82,6 +125,7 @@ export const peopleControls: Record<string, (body: Body) => unknown> = {
     };
     if (personById(person.id))
       person.id = `person-${name}-${String(Date.now())}`;
+    applyFields(person, body, true);
     mockState.data.people.push(person);
     return publicPerson(person);
   },
@@ -111,6 +155,7 @@ export const peopleControls: Record<string, (body: Body) => unknown> = {
     person.secondFactor = flag(body.secondFactor) ?? person.secondFactor;
     if (typeof body.password === "string" && body.password !== "")
       person.password = body.password;
+    applyFields(person, body, false);
     if (person.disabled) endSessions(person.id);
     return publicPerson(person);
   },

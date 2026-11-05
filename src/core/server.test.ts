@@ -454,8 +454,11 @@ describe("sign-in users", () => {
         hasPassword: true,
         id: undefined,
         name: "Charlie Example",
+        onCall: false,
         roles: ["STAFF", "AUDITOR"],
         secondFactor: false,
+        tags: [],
+        team: "",
         username: "charlie",
       },
     );
@@ -541,6 +544,37 @@ describe("sign-in users", () => {
       ((await quick.json()) as Record<string, string>).message,
       "This account is disabled.",
     );
+  });
+
+  it("keeps a product's own person fields, edited like the core's", async () => {
+    const added = await control(base, {
+      kind: "person-add",
+      onCall: true,
+      password: "charlie-password",
+      tags: "night, weekend",
+      team: "Platform",
+      username: "charlie",
+    });
+    const charlie = added.result as Record<string, unknown>;
+    assert.deepEqual(
+      { onCall: charlie.onCall, tags: charlie.tags, team: charlie.team },
+      { onCall: true, tags: ["night", "weekend"], team: "Platform" },
+    );
+    await control(base, {
+      kind: "person-update",
+      personId: charlie.id,
+      tags: ["weekend"],
+    });
+    const listed = (await people()).find((p) => p.username === "charlie");
+    assert.deepEqual(
+      { onCall: listed?.onCall, tags: listed?.tags, team: listed?.team },
+      { onCall: true, tags: ["weekend"], team: "Platform" },
+    );
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<th scope="col">Tags<\/th>/);
+    assert.match(html, /id="user-field-onCall" type="checkbox"/);
+    assert.match(html, /data-fields="\[\{&quot;key&quot;:&quot;team&quot;/);
+    assert.doesNotMatch(html, /Shadow/);
   });
 
   it("never hands out a password, on the list or in the state dump", async () => {

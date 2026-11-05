@@ -17,10 +17,12 @@
 // it; the switch posts /_mock/theme, which saves the choice in a cookie the page is then served
 // with, so it opens in the saved theme with no flash and nothing kept in the browser's storage.
 
+import type { PersonField } from "#core/product.ts";
 import type { MaintenanceWindow } from "#core/state.ts";
 
 import { cookieOf, readJson, refuse } from "#core/http.ts";
 import { maintenance } from "#core/maintenance.ts";
+import { personFields } from "#core/people.ts";
 import { product, settings } from "#core/product.ts";
 
 type Theme = "dark" | "light";
@@ -358,7 +360,7 @@ const SCRIPT = `
       });
       const actions = el("td");
       actions.append(edit, " ", remove);
-      row.append(el("td", "", p.name), el("td", "", p.username), el("td", "", p.roles.join(", ") || "none"), el("td", "", p.hasPassword ? "set" : "not set"), el("td", "", (p.disabled ? "disabled" : "active") + (p.secondFactor ? ", second factor" : "")), actions);
+      row.append(el("td", "", p.name), el("td", "", p.username), el("td", "", p.roles.join(", ") || "none"), el("td", "", p.hasPassword ? "set" : "not set"), el("td", "", (p.disabled ? "disabled" : "active") + (p.secondFactor ? ", second factor" : "")), ...extra.map((field) => el("td", "", extraText(field, p[field.key]))), actions);
       return row;
     }));
   };
@@ -371,12 +373,18 @@ const SCRIPT = `
     await refresh();
   });
 
-  const form = () => ({ disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: $("user-roles").value, secondFactor: $("user-second-factor").checked, username: $("user-username").value });
+  // The product's own person fields, from the Users card's data-fields.
+  const extra = JSON.parse($("users").dataset.fields || "[]");
+  const extraInput = (field) => $("user-field-" + field.key);
+  const extraValue = (field) => field.kind === "boolean" ? extraInput(field).checked : extraInput(field).value;
+  const extraText = (field, value) => field.kind === "boolean" ? (value === true ? "yes" : "no") : field.kind === "list" ? (value ?? []).join(", ") || "none" : value ?? "";
+  const form = () => ({ ...Object.fromEntries(extra.map((field) => [field.key, extraValue(field)])), disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: $("user-roles").value, secondFactor: $("user-second-factor").checked, username: $("user-username").value });
   const clearForm = () => {
     editing = null;
     for (const id of ["user-name", "user-username", "user-email", "user-roles", "user-password"]) $(id).value = "";
     $("user-second-factor").checked = false;
     $("user-disabled").checked = false;
+    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = false; else extraInput(field).value = ""; }
     $("user-password").placeholder = "The password they sign in with";
     $("user-save").hidden = true;
     $("user-add").hidden = false;
@@ -391,6 +399,7 @@ const SCRIPT = `
     $("user-password").placeholder = p.hasPassword ? "Leave empty to keep the password" : "No password yet: set one";
     $("user-second-factor").checked = p.secondFactor;
     $("user-disabled").checked = p.disabled;
+    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = p[field.key] === true; else extraInput(field).value = field.kind === "list" ? (p[field.key] ?? []).join(", ") : p[field.key] ?? ""; }
     $("user-save").hidden = false;
     $("user-add").hidden = true;
     $("user-name").focus();
@@ -483,8 +492,31 @@ const tilesHtml = (summary: Record<string, unknown>) =>
     )
     .join("");
 
+/** The product's own person fields in the Users form: text inputs, then checkboxes. */
+const fieldsHtml = (fields: PersonField[]) => {
+  const inputs = fields
+    .filter((field) => field.kind !== "boolean")
+    .map(
+      (field) =>
+        `<div class="field"><label class="label" for="user-field-${escape(field.key)}">${escape(field.label)}</label><input id="user-field-${escape(field.key)}" type="text" placeholder="${escape(field.hint ?? (field.kind === "list" ? "Comma-separated" : ""))}" autocomplete="off"></div>`,
+    )
+    .join("");
+  const checks = fields
+    .filter((field) => field.kind === "boolean")
+    .map(
+      (field) =>
+        `<label class="check"><input id="user-field-${escape(field.key)}" type="checkbox"> ${escape(field.label)}</label>`,
+    )
+    .join("");
+  return (
+    (inputs ? `<div class="row">${inputs}</div>` : "") +
+    (checks ? `<div class="row">${checks}</div>` : "")
+  );
+};
+
 const page = (saved: null | Theme) => {
   const { graphqlPath, name, version } = settings();
+  const fields = personFields();
   const theme: Theme = saved ?? "light";
   const window = maintenance();
   return `<!doctype html>
@@ -544,10 +576,10 @@ const page = (saved: null | Theme) => {
           <p class="result" id="sign-in-result" role="status" aria-live="polite"></p>
           <p class="hint">Uses the person's password from Users and skips the second factor. A client's own sign-in takes the same password, then any six digits except 000000.</p>
         </section>
-        <section class="card" id="users" aria-labelledby="users-title">
+        <section class="card" id="users" aria-labelledby="users-title" data-fields="${escape(JSON.stringify(fields))}">
           <h2 id="users-title">Users</h2>
           <p class="hint">The people who can sign in, and the only passwords that work for them. A change counts from the next sign-in; removing someone signs them out.</p>
-          <div class="table-wrap"><table class="people"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Roles</th><th scope="col">Password</th><th scope="col">Status</th><th scope="col"><span class="label">Actions</span></th></tr></thead><tbody id="people-rows"></tbody></table></div>
+          <div class="table-wrap"><table class="people"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Roles</th><th scope="col">Password</th><th scope="col">Status</th>${fields.map((field) => `<th scope="col">${escape(field.label)}</th>`).join("")}<th scope="col"><span class="label">Actions</span></th></tr></thead><tbody id="people-rows"></tbody></table></div>
           <div class="row">
             <div class="field"><label class="label" for="user-name">Name</label><input id="user-name" type="text" placeholder="Charlie Example" autocomplete="off"></div>
             <div class="field"><label class="label" for="user-username">Username</label><input id="user-username" type="text" placeholder="charlie" autocomplete="off"></div>
@@ -562,7 +594,7 @@ const page = (saved: null | Theme) => {
           <div class="row">
             <label class="check"><input id="user-second-factor" type="checkbox"> Asks for a second factor</label>
             <label class="check"><input id="user-disabled" type="checkbox"> Disabled</label>
-          </div>
+          </div>${fieldsHtml(fields)}
           <div class="row">
             <button class="button button--primary" id="user-add" type="button">Add user</button>
             <button class="button button--primary" id="user-save" type="button" hidden>Save changes</button>

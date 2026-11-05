@@ -141,7 +141,8 @@ The people who can sign in have kinds of their own, and the Users card on the pa
 | `person-update` | `personId`, and any of the fields above                                                     | Changes what it's given. A password counts from the next sign-in; an empty one is ignored. |
 | `person-remove` | `personId`                                                                                  | Takes the person out and ends their sessions.                                              |
 
-Reset and start fresh put the seed people back, and no maintenance. Steward answers the window the way
+A product's own person fields (`personFields`) are set the same way, by their key, and show in the
+Users card. Reset and start fresh put the seed people back, and no maintenance. Steward answers the window the way
 steward-gateway does:
 
 - **Announced:** `globalSettings.announcement` is a `warning` announcement with the window's
