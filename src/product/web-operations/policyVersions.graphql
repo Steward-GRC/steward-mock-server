@@ -3,5 +3,6 @@ query PolicyVersions($policyId: ID!) {
     id
     versionNo
     status
+    publishedAt
   }
 }

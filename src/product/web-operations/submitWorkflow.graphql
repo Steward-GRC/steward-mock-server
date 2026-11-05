@@ -1,0 +1,15 @@
+mutation SubmitWorkflow(
+  $policyVersionId: ID!
+  $policyId: ID!
+  $categoryId: ID!
+  $ancestorCategoryIds: [ID!]!
+) {
+  submitWorkflow(
+    policyVersionId: $policyVersionId
+    policyId: $policyId
+    categoryId: $categoryId
+    ancestorCategoryIds: $ancestorCategoryIds
+  ) {
+    runId
+  }
+}

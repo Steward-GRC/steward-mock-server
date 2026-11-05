@@ -1,0 +1,26 @@
+mutation CompleteOnboarding(
+  $acceptTerms: Boolean!
+  $username: String
+  $firstName: String
+  $lastName: String
+  $email: String
+) {
+  completeOnboarding(
+    acceptTerms: $acceptTerms
+    username: $username
+    firstName: $firstName
+    lastName: $lastName
+    email: $email
+  ) {
+    userId
+    username
+    name
+    firstName
+    lastName
+    email
+    roles
+    permissions
+    managedGroupIds
+    needsOnboarding
+  }
+}
