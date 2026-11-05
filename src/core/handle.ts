@@ -14,6 +14,7 @@ import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import {
   maintenanceAllows,
+  maintenanceGate,
   maintenanceOn,
   maintenanceRefusal,
 } from "#core/maintenance.ts";
@@ -132,7 +133,7 @@ const route = async (request: Request, url: URL): Promise<Response> => {
   ) {
     return answerGraphql(request, url);
   }
-  // In order: the core's own paths, the maintenance refusal while maintenance is on, then the
+  // In order: the core's own paths, the maintenance refusal while maintenance closes the gateway, then the
   // product's routes, then the core's /auth and /setup
   // (whose catch-alls answer 404 for paths they don't know). Each is awaited before the next is
   // asked, so a route that answers nothing asynchronously still falls through.
@@ -140,7 +141,7 @@ const route = async (request: Request, url: URL): Promise<Response> => {
     answerHealth,
     answerPage,
     answerControls,
-    maintenanceRefusal,
+    maintenanceGate,
     product().routes,
     answerAuth,
     answerSetup,

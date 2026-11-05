@@ -85,8 +85,11 @@ subscription. Replace it; don't build around it.
    `src/core/maintenance.ts` builds it, so a product can start from it). `allow(request, session,
    operation)` lets a caller's GraphQL operation run as normal during maintenance, the way a
    gateway lets a site admin keep using the admin console and end maintenance; `session` is null
-   when signed out. It covers the GraphQL path only, not /auth, /setup, the product's routes or
-   new websockets. Its resolvers read the window with `maintenance()` and can push banner changes
+   when signed out. It gates GraphQL operations only, over HTTP and on websockets already open.
+   `scope` says what else maintenance closes: `"gateway"` (the default) refuses /auth, /setup,
+   the product's routes and new websockets too and takes /readyz out of ready, as a gateway in
+   front of a stopped service; `"graphql"` leaves all of those open, for a gateway whose
+   maintenance gate is GraphQL middleware. Its resolvers read the window with `maintenance()` and can push banner changes
    from `MAINTENANCE_CHANGED`.
 
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
