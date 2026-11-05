@@ -6,7 +6,9 @@ Steward's staff and admin apps talk to steward-gateway. To work on a screen with
 backend running, they talk to this instead: one Node process on port 5175 that answers the
 gateway's paths in the gateway's shapes (`/query`, `/auth/*`, `/setup/*`, the probes), from
 invented data that every client shares and anyone can put back with one click at `/_mock`. The
-schema is steward-gateway's own, pinned to one commit in `schema-refs.env`.
+schema is steward-gateway's own, pinned to one commit in `schema-refs.env`. Fields the clients
+need before the gateway ships them (for now `searchPolicies`, from steward-gateway#41) live apart
+in `src/product/schema-pending.graphql` and leave it once the pinned copy carries them.
 
 ## ✨ Highlights
 

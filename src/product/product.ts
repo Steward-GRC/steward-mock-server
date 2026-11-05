@@ -20,7 +20,7 @@ export const steward: Product = {
   actions: productActions,
   resolvers,
   routes: stewardRoutes,
-  schema: read("schema.graphql"),
+  schema: [read("schema.graphql"), read("schema-pending.graphql")],
   seed,
   settings: {
     graphqlPath: "/query",

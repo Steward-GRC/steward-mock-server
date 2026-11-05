@@ -14,6 +14,7 @@ import { caseResolvers } from "#product/resolvers/cases.ts";
 import { complianceResolvers } from "#product/resolvers/compliance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
+import { searchResolvers } from "#product/resolvers/search.ts";
 import {
   LIVE_EVENTS,
   type LiveEvent,
@@ -68,6 +69,7 @@ const domains: Resolvers[] = [
   libraryResolvers,
   liveResolvers,
   policyResolvers,
+  searchResolvers,
   userResolvers,
   workflowResolvers,
 ];
