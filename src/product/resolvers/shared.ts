@@ -7,7 +7,7 @@ import { GraphQLError } from "graphql";
 
 import { publish } from "#core/events.ts";
 import { type Context, signedIn } from "#core/graphql.ts";
-import { mockState } from "#core/state.ts";
+import { stewardData } from "#product/data.ts";
 import { chained } from "#product/data/admin.ts";
 import { asSteward, type StewardPerson } from "#product/data/people.ts";
 
@@ -63,18 +63,18 @@ export const withAnyRole = (
 export const siteAdmin = (context: Context): StewardPerson =>
   withAnyRole(context);
 
-export const data = () => mockState.data;
+export const data = () => stewardData();
 
 export const people = (): StewardPerson[] =>
-  mockState.data.people.map(asSteward);
+  stewardData().people.map(asSteward);
 
 export const personOf = (id: null | string | undefined) =>
   id ? people().find((p) => p.id === id) : undefined;
 
 /** A new record's id: the kind and a number past every seeded one. */
 export const newId = (kind: string): string => {
-  const next = mockState.data.next[kind] ?? 100;
-  mockState.data.next[kind] = next + 1;
+  const next = stewardData().next[kind] ?? 100;
+  stewardData().next[kind] = next + 1;
   return `${kind}-${String(next)}`;
 };
 
@@ -118,7 +118,7 @@ export const record = (
   actor: StewardPerson,
   subject: Subject,
 ): void => {
-  const trail = mockState.data.audit;
+  const trail = stewardData().audit;
   trail.push(
     chained(trail, {
       action,

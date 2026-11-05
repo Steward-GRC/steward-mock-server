@@ -9,9 +9,10 @@ import { createHash } from "node:crypto";
 import type { Membership, StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { settings } from "#core/product.ts";
 import { endSessions, mockState } from "#core/state.ts";
 import { authorScopes } from "#product/access.ts";
-import { product } from "#product/product.ts";
+import { stewardData } from "#product/data.ts";
 import {
   caller,
   data,
@@ -77,7 +78,7 @@ const approverScopes = (person: StewardPerson): string[] =>
     .map((c) => c.name);
 
 const isRoot = (person: StewardPerson) =>
-  person.id === mockState.data.people[0]?.id;
+  person.id === stewardData().people[0]?.id;
 
 /** A person as the gateway's User type. */
 export const asUser = (person: StewardPerson) => ({
@@ -476,7 +477,7 @@ export const userResolvers: Resolvers = {
           commit: null,
           name: "gateway",
           status: "OK",
-          version: product.version,
+          version: settings().version,
         },
         generatedAt: new Date().toISOString(),
         release: null,
@@ -485,7 +486,7 @@ export const userResolvers: Resolvers = {
             commit: null,
             name: "core",
             status: "OK",
-            version: product.version,
+            version: settings().version,
           },
           { commit: null, name: "ai", status: "UNAVAILABLE", version: "" },
         ],

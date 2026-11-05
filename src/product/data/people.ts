@@ -14,6 +14,11 @@ export interface Membership {
 /** A person as Steward's directory keeps them: the core's sign-in fields and the User type's. */
 export interface StewardPerson extends Person {
   deletedAt: null | string;
+  /**
+   * Has no second factor yet but must enrol one before signing in: the gateway answers the
+   * password with enrollmentRequired, and enrolling turns secondFactor on.
+   */
+  enrolSecondFactor?: boolean;
   idpGroups: string[];
   localAccount: boolean;
   locale: string;

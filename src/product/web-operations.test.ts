@@ -10,14 +10,14 @@ import { after, before, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
+import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
 import {
   control,
   openSocket,
   query,
   type Signed,
   startForTests,
-} from "#core/test-client.ts";
-import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
+} from "#product/test-client.ts";
 import { documentOf, signInAs, webOperations } from "#product/web-client.ts";
 
 interface Case {

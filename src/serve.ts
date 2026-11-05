@@ -7,9 +7,9 @@ import { readFileSync } from "node:fs";
 import { WRONG_CODE, WRONG_PASSWORD } from "#core/auth.ts";
 import { settings, useProduct } from "#core/product.ts";
 import { startMockServer } from "#core/server.ts";
-import { example } from "#product/product.ts";
+import { steward } from "#product/product.ts";
 
-useProduct(example);
+useProduct(steward);
 
 const httpsPort = process.env.HTTPS_PORT;
 const certificate = process.env.MOCK_TLS_CERT;

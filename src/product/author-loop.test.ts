@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
-import type { Signed } from "#core/test-client.ts";
+import type { Signed } from "#product/test-client.ts";
 
-import { query, startForTests, startFresh } from "#core/test-client.ts";
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
+import { query, startForTests, startFresh } from "#product/test-client.ts";
 import { type Answer, call, signInAs } from "#product/web-client.ts";
 
 /** steward-gateway's submit for review; steward-web has no operation for it yet. */

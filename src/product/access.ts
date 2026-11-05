@@ -15,9 +15,9 @@ import type { Category } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
 import type { Policy, PolicyVersion } from "#product/data/policies.ts";
 
-import { mockState } from "#core/state.ts";
+import { stewardData } from "#product/data.ts";
 
-const data = () => mockState.data;
+const data = () => stewardData();
 
 const isSiteAdmin = (person: StewardPerson) =>
   person.roles.includes("site-admin");
