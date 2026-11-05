@@ -5,6 +5,7 @@
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { WebSocket } from "ws";
 
 import type { RunningMockServer } from "#core/server.ts";
 
@@ -334,6 +335,65 @@ describe("product routes and schema", () => {
     const ben = await signIn(base, "ben");
     const { body } = await query(base, "{ noteCount }", ben);
     assert.deepEqual(body.data, { noteCount: 2 });
+  });
+});
+
+/** Open a socket on a product path: the open socket, or the HTTP answer that refused it. */
+const connect = (path: string, headers: Record<string, string> = {}) =>
+  new Promise<{ body?: string; socket: WebSocket; status?: number }>(
+    (resolve, reject) => {
+      const socket = new WebSocket(`${base.replace("http", "ws")}${path}`, {
+        headers,
+      });
+      socket.once("open", () => resolve({ socket }));
+      socket.once("unexpected-response", (_request, response) => {
+        let body = "";
+        response.on("data", (chunk: Buffer) => (body += String(chunk)));
+        response.on("end", () =>
+          resolve({ body, socket, status: response.statusCode }),
+        );
+      });
+      socket.once("error", (error) => {
+        if (!String(error).includes("Unexpected server response"))
+          reject(error);
+      });
+    },
+  );
+
+describe("product websockets", () => {
+  it("refuses an upgrade without a session with the product's own answer", async () => {
+    const refused = await connect("/fixture/relay/draft-1");
+    assert.equal(refused.status, 401);
+    assert.equal(refused.body, "unauthorized");
+  });
+
+  it("answers 404 to an upgrade on a path nobody serves", async () => {
+    const ben = await signIn(base, "ben");
+    const refused = await connect("/fixture/elsewhere", { cookie: ben.cookie });
+    assert.equal(refused.status, 404);
+  });
+
+  it("hands the product the socket, so it can relay between clients on one path", async () => {
+    const ben = await signIn(base, "ben");
+    const cy = await signIn(base, "cy");
+    const one = (
+      await connect("/fixture/relay/draft-1", { cookie: ben.cookie })
+    ).socket;
+    const two = (await connect("/fixture/relay/draft-1", { cookie: cy.cookie }))
+      .socket;
+    const other = (
+      await connect("/fixture/relay/draft-2", { cookie: cy.cookie })
+    ).socket;
+    const heard: string[] = [];
+    other.on("message", (data) => heard.push(String(data)));
+    const received = new Promise<string>((resolve) =>
+      two.once("message", (data) => resolve(String(data))),
+    );
+    one.send("hello");
+    assert.equal(await received, "hello");
+    await new Promise((settle) => setTimeout(settle, 50));
+    assert.deepEqual(heard, []);
+    for (const socket of [one, two, other]) socket.close();
   });
 });
 
