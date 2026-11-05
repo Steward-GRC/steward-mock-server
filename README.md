@@ -57,13 +57,22 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
 3. Open the controls at `http://localhost:5175/_mock`, or sign in from a client: any person listed
    at `/_mock/people`, any password except `wrong-password`, then any six digits except `000000`.
 
+### Sample data
+
+The library is the design brief's sample organisation, so a screen compares 1:1 with its design
+frame: the Workplace, People, Finance and Information categories; documents such as the Desk
+Booking Policy (`POL-FACILITIES-000001`) and the Expense Claims Policy (`POL-EXPENSES-000002`); the
+Finance team, Facilities team, All staff and Approvers groups; the Standard 2-stage and Finance
+sign-off workflows; and the Standard Policy and Step-by-step Procedure templates. The people are
+the six below.
+
 ### Who to sign in as
 
 | Username  | Role            | What they see                                                                                      |
 | --------- | --------------- | -------------------------------------------------------------------------------------------------- |
 | `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.        |
 | `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                       |
-| `charlie` | approver        | Published policies, the Data Classification approval waiting on them, the IT Security staff group. |
+| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. |
 | `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                         |
 | `erin`    | reader          | Published, non-sensitive policies only.                                                            |
 | `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                     |
