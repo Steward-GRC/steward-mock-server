@@ -1,0 +1,23 @@
+fragment NotificationSettingsFields on NotificationSettings {
+  channels {
+    email
+    inApp
+    push
+  }
+  categories {
+    category
+    cadence
+    mandatory
+  }
+  overrides {
+    kind
+    category
+    cadence
+    mandatory
+    delivery
+  }
+  digest {
+    dailyHour
+    weeklyDow
+  }
+}

@@ -1,0 +1,3 @@
+mutation EnrollTotpConfirm($code: String!) {
+  enrollTotpConfirm(code: $code)
+}

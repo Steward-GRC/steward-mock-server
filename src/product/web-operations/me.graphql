@@ -10,6 +10,7 @@ query Me {
     permissions
     managedGroupIds
     needsOnboarding
+    locale
     scopes {
       author
     }

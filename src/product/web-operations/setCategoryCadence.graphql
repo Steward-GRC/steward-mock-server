@@ -1,0 +1,5 @@
+mutation SetCategoryCadence($category: NotifCategory!, $cadence: NotifCadence!) {
+  setCategoryCadence(category: $category, cadence: $cadence) {
+    ...NotificationSettingsFields
+  }
+}

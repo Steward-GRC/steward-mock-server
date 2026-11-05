@@ -1,0 +1,11 @@
+query NotificationSettings {
+  notificationSettings {
+    ...NotificationSettingsFields
+  }
+  notificationTypeCatalog {
+    kind
+    category
+    mandatory
+    delivery
+  }
+}

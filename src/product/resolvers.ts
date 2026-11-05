@@ -16,8 +16,10 @@ import { adminResolvers } from "#product/resolvers/admin.ts";
 import { aiResolvers } from "#product/resolvers/ai.ts";
 import { caseResolvers } from "#product/resolvers/cases.ts";
 import { complianceResolvers } from "#product/resolvers/compliance.ts";
+import { factorResolvers } from "#product/resolvers/factors.ts";
 import { governanceResolvers } from "#product/resolvers/governance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
+import { notificationResolvers } from "#product/resolvers/notifications.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
 import { raciResolvers } from "#product/resolvers/raci.ts";
 import { searchResolvers } from "#product/resolvers/search.ts";
@@ -73,9 +75,11 @@ const domains: Resolvers[] = [
   aiResolvers,
   caseResolvers,
   complianceResolvers,
+  factorResolvers,
   governanceResolvers,
   libraryResolvers,
   liveResolvers,
+  notificationResolvers,
   policyResolvers,
   raciResolvers,
   searchResolvers,

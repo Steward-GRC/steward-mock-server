@@ -13,6 +13,7 @@ import type { RunningMockServer } from "#core/server.ts";
 import { auditActions } from "#product/audit-actions.ts";
 import { stewardData } from "#product/data.ts";
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
+import { passkeyCredentialId } from "#product/passkeys.ts";
 import {
   control,
   openSocket,
@@ -247,6 +248,13 @@ const cases: Record<string, Case> = {
   },
   EmailServiceConfig: { as: ADMIN },
   EnableUser: { as: ADMIN, variables: { userId: "user-frank" } },
+  EnrollTotpBegin: { as: READER },
+  // One step can't begin an enrollment first: identity's FailedPrecondition, a gateway fault.
+  EnrollTotpConfirm: {
+    as: READER,
+    refused: "INTERNAL",
+    variables: { code: "123456" },
+  },
   ExportAcks: {
     as: ADMIN,
     variables: { format: "csv", policyVersionId: "version-2" },
@@ -298,6 +306,8 @@ const cases: Record<string, Case> = {
   MyFactors: { as: READER },
   MyManagedGroups: { as: APPROVER },
   MyObligations: { as: READER },
+  MyWebauthnCredentials: { as: APPROVER },
+  NotificationSettings: { as: READER },
   Organizations: { as: ADMIN },
   // A one-step case can't export first, so the job is one delivery doesn't know.
   PdfDownloadLink: {
@@ -355,6 +365,7 @@ const cases: Record<string, Case> = {
     },
   },
   References: { as: AUTHOR, variables: { includeArchived: true } },
+  RemoveFactor: { as: ADMIN, variables: { kind: "totp" } },
   RemoveUserFromGroup: {
     as: ADMIN,
     variables: { groupId: "group-2", userId: APPROVER },
@@ -363,6 +374,10 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { methodId: "totp", userId: APPROVER },
   },
+  RemoveWebauthnCredential: {
+    as: APPROVER,
+    variables: { credentialId: passkeyCredentialId("charlie") },
+  },
   RenameCategory: {
     as: ADMIN,
     variables: {
@@ -370,6 +385,10 @@ const cases: Record<string, Case> = {
       name: "Offices",
       slug: "offices",
     },
+  },
+  RenameMfaMethod: {
+    as: ADMIN,
+    variables: { label: "Work phone", methodId: "totp" },
   },
   RenameTemplate: {
     as: ADMIN,
@@ -405,6 +424,7 @@ const cases: Record<string, Case> = {
   RetirePolicy: { as: AUTHOR, variables: { id: "policy-10" } },
   RetireTemplate: { as: ADMIN, variables: { id: "template-2" } },
   RevokeMagicLink: { as: ADMIN, variables: { token: "a".repeat(64) } },
+  RevokeMySessions: { as: READER },
   RevokeRole: { as: ADMIN, variables: { role: "approver", userId: APPROVER } },
   RevokeUserSessions: {
     as: ADMIN,
@@ -441,6 +461,10 @@ const cases: Record<string, Case> = {
   SetCaseStatus: {
     as: OFFICER,
     variables: { caseId: "case-1", status: "IN_REVIEW" },
+  },
+  SetCategoryCadence: {
+    as: READER,
+    variables: { cadence: "WEEKLY", category: "WORKFLOW" },
   },
   SetCategoryDefaults: {
     as: ADMIN,
@@ -485,6 +509,7 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { archived: false, id: "definition-3" },
   },
+  SetDigestWindow: { as: READER, variables: { dailyHour: 18, weeklyDow: 5 } },
   SetEmailServiceConfig: {
     as: ADMIN,
     variables: {
@@ -507,6 +532,10 @@ const cases: Record<string, Case> = {
       },
     },
   },
+  SetNotificationChannels: {
+    as: READER,
+    variables: { input: { email: true, inApp: true, push: true } },
+  },
   SetPolicyOwner: {
     as: ADMIN,
     variables: { ownerUserId: APPROVER, policyId: "policy-1" },
@@ -514,6 +543,10 @@ const cases: Record<string, Case> = {
   SetReferenceArchived: {
     as: ADMIN,
     variables: { archived: false, id: "reference-3" },
+  },
+  SetTypeCadence: {
+    as: READER,
+    variables: { cadence: "DAILY", kind: "policy-published" },
   },
   SetUserPolicyOverride: {
     as: ADMIN,
@@ -647,7 +680,7 @@ const cases: Record<string, Case> = {
   },
   UpdateMyProfile: {
     as: READER,
-    variables: { firstName: "Erin", lastName: "Reader" },
+    variables: { firstName: "Erin", lastName: "Reader", locale: "en-GB" },
   },
   UpdateReference: {
     as: ADMIN,
@@ -690,6 +723,17 @@ const cases: Record<string, Case> = {
     variables: { fromRecordId: "1", toRecordId: "5" },
   },
   VerifyDomain: { as: ADMIN, variables: { domain: "partner.example.net" } },
+  WebauthnRegisterBegin: { as: READER },
+  // One step can't begin a ceremony first, so the session is one identity doesn't know.
+  WebauthnRegisterFinish: {
+    as: READER,
+    refused: "NotFound",
+    variables: {
+      credentialJson: "{}",
+      label: "YubiKey",
+      sessionId: "00000000-0000-4000-8000-000000000000",
+    },
+  },
   WorkflowDef: { as: ADMIN, variables: { id: "workflow-1" } },
   WorkflowDefs: { as: ADMIN },
   WorkflowStatus: { as: AUTHOR, variables: { policyVersionId: "version-4" } },
@@ -741,7 +785,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 164);
+    assert.equal(webOperations.length, 178);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

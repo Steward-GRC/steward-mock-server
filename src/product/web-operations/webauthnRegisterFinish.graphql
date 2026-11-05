@@ -1,0 +1,3 @@
+mutation WebauthnRegisterFinish($sessionId: ID!, $credentialJson: String!, $label: String) {
+  webauthnRegisterFinish(sessionId: $sessionId, credentialJson: $credentialJson, label: $label)
+}

@@ -216,6 +216,31 @@ The admin user screens answer as steward-gateway and steward-identity do:
   are audited under the admin, and the gateway's high-risk mutations are refused meanwhile with
   `IMPERSONATION_DENIED`.
 
+### Profile pages
+
+The signed-in person's own security and notification settings answer as steward-gateway does from
+steward-identity and steward-obligations:
+
+- **Second factors:** `enrollTotpBegin` hands out an authenticator app secret and
+  `enrollTotpConfirm` takes any six digits but `000000` to switch it on. `myWebauthnCredentials`
+  lists the person's passkey (Charlie's "MacBook Touch ID"); `webauthnRegisterBegin` and
+  `webauthnRegisterFinish` register one, taking any well-formed credential because there's no
+  authenticator behind the mock. The mock holds one passkey per person, so a second registration
+  is refused as already registered. `renameMfaMethod`, `removeWebauthnCredential` and
+  `removeFactor` name and remove factors; the email factor can't be renamed or removed. Refusals
+  the gateway turns into plain errors (already enrolled, nothing to confirm) come back as
+  `INTERNAL`, as they do from the gateway.
+- **Sessions:** `revokeMySessions` ends every session the person has, this one included, and
+  answers how many.
+- **Notifications:** `notificationSettings` answers obligations' defaults for anyone who saved
+  nothing (email and in-app on, push off; every category immediate but informational, which is
+  daily; digest at 08:00 on Mondays). Alice has saved choices: push on, workflow mail daily with
+  approvals still immediate, and a 07:00 digest. `notificationTypeCatalog` lists the 27 types
+  obligations' taxonomy classifies. `setCategoryCadence`, `setTypeCadence`, `setDigestWindow` and
+  `setNotificationChannels` save the caller's choices; turning off a compliance, security or
+  transactional category or type is refused with `NOTIFY_PREF_MANDATORY_OFF`, and an unknown type
+  or a digest hour or day out of range with `NOTIFY_PREF_INVALID`.
+
 ### Acknowledgement activity
 
 `ackActivity(policyVersionId, groupId, days)` answers the completion chart as steward-obligations
