@@ -283,7 +283,10 @@ describe("controls", () => {
       kind: "add-note",
       text: "From the page",
     });
-    assert.deepEqual(state.summary, { notes: 3 });
+    assert.deepEqual(state.summary, {
+      notes: 3,
+      signInMethods: "passkey, passwordReset, sso",
+    });
     assert.ok(
       (state.actions as { kind: string }[]).some(
         (action) => action.kind === "add-note",
@@ -363,6 +366,25 @@ describe("controls", () => {
       html,
       /<div class="tile"><span class="tile__label">notes<\/span><span class="tile__value">2<\/span><\/div>/,
     );
+  });
+
+  it("keeps the tiles intact at any width, text values and long labels included", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    // A text value gets the smaller, wrapping style, in the first render and in the script's.
+    assert.match(
+      html,
+      /<span class="tile__label">signInMethods<\/span><span class="tile__value tile__value--text">passkey, passwordReset, sso<\/span>/,
+    );
+    assert.match(html, /"tile__value tile__value--text"/);
+    // Columns never ask for more than the row has, tiles can shrink, and nothing overflows.
+    assert.match(
+      html,
+      /\.tiles \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(170px, 100%\), 1fr\)\)/,
+    );
+    assert.match(html, /\.tile \{[^}]*min-width: 0/);
+    assert.match(html, /\.tile__label \{[^}]*overflow-wrap: anywhere/);
+    assert.match(html, /\.tile__value \{[^}]*overflow-wrap: anywhere/);
+    assert.match(html, /\.tile__value--text \{[^}]*font: 700 16px/);
   });
 
   it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {
