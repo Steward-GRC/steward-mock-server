@@ -1,0 +1,23 @@
+query SearchAndAnswer($question: String!, $categoryId: ID) {
+  searchAndAnswer(question: $question, categoryId: $categoryId) {
+    answer
+    hasSensitiveSource
+    noAuthorizedSource
+    citations {
+      documentType
+      policyId
+      policyTitle
+      sectionKey
+      versionId
+      versionNo
+    }
+    segments {
+      start
+      end
+      sources {
+        policyId
+        sectionKey
+      }
+    }
+  }
+}

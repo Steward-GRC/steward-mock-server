@@ -12,6 +12,7 @@ import { type Context, signedIn } from "#core/graphql.ts";
 import { stewardData } from "#product/data.ts";
 import { chained } from "#product/data/admin.ts";
 import { asSteward, type StewardPerson } from "#product/data/people.ts";
+import { actingAs } from "#product/impersonation.ts";
 
 export const LIVE_EVENTS = "live-events";
 
@@ -54,8 +55,17 @@ export const forbidden = (): GraphQLError =>
 export const notFound = (what: string): GraphQLError =>
   refuse("NOT_FOUND", `${what} not found`);
 
-/** The signed-in person, as Steward's directory keeps them. */
-export const caller = (context: Context): StewardPerson =>
+/**
+ * The person a request acts for, as Steward's directory keeps them: the signed-in person, or the
+ * person they act as while impersonating (the gateway swaps the principal the same way).
+ */
+export const caller = (context: Context): StewardPerson => {
+  const real = signedIn(context);
+  return asSteward(actingAs(context) ?? real);
+};
+
+/** The signed-in person themselves, even while they act as someone else. */
+export const realCaller = (context: Context): StewardPerson =>
   asSteward(signedIn(context));
 
 export const isSiteAdmin = (person: StewardPerson): boolean =>

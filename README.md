@@ -68,14 +68,14 @@ the six below.
 
 ### Who to sign in as
 
-| Username  | Role            | What they see                                                                                                                                     |
-| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.                                                       |
-| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                                                      |
-| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has a passkey.                                 |
-| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                                                                        |
-| `erin`    | reader          | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. |
-| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                                                    |
+| Username  | Role            | What they see                                                                                                                                                                                          |
+| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. The root admin. Asks for a second factor (an authenticator app, "Work phone").                                                       |
+| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                                                                                                           |
+| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has an authenticator app and a passkey ("MacBook Touch ID").                                        |
+| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first. Has a deny exception on the Lost Device Procedure.                                                                                          |
+| `erin`    | reader          | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. Has an allow exception on the Archive Access Policy. |
+| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                                                                                                         |
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with
@@ -143,6 +143,28 @@ steward-gateway does:
 
 Steward adds `idp-test-outcome`, `expire-test-links`, `needs-onboarding` and `sign-in-methods`
 below.
+
+### User administration
+
+The admin user screens answer as steward-gateway and steward-identity do:
+
+- **Policy exceptions:** `setUserPolicyOverride` stores or (with no effect) clears a person's
+  exception for one policy number, and `policyOverrides` on a user lists them. The exceptions are
+  shown and kept, but the mock's read model doesn't apply them.
+- **Second factors:** `userFactors` lists the authenticator app, each passkey and the implicit
+  email factor, and `removeUserMfaFactor` and `renameUserMfaFactor` change them. Removing one
+  takes it off sign-in too.
+- **Password and welcome email:** `resetUserPassword` answers true for a local account (the
+  password isn't kept, since any password signs in); `resendWelcomeEmail` answers true and sends
+  nothing.
+- **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
+  `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
+  last root admin can't lose it.
+- **Acting as someone:** `startImpersonation` makes every request on that admin's session (only
+  that one) run as the target for 30 minutes, until `stopImpersonation`. `impersonationStatus`
+  reports it, `diagnostics` names the real admin with the target as `actingAs`, the start and stop
+  are audited under the admin, and the gateway's high-risk mutations are refused meanwhile with
+  `IMPERSONATION_DENIED`.
 
 ### Category access
 
