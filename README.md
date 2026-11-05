@@ -216,6 +216,29 @@ The admin user screens answer as steward-gateway and steward-identity do:
   are audited under the admin, and the gateway's high-risk mutations are refused meanwhile with
   `IMPERSONATION_DENIED`.
 
+### Policy governance
+
+The admin policy screen's governance actions answer as steward-gateway, steward-core and
+steward-delivery do:
+
+- `deletePolicy` deletes a policy that was never published, with its versions, for anyone who may
+  author it; a policy that was ever published is refused (`FailedPrecondition`).
+- `retirePolicy` sets `retiredAt` (once), hides the policy from category listings and ends its
+  acknowledgement obligations; its history and completed acknowledgements stay.
+- `setPolicyOwner` and `movePolicy` are for site admins. A move takes the next number in the
+  target category's sequence (a counter that never goes back, as core's does); a move to the
+  category it's in already does nothing.
+- `requestPDFExport` answers a job that's ready at once. `pdfDownloadLink` answers a link, valid
+  15 minutes, to `/delivery/pdf/<jobId>.pdf` on the mock, which serves a one-page sample PDF for
+  every job (set `MOCK_PUBLIC_URL` when the mock isn't on `http://localhost:5175`).
+- `createMagicLink` answers a 64-character token that lasts 30 days, or 48 hours for a sensitive
+  link; `revokeMagicLink` is for site admins and answers true even for a token it doesn't know,
+  as delivery does. A version the caller can't read in full is "policy version not found" for
+  both the export and the link.
+
+Each writes the services' audit entry: `policy.deleted`, `policy.retired`,
+`policy.owner_changed`, `policy.moved`, `magic_link.created` and `magic_link.revoked`.
+
 ### Reference documents
 
 Generate with AI's reference documents use steward-gateway's `POST /documents/extract` and

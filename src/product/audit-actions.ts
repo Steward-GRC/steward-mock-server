@@ -68,6 +68,11 @@ export const AUDIT_ACTIONS = {
     "template_version.published",
     "template_version.updated",
   ],
+  delivery: [
+    // steward-delivery/internal/magiclink/service.go
+    "magic_link.created",
+    "magic_link.revoked",
+  ],
   gateway: [
     // steward-gateway/internal/resolvers/impersonation_resolver.go
     "impersonation.started",

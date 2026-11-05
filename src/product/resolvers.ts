@@ -16,6 +16,7 @@ import { adminResolvers } from "#product/resolvers/admin.ts";
 import { aiResolvers } from "#product/resolvers/ai.ts";
 import { caseResolvers } from "#product/resolvers/cases.ts";
 import { complianceResolvers } from "#product/resolvers/compliance.ts";
+import { governanceResolvers } from "#product/resolvers/governance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
 import { raciResolvers } from "#product/resolvers/raci.ts";
@@ -72,6 +73,7 @@ const domains: Resolvers[] = [
   aiResolvers,
   caseResolvers,
   complianceResolvers,
+  governanceResolvers,
   libraryResolvers,
   liveResolvers,
   policyResolvers,
