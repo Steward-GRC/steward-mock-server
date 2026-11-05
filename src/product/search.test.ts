@@ -133,14 +133,14 @@ const publish = async (author: Signed, title: string, text: string) => {
 describe("searchPolicies", () => {
   it("finds a policy by a word only in its published text, with a marked snippet", async () => {
     const reader = await signIn(base, "erin");
-    const page = await search(reader, { query: "INCURRED" });
+    const page = await search(reader, { query: "PHOTO" });
     assert.deepEqual(titles(page), ["Expense Claims Policy"]);
     const [hit] = page.hits;
     assert.ok(hit);
     assert.equal(hit.policy.number, EXPENSE_CLAIMS_NUMBER);
     assert.ok(hit.rank > 0);
     assert.doesNotMatch(hit.snippet?.text ?? "", /<|>/);
-    assert.deepEqual(marked(hit), ["incurred"]);
+    assert.deepEqual(marked(hit), ["photo"]);
     assert.equal(page.nextPageToken, "");
   });
 
@@ -245,8 +245,8 @@ describe("searchPolicies", () => {
     assert.deepEqual(
       titles(await search(reader, { documentType: "POLICY", query: "the" })),
       [
-        "Expense Claims Policy",
         "Desk Booking Policy",
+        "Expense Claims Policy",
         "Visitor Sign-in Policy",
       ],
     );

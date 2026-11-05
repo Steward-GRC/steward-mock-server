@@ -66,6 +66,13 @@ Finance team, Facilities team, All staff and Approvers groups; the Standard 2-st
 sign-off workflows; and the Standard Policy and Step-by-step Procedure templates. The people are
 the six below.
 
+Every document's content is a Lexical document, as the editor saves it and steward-core reads it,
+with real headings: the Desk Booking Policy is the design's reader frame (Purpose, Scope, Booking a
+desk with its "Changing a booking" sub-section, Responsibilities as a table, and Appendix A: Desk
+zones). Section keys are core's: a slug of each top-level heading (`booking-a-desk`), `-2`, `-3`
+for a repeated heading, and `body` for text before the first one. `diffVersions` answers one entry
+per section of the pinned template, keyed and word-diffed as core does.
+
 ### Who to sign in as
 
 | Username  | Role            | What they see                                                                                                                                                                                          |
