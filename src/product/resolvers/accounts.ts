@@ -18,7 +18,7 @@ import {
   startImpersonating,
   stopImpersonating,
 } from "#product/impersonation.ts";
-import { passkeyCredentialId } from "#product/passkeys.ts";
+import { passkeysOf, setPasskeys } from "#product/passkeys.ts";
 import {
   caller,
   data,
@@ -93,16 +93,12 @@ const factorsOf = (person: StewardPerson) => [
         },
       ]
     : []),
-  ...(person.passkey
-    ? [
-        {
-          enrolledAt: person.passkeyCreatedAt ?? null,
-          id: passkeyCredentialId(person.username),
-          kind: "passkey",
-          label: person.passkeyLabel || null,
-        },
-      ]
-    : []),
+  ...passkeysOf(person).map((passkey) => ({
+    enrolledAt: passkey.createdAt,
+    id: passkey.id,
+    kind: "passkey",
+    label: passkey.label,
+  })),
   ...(person.email
     ? [{ enrolledAt: null, id: "email", kind: "email", label: null }]
     : []),
@@ -121,7 +117,7 @@ const factorFor = (person: StewardPerson, methodId: string, verb: string) => {
       throw refuse("NOT_FOUND", `no totp enrollment to ${verb}`);
     return "totp";
   }
-  if (!person.passkey || methodId !== passkeyCredentialId(person.username))
+  if (!passkeysOf(person).some((p) => p.id === methodId))
     throw refuse("NOT_FOUND", `no such passkey to ${verb}`);
   return "passkey";
 };
@@ -226,7 +222,10 @@ export const accountResolvers: Resolvers = {
         person.totpEnrolledAt = undefined;
         person.totpLabel = null;
       } else {
-        person.passkey = false;
+        setPasskeys(
+          person,
+          passkeysOf(person).filter((p) => p.id !== given.methodId),
+        );
       }
       record("admin.mfa_factor_removed", actor, userSubject(person));
       return true;
@@ -245,7 +244,10 @@ export const accountResolvers: Resolvers = {
         );
       if (factorFor(person, given.methodId, "rename") === "totp")
         person.totpLabel = given.label || null;
-      else person.passkeyLabel = given.label || null;
+      else
+        for (const passkey of passkeysOf(person))
+          if (passkey.id === given.methodId)
+            passkey.label = given.label || null;
       record("admin.mfa_factor_relabeled", actor, userSubject(person));
       return true;
     },
@@ -411,11 +413,17 @@ export const accountResolvers: Resolvers = {
      * its label, one passkey entry (unlabelled, dated from the first passkey), then the email.
      */
     myFactors: (_root, _given, context: Context) =>
-      factorsOf(caller(context)).map(({ enrolledAt, kind, label }) => ({
-        enrolledAt,
-        kind,
-        label: kind === "passkey" ? null : label,
-      })),
+      factorsOf(caller(context))
+        .filter(
+          (factor, index, all) =>
+            factor.kind !== "passkey" ||
+            all.findIndex((f) => f.kind === "passkey") === index,
+        )
+        .map(({ enrolledAt, kind, label }) => ({
+          enrolledAt,
+          kind,
+          label: kind === "passkey" ? null : label,
+        })),
     userFactors: (_root, given: { userId: string }, context: Context) => {
       siteAdmin(context);
       return factorsOf(personFor(given.userId));

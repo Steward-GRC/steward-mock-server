@@ -600,7 +600,7 @@ describe("webauthnRegisterBegin and webauthnRegisterFinish", () => {
     });
     assert.equal(data.webauthnRegisterFinish, true);
     assert.deepEqual(await passkeysOf(erin), [
-      { id: passkeyCredentialId("erin"), label: "YubiKey" },
+      { id: "new-key", label: "YubiKey" },
     ]);
     assert.deepEqual(await kindsOf(erin), ["passkey", "email"]);
     assert.deepEqual(

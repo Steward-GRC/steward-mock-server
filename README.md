@@ -223,11 +223,12 @@ steward-identity and steward-obligations:
 
 - **Second factors:** `enrollTotpBegin` hands out an authenticator app secret and
   `enrollTotpConfirm` takes any six digits but `000000` to switch it on. `myWebauthnCredentials`
-  lists the person's passkey (Charlie's "MacBook Touch ID"); `webauthnRegisterBegin` and
-  `webauthnRegisterFinish` register one, taking any well-formed credential because there's no
-  authenticator behind the mock. The mock holds one passkey per person, so a second registration
-  is refused as already registered. `renameMfaMethod`, `removeWebauthnCredential` and
-  `removeFactor` name and remove factors; the email factor can't be renamed or removed. Refusals
+  lists the person's passkeys oldest first (Charlie starts with "MacBook Touch ID").
+  `webauthnRegisterBegin` and `webauthnRegisterFinish` add one, taking any well-formed credential
+  because there's no authenticator behind the mock, and store it under the `id` it carries, so it
+  signs in afterwards; an id already registered is refused. `renameMfaMethod` and
+  `removeWebauthnCredential` work on one passkey, `removeFactor` with `passkey` removes them all,
+  and the email factor can't be renamed or removed. Refusals
   the gateway turns into plain errors (already enrolled, nothing to confirm) come back as
   `INTERNAL`, as they do from the gateway.
 - **Sessions:** `revokeMySessions` ends every session the person has, this one included, and
@@ -351,13 +352,16 @@ How to walk each method:
   replaces the old one. A person without a local password, like Charlie,
   gets the gateway's invalid-code refusal.
 - **Passkey:** there's no authenticator behind the mock, so it doesn't check signatures. The
-  options it hands out are valid WebAuthn request options for the host the caller used, and the
-  answer counts as the passkey whose `id` (or `rawId`) it carries, the way steward-gateway's own
+  options it hands out are valid WebAuthn options, and the answer counts as the passkey whose
+  `id` (or `rawId`) it carries, the way steward-gateway's own
   tests fake the ceremony. Charlie's passkey id is the base64url of `mock-passkey:charlie`
   (`bW9jay1wYXNza2V5OmNoYXJsaWU`). Post `{"id":"bW9jay1wYXNza2V5OmNoYXJsaWU"}` as the
   `credentialJson` to `/auth/passkey/login/finish`, or to `/auth/mfa/verify` with `kind: "passkey"`
   after `/auth/mfa/webauthn/begin`. In a browser, a Chrome DevTools virtual authenticator holding a
-  resident credential with that id for `localhost` completes the prompt.
+  resident credential with that id for `localhost` completes the prompt. The relying-party id is
+  identity's `WEBAUTHN_RP_ID`: the host of `MOCK_PUBLIC_URL` when it's set, else the host the
+  request came on. For passkey registration, which runs over GraphQL, that's the host the session
+  signed in on; a session started from the controls gets identity's default, `localhost`.
 
 ## 📦 Use it from a client's tests
 

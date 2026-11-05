@@ -20,7 +20,7 @@ import { settings } from "#core/product.ts";
 import { mockState, type Person, personById } from "#core/state.ts";
 import { deliveryRoutes } from "#product/delivery.ts";
 import { documentRoutes } from "#product/documents.ts";
-import { passkeyOwner, requestOptions } from "#product/passkeys.ts";
+import { passkeyOwner, requestOptions, stampUse } from "#product/passkeys.ts";
 import { globalSettingsNow } from "#product/resolvers/admin.ts";
 import {
   cookie,
@@ -75,7 +75,7 @@ const login = async (request: Request) => {
       mfaRequired: true,
       pendingId: park(person, "enrol"),
     });
-  return startSession(person, token === true);
+  return startSession(person, token === true, request);
 };
 
 /** Whether a passkey assertion came from this person's passkey. */
@@ -106,7 +106,8 @@ const verify = async (request: Request) => {
       : goodCode(code);
   if (!offered || !verified) return wrongCode(found.pendingId, found.pending);
   drop(found.pendingId);
-  return startSession(found.person, token === true);
+  if (kind === "passkey") stampUse(credentialJson ?? "");
+  return startSession(found.person, token === true, request);
 };
 
 /**
@@ -166,7 +167,7 @@ const enrolConfirm = async (request: Request) => {
     totpEnrolledAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
   });
   log.debug("second factor enrolled", { personId: found.person.id });
-  return startSession(found.person, token === true);
+  return startSession(found.person, token === true, request);
 };
 
 const session = (request: Request) => {
