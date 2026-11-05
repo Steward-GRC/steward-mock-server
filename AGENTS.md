@@ -55,8 +55,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 
 ## Template sync
 
-- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.0.0**
-  (`1d952c5`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
+- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.1.0**
+  (`c742664`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
   metadata only: it never becomes a tag here.
 - `src/core/` is the template's file for file; only the two SPDX lines differ (Steward's holder).
   Steward's sign-in and first-run bootstrap are product routes in `src/product/routes.ts`, which
@@ -82,8 +82,9 @@ drafts.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
 - A route that throws answers 500 `internal` (logged), never a hung request. A websocket upgrade
-  on any path but the GraphQL one goes to the product's `sockets` hook; nothing there answers 404. Product routes run
-  after the health probes, the controls and the GraphQL path, and before `/auth` and `/setup`.
+  on any path but the GraphQL one goes to the product's `sockets` hook; nothing there answers 404.
+  Product routes run after the health probes, the controls and the GraphQL path, and before
+  `/auth` and `/setup`.
 - Anything the mock doesn't serve answers 501 `not_mocked`. Keep that: a client must find out at
   once that it called something nobody mocked.
 - Health probes never fail, whatever the controls armed.
