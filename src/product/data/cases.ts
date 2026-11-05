@@ -76,7 +76,8 @@ export interface ThreadMessage {
   officerUserId: null | string;
 }
 
-const blank = {
+/** A case's empty fields, with lists made fresh on each call so no two cases share one. */
+const blank = () => ({
   assessment: null,
   assigneeUserId: null,
   attachments: [],
@@ -88,11 +89,11 @@ const blank = {
   outcome: null,
   reporterUserId: null,
   thread: [],
-};
+});
 
 export const reportCases = (): ReportCase[] => [
   {
-    ...blank,
+    ...blank(),
     caseCode: "K7Q4-M2X9",
     details: {
       informationKinds: ["CONTACT"],
@@ -108,7 +109,7 @@ export const reportCases = (): ReportCase[] => [
     status: "NEW",
   },
   {
-    ...blank,
+    ...blank(),
     assigneeUserId: "user-mhamilton",
     caseCode: "P3D8-W6N1",
     details: {
@@ -144,7 +145,7 @@ export const reportCases = (): ReportCase[] => [
     ],
   },
   {
-    ...blank,
+    ...blank(),
     assessment: {
       decidedAt: "2026-03-21T11:00:00Z",
       decidedByUserId: "user-mhamilton",
