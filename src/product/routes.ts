@@ -13,6 +13,7 @@ import { json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { settings } from "#core/product.ts";
 import { mockState, type Person, personById } from "#core/state.ts";
+import { documentRoutes } from "#product/documents.ts";
 import { passkeyOwner, requestOptions } from "#product/passkeys.ts";
 import { globalSettingsNow } from "#product/resolvers/admin.ts";
 import {
@@ -242,5 +243,9 @@ export const stewardRoutes = (
     return session(request);
   if (path === "/maintenance" && request.method === "GET")
     return maintenanceStatus();
-  return signInRoutes(request, path) ?? ssoRoutes(request, path);
+  return (
+    documentRoutes(request, path) ??
+    signInRoutes(request, path) ??
+    ssoRoutes(request, path)
+  );
 };
