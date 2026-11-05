@@ -4,6 +4,7 @@
 // groups; a site admin is not one unless they are), so the mock lets in whoever holds the
 // privacy-officer role. A closed case takes no more changes.
 
+import type { AuditAction } from "#product/audit-actions.ts";
 import type {
   CaseNotice,
   ReportCase,
@@ -67,7 +68,7 @@ const openCase = (context: Context, id: string) => {
 };
 
 const audit = (
-  action: string,
+  action: AuditAction,
   person: ReturnType<typeof officer>,
   reportCase: ReportCase,
 ) =>
@@ -240,7 +241,7 @@ export const caseResolvers: Resolvers = {
       reportCase.assessment = assessment;
       reportCase.status =
         given.decision === "REPORTABLE" ? "NOTIFICATION_DUE" : "IN_REVIEW";
-      audit("case.risk_assessed", person, reportCase);
+      audit("case.assessment_recorded", person, reportCase);
       return assessment;
     },
     setCaseDiscoveryDate: (
@@ -266,7 +267,7 @@ export const caseResolvers: Resolvers = {
       if (given.status === "CLOSED")
         throw refuse("BAD_USER_INPUT", "Close a case with closeCase.");
       reportCase.status = given.status;
-      audit("case.status_set", person, reportCase);
+      audit("case.status_changed", person, reportCase);
       return reportCase;
     },
     updateCaseNotice: (

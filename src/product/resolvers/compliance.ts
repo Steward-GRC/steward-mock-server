@@ -97,7 +97,7 @@ export const complianceResolvers: Resolvers = {
         };
         data().acknowledgements.push(ack);
         const policy = data().policies.find((p) => p.id === version.policyId);
-        record("policy.acknowledged", person, {
+        record("ack.recorded", person, {
           groupId: policy?.homeCategoryId,
           id: version.policyId,
           kind: "policy",

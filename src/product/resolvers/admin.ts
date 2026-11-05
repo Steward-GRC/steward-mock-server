@@ -25,14 +25,10 @@ const organizationFor = (domain: string): Organization =>
     `organization ${domain}`,
   );
 
-const orgSubject = (org: Organization) => ({
-  id: org.domain,
-  kind: "organization",
-  label: org.orgName,
-});
-
 const SETTINGS = { id: "global", kind: "settings", label: "Settings" };
 
+// steward-identity audits no organisation, group mapping or SP certificate change (it sends only
+// sso.lifecycle notices), so those mutations write no audit entry here either.
 export const adminResolvers: Resolvers = {
   Mutation: {
     activateOrganization: (
@@ -40,7 +36,7 @@ export const adminResolvers: Resolvers = {
       given: { domain: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       if (!org.verified || !org.testPassed)
         throw refuse(
@@ -48,7 +44,6 @@ export const adminResolvers: Resolvers = {
           "Both the domain and the IdP test must pass before activation.",
         );
       org.enabled = true;
-      record("organization.activated", admin, orgSubject(org));
       return org;
     },
     addGroupMapping: (
@@ -60,7 +55,7 @@ export const adminResolvers: Resolvers = {
       },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       found(
         data().organizations.find((o) => o.connectionId === given.connectionId),
         "connection",
@@ -71,11 +66,6 @@ export const adminResolvers: Resolvers = {
       );
       const mapping = { ...given, id: newId("group-mapping") };
       data().groupMappings.push(mapping);
-      record("group_mapping.created", admin, {
-        id: mapping.id,
-        kind: "group_mapping",
-        label: given.idpGroupClaimValue,
-      });
       return mapping;
     },
     addOrganization: (
@@ -90,7 +80,7 @@ export const adminResolvers: Resolvers = {
       },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const { displayName, domain, orgName, protocol } = given.input;
       if (data().organizations.some((o) => o.domain === domain))
         throw refuse(
@@ -113,7 +103,6 @@ export const adminResolvers: Resolvers = {
         verified: false,
       };
       data().organizations.push(org);
-      record("organization.created", admin, orgSubject(org));
       return org;
     },
     changeOrgProtocol: (
@@ -121,7 +110,7 @@ export const adminResolvers: Resolvers = {
       given: { domain: string; protocol: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       // A new protocol is a new connection: both activation gates start again.
       Object.assign(org, {
@@ -131,7 +120,6 @@ export const adminResolvers: Resolvers = {
         testPassed: false,
         verified: false,
       });
-      record("organization.protocol_changed", admin, orgSubject(org));
       return org;
     },
     deleteGroupMapping: (
@@ -139,17 +127,12 @@ export const adminResolvers: Resolvers = {
       given: { mappingId: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const mapping = found(
         data().groupMappings.find((m) => m.id === given.mappingId),
         "group mapping",
       );
       data().groupMappings = data().groupMappings.filter((m) => m !== mapping);
-      record("group_mapping.deleted", admin, {
-        id: mapping.id,
-        kind: "group_mapping",
-        label: mapping.idpGroupClaimValue,
-      });
       return true;
     },
     deleteOrganization: (
@@ -157,13 +140,12 @@ export const adminResolvers: Resolvers = {
       given: { domain: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       data().organizations = data().organizations.filter((o) => o !== org);
       data().groupMappings = data().groupMappings.filter(
         (m) => m.connectionId !== org.connectionId,
       );
-      record("organization.deleted", admin, orgSubject(org));
       return true;
     },
     disableOrganization: (
@@ -171,21 +153,15 @@ export const adminResolvers: Resolvers = {
       given: { domain: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       org.enabled = false;
-      record("organization.disabled", admin, orgSubject(org));
       return org;
     },
     forceRotateSpCertificate: (_root, _given, context: Context) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const serial = Number(data().spCertificate.serial.split("-").at(-1)) + 1;
       data().spCertificate = spCertificate(serial);
-      record("sp_certificate.rotated", admin, {
-        id: data().spCertificate.serial,
-        kind: "sp_certificate",
-        label: null,
-      });
       return data().spCertificate;
     },
     setEmailServiceConfig: (
@@ -209,7 +185,7 @@ export const adminResolvers: Resolvers = {
         ...rest,
         apiKeySet: apiKey ? true : data().emailServiceConfig.apiKeySet,
       };
-      record("settings.email_updated", admin, SETTINGS);
+      record("email_service_config.updated", admin, SETTINGS);
       return data().emailServiceConfig;
     },
     setGlobalSettings: (
@@ -225,7 +201,7 @@ export const adminResolvers: Resolvers = {
           "An enabled announcement needs a message.",
         );
       data().settings = { announcement, maintenance };
-      record("settings.updated", admin, SETTINGS);
+      record("global_settings.updated", admin, SETTINGS);
       return data().settings;
     },
     startDomainVerification: (
@@ -255,21 +231,19 @@ export const adminResolvers: Resolvers = {
       },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       org.allowLocal = given.allowLocal ?? org.allowLocal;
       org.jitEnabled = given.jitEnabled ?? org.jitEnabled;
       // The mock keeps no secret; a new one only clears the re-entry flag, as identity does.
       if (given.clientSecret || given.secretRef)
         org.secretReentryRequired = false;
-      record("organization.updated", admin, orgSubject(org));
       return org;
     },
     verifyDomain: (_root, given: { domain: string }, context: Context) => {
-      const admin = siteAdmin(context);
+      siteAdmin(context);
       const org = organizationFor(given.domain);
       org.verified = true;
-      record("organization.domain_verified", admin, orgSubject(org));
       return org;
     },
   },

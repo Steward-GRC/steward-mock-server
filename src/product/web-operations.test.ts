@@ -10,6 +10,8 @@ import { after, before, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
+import { auditActions } from "#product/audit-actions.ts";
+import { stewardData } from "#product/data.ts";
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
 import {
   control,
@@ -606,6 +608,11 @@ describe("steward-web's operations", () => {
       // The seed has a record behind every id the cases name, so no root field answers null.
       for (const [field, value] of Object.entries(body.data ?? {}))
         assert.notEqual(value, null, `${name}: ${field} answered null`);
+      // Every audit entry, seeded or written by the call, uses a name a service really writes.
+      const unknown = stewardData()
+        .audit.map((entry) => entry.action)
+        .filter((action) => !auditActions.has(action));
+      assert.deepEqual(unknown, [], `${name} wrote unknown audit actions`);
     });
   }
 

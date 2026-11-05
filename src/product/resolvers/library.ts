@@ -206,6 +206,7 @@ const withDefinitionUse = (definition: Definition) => ({
   usedByCount: usedBy((l) => l.definitionIds, definition.id),
 });
 
+// steward-core audits no contact block change, so the contact block mutations write no entry.
 const contactFor = (id: string) =>
   found(
     data().contactBlocks.find((b) => b.id === id),
@@ -337,18 +338,13 @@ export const libraryResolvers: Resolvers = {
       given: { block: ContactInput },
       context: Context,
     ) => {
-      const admin = libraryAdmin(context);
+      libraryAdmin(context);
       const block: ContactBlock = {
         ...contactFields(given.block),
         archived: false,
         id: newId("contact-block"),
       };
       data().contactBlocks.push(block);
-      record(
-        "contact_block.created",
-        admin,
-        librarySubject("contact_block", block.id, block.label),
-      );
       return withContactUse(block);
     },
     createDefinition: (
@@ -439,7 +435,7 @@ export const libraryResolvers: Resolvers = {
       };
       data().templateVersions.push(version);
       record(
-        "template.version_created",
+        "template_version.created",
         admin,
         librarySubject("template", template.id, template.name),
       );
@@ -582,7 +578,7 @@ export const libraryResolvers: Resolvers = {
       version.status = "published";
       const template = templateFor(version.templateId);
       record(
-        "template.version_published",
+        "template_version.published",
         admin,
         librarySubject("template", template.id, template.name),
       );
@@ -682,7 +678,7 @@ export const libraryResolvers: Resolvers = {
         category.ackEveryone = given.ackEveryone;
         category.ackEveryoneSet = true;
       }
-      record("category.governance_set", admin, categorySubject(category));
+      record("category.governance_updated", admin, categorySubject(category));
       return category;
     },
     setContactBlockArchived: (
@@ -690,14 +686,9 @@ export const libraryResolvers: Resolvers = {
       given: { archived: boolean; id: string },
       context: Context,
     ) => {
-      const admin = libraryAdmin(context);
+      libraryAdmin(context);
       const block = contactFor(given.id);
       block.archived = given.archived;
-      record(
-        given.archived ? "contact_block.archived" : "contact_block.restored",
-        admin,
-        librarySubject("contact_block", block.id, block.label),
-      );
       return withContactUse(block);
     },
     setDefinitionArchived: (
@@ -709,7 +700,7 @@ export const libraryResolvers: Resolvers = {
       const person = editorOf(context, definition);
       definition.archived = given.archived;
       record(
-        given.archived ? "definition.archived" : "definition.restored",
+        "definition.archived",
         person,
         librarySubject("definition", definition.id, definition.term),
       );
@@ -724,7 +715,7 @@ export const libraryResolvers: Resolvers = {
       const person = editorOf(context, reference);
       reference.archived = given.archived;
       record(
-        given.archived ? "reference.archived" : "reference.restored",
+        "reference.archived",
         person,
         librarySubject("reference", reference.id, reference.label),
       );
@@ -735,14 +726,9 @@ export const libraryResolvers: Resolvers = {
       given: { block: ContactInput; id: string },
       context: Context,
     ) => {
-      const admin = libraryAdmin(context);
+      libraryAdmin(context);
       const block = contactFor(given.id);
       Object.assign(block, contactFields(given.block));
-      record(
-        "contact_block.updated",
-        admin,
-        librarySubject("contact_block", block.id, block.label),
-      );
       return withContactUse(block);
     },
     updateDefinition: (
