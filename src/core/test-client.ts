@@ -4,7 +4,9 @@
 
 import { WebSocket } from "ws";
 
+import { type Product, settings, useProduct } from "#core/product.ts";
 import { type RunningMockServer, startMockServer } from "#core/server.ts";
+import { fixture } from "#core/test-fixture.ts";
 
 export interface Signed {
   cookie: string;
@@ -14,10 +16,14 @@ export interface Signed {
 
 export const GOOD_CODE = "123456";
 
-export const startForTests = async (): Promise<{
+/** Hand the core a product (the test fixture unless a test names another) and start it on a free port. */
+export const startForTests = async (
+  product: Product = fixture,
+): Promise<{
   base: string;
   server: RunningMockServer;
 }> => {
+  useProduct(product);
   const server = await startMockServer({ port: 0 });
   return { base: `http://127.0.0.1:${String(server.port)}`, server };
 };
@@ -47,9 +53,8 @@ export const signIn = async (
   });
   let body = (await answer.json()) as Record<string, string>;
   if (body.mfaRequired) {
-    answer = await post(base, "/auth/mfa/verify", {
+    answer = await post(base, "/auth/verify", {
       code: GOOD_CODE,
-      kind: "totp",
       pendingId: body.pendingId,
       token,
     });
@@ -73,7 +78,7 @@ export const query = async (
 ) => {
   const answer = await post(
     base,
-    "/query",
+    settings().graphqlPath,
     { query: text, variables },
     signed ? headersFor(signed) : {},
   );
@@ -98,7 +103,7 @@ export const openSocket = async (
   headers: Record<string, string> = {},
 ) => {
   const socket = new WebSocket(
-    `${base.replace("http", "ws")}/query`,
+    `${base.replace("http", "ws")}${settings().graphqlPath}`,
     protocol,
     { headers },
   );
@@ -128,5 +133,4 @@ export const openSocket = async (
 };
 
 export { WRONG_CODE } from "#core/auth.ts";
-export { SETUP_TOKEN } from "#core/setup.ts";
 export { startFresh } from "#core/state.ts";

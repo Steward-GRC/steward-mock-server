@@ -1,5 +1,8 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
+// The core's tests. They run against the test-only fixture product (src/core/test-fixture.ts),
+// never src/product, so they pass unchanged in a product that replaced the sample.
+
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
@@ -13,12 +16,12 @@ import {
   openSocket,
   post,
   query,
-  SETUP_TOKEN,
   signIn,
   startForTests,
   startFresh,
   WRONG_CODE,
 } from "#core/test-client.ts";
+import { FIXTURE_VERSION } from "#core/test-fixture.ts";
 
 let base = "";
 let server: RunningMockServer;
@@ -33,29 +36,12 @@ beforeEach(() => {
   startFresh();
 });
 
-// Steward's site-admin-only write, used wherever a test needs a role-gated mutation.
-const SET_SETTINGS = `mutation ($input: GlobalSettingsInput!) {
-  setGlobalSettings(input: $input) { announcement { message } }
-}`;
-
-const settingsTo = (message: string) => ({
-  input: {
-    announcement: { enabled: true, level: "info", message },
-    maintenance: { enabled: false, message: "" },
-  },
-});
-
-const login = async (username: string, password = "any password") => {
-  const answer = await post(base, "/auth/login", { password, username });
-  return { answer, body: (await answer.json()) as Record<string, unknown> };
-};
-
 describe("health", () => {
-  it("answers every probe with the version header", async () => {
+  it("answers every probe with the product's version header", async () => {
     for (const path of ["/livez", "/readyz", "/healthz"]) {
       const answer = await fetch(`${base}${path}`);
       assert.equal(answer.status, 200);
-      assert.equal(answer.headers.get("steward-version"), "v0.1.0-mock");
+      assert.equal(answer.headers.get("fixture-version"), FIXTURE_VERSION);
     }
   });
 
@@ -66,265 +52,179 @@ describe("health", () => {
 });
 
 describe("sign-in", () => {
-  it("refuses a missing name, a wrong password, an unknown person and a disabled account", async () => {
-    const missing = await login("");
-    assert.equal(missing.answer.status, 400);
-    assert.deepEqual(missing.body, { error: "invalid_request" });
-    for (const [username, password] of [
-      ["ghopper", "wrong-password"],
-      ["nobody", "x"],
-      ["hlamarr", "x"],
-    ] as const) {
-      const refused = await login(username, password);
-      assert.equal(refused.answer.status, 401);
-      assert.deepEqual(refused.body, { error: "invalid_credentials" });
-    }
-  });
-
-  it("signs straight in without a second factor, with the gateway's cookie", async () => {
-    const { answer, body } = await login("alovelace");
-    assert.equal(answer.status, 200);
-    assert.equal(typeof body.csrfToken, "string");
-    const cookie = answer.headers.get("set-cookie") ?? "";
-    assert.match(
-      cookie,
-      /^steward_sid=[^;]+; Path=\/; Max-Age=604800; HttpOnly; SameSite=Lax$/,
-    );
-  });
-
-  it("asks for the second factor, refuses a wrong code or kind, and spends the pending once", async () => {
-    const { answer, body } = await login("demo-admin");
-    assert.equal(answer.headers.get("set-cookie"), null);
-    assert.equal(body.mfaRequired, true);
-    assert.deepEqual(body.factors, ["totp", "email"]);
-    const pendingId = body.pendingId as string;
-    const verify = (kind: string, code: string) =>
-      post(base, "/auth/mfa/verify", { code, kind, pendingId });
-    const wrong = await verify("totp", WRONG_CODE);
-    assert.equal(wrong.status, 401);
-    assert.deepEqual(await wrong.json(), { error: "invalid_code" });
-    assert.equal((await verify("passkey", GOOD_CODE)).status, 401);
-    const good = await verify("totp", GOOD_CODE);
-    assert.equal(good.status, 200);
-    assert.match(good.headers.get("set-cookie") ?? "", /^steward_sid=/);
-    const again = await verify("totp", GOOD_CODE);
-    assert.equal(again.status, 401);
-    assert.deepEqual(await again.json(), { error: "invalid_pending" });
-  });
-
-  it("gives up on a pending sign-in after five wrong codes", async () => {
-    const { body } = await login("ghopper");
-    const verify = (code: string) =>
-      post(base, "/auth/mfa/verify", {
-        code,
-        kind: "totp",
-        pendingId: body.pendingId,
-      });
-    for (let attempt = 0; attempt < 5; attempt += 1) await verify(WRONG_CODE);
-    assert.deepEqual(await (await verify(GOOD_CODE)).json(), {
-      error: "invalid_pending",
-    });
-  });
-
-  it("sends an email code and takes it", async () => {
-    const { body } = await login("ghopper");
-    const sent = await post(base, "/auth/mfa/otp/send", {
-      pendingId: body.pendingId,
-    });
-    assert.deepEqual(await sent.json(), { ok: true });
-    const unknown = await post(base, "/auth/mfa/otp/send", {
-      pendingId: "nope",
-    });
-    assert.equal(unknown.status, 401);
-    const verified = await post(base, "/auth/mfa/verify", {
-      code: GOOD_CODE,
-      kind: "email",
-      pendingId: body.pendingId,
-    });
-    assert.equal(verified.status, 200);
-  });
-
-  it("makes a person with no second factor enrol one before signing in", async () => {
-    const { body } = await login("mhamilton");
-    assert.deepEqual(Object.keys(body).toSorted(), [
-      "enrollmentRequired",
-      "mfaRequired",
-      "pendingId",
-    ]);
-    const pendingId = body.pendingId as string;
+  it("refuses a wrong password, an unknown person and a disabled account", async () => {
     assert.equal(
       (
-        await post(base, "/auth/mfa/verify", {
-          code: GOOD_CODE,
-          kind: "totp",
-          pendingId,
+        await post(base, "/auth/login", {
+          password: "wrong-password",
+          username: "ben",
         })
       ).status,
       401,
     );
-    const begun = (await (
-      await post(base, "/auth/mfa/enroll/totp/begin", { pendingId })
-    ).json()) as Record<string, string>;
-    assert.match(begun.otpauthUri ?? "", /^otpauth:\/\/totp\//);
-    assert.equal(typeof begun.secret, "string");
-    const wrong = await post(base, "/auth/mfa/enroll/totp/confirm", {
-      code: WRONG_CODE,
-      pendingId,
-    });
-    assert.deepEqual(await wrong.json(), { error: "invalid_code" });
-    const confirmed = await post(base, "/auth/mfa/enroll/totp/confirm", {
-      code: GOOD_CODE,
-      pendingId,
-    });
-    assert.equal(confirmed.status, 200);
-    assert.deepEqual((await login("mhamilton")).body.factors, [
-      "totp",
-      "email",
-    ]);
+    assert.equal(
+      (await post(base, "/auth/login", { password: "x", username: "nobody" }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await post(base, "/auth/login", { password: "x", username: "dot" }))
+        .status,
+      403,
+    );
   });
 
-  it("only enrols on an enrolment pending", async () => {
-    const { body } = await login("demo-admin");
-    const begun = await post(base, "/auth/mfa/enroll/totp/begin", {
-      pendingId: body.pendingId,
-    });
-    assert.equal(begun.status, 400);
-    assert.deepEqual(await begun.json(), { error: "invalid_request" });
+  it("asks for the second factor and refuses the wrong code", async () => {
+    const login = (await (
+      await post(base, "/auth/login", { password: "x", username: "ada" })
+    ).json()) as Record<string, string>;
+    assert.equal(login.mfaRequired, true);
+    assert.equal(
+      (
+        await post(base, "/auth/verify", {
+          code: WRONG_CODE,
+          pendingId: login.pendingId,
+        })
+      ).status,
+      401,
+    );
+    assert.equal(
+      (
+        await post(base, "/auth/verify", {
+          code: GOOD_CODE,
+          pendingId: login.pendingId,
+        })
+      ).status,
+      200,
+    );
+  });
+
+  it("uses the product's session cookie and needs the CSRF header with it", async () => {
+    const ada = await signIn(base, "ada");
+    assert.match(ada.cookie, /^fixture_session=/);
+    const without = await post(
+      base,
+      "/gql",
+      { query: "{ me { name } }" },
+      { cookie: ada.cookie },
+    );
+    assert.equal(without.status, 401);
+    const { body } = await query(base, "{ me { name } }", ada);
+    assert.deepEqual(body.data, { me: { name: "Ada Admin" } });
   });
 
   it("reports and ends the session", async () => {
-    const approver = await signIn(base, "ghopper");
+    const ben = await signIn(base, "ben");
     const session = (await (
-      await fetch(`${base}/auth/session`, {
-        headers: { cookie: approver.cookie },
-      })
+      await fetch(`${base}/auth/session`, { headers: { cookie: ben.cookie } })
     ).json()) as Record<string, unknown>;
-    assert.deepEqual(session, {
-      authenticated: true,
-      csrfToken: approver.csrf,
-      email: "grace.hopper@example.org",
-    });
-    const out = await post(
-      base,
-      "/auth/logout",
-      {},
-      { cookie: approver.cookie },
-    );
-    assert.deepEqual(await out.json(), { status: "logged_out" });
-    assert.match(
-      out.headers.get("set-cookie") ?? "",
-      /^steward_sid=; Path=\/; Max-Age=0;/,
-    );
-    assert.deepEqual(
-      await (
-        await fetch(`${base}/auth/session`, {
-          headers: { cookie: approver.cookie },
-        })
-      ).json(),
-      { authenticated: false },
-    );
-  });
-
-  it("guards /query the gateway's way: no session is 401, a cookie without CSRF is 403", async () => {
-    const admin = await signIn(base, "demo-admin");
-    const nobody = await post(base, "/query", { query: "{ me { name } }" });
-    assert.equal(nobody.status, 401);
-    assert.deepEqual(await nobody.json(), { error: "unauthorized" });
-    const noCsrf = await post(
-      base,
-      "/query",
-      { query: "{ me { name } }" },
-      { cookie: admin.cookie },
-    );
-    assert.equal(noCsrf.status, 403);
-    assert.deepEqual(await noCsrf.json(), { error: "csrf" });
-    const { body } = await query(base, "{ me { name } }", admin);
-    assert.deepEqual(body.data, { me: { name: "Demo Admin" } });
+    assert.equal(session.personId, "person-ben");
+    await post(base, "/auth/logout", {}, { cookie: ben.cookie });
+    assert.equal((await query(base, "{ me { name } }", ben)).status, 401);
   });
 
   it("gives a native client a bearer token that works without a cookie", async () => {
-    const author = await signIn(base, "alovelace", true);
-    assert.ok(author.token);
+    const cy = await signIn(base, "cy", true);
+    assert.ok(cy.token);
     const { body } = await query(base, "{ me { username } }", {
       cookie: "",
       csrf: "",
-      token: author.token,
+      token: cy.token,
     });
-    assert.deepEqual(body.data, { me: { username: "alovelace" } });
+    assert.deepEqual(body.data, { me: { username: "cy" } });
   });
 });
 
 describe("GraphQL", () => {
+  it("serves on the product's own path and nowhere else", async () => {
+    assert.equal(
+      (await post(base, "/gql", { query: "{ status { name } }" })).status,
+      200,
+    );
+    assert.equal(
+      (await post(base, "/query", { query: "{ status { name } }" })).status,
+      501,
+    );
+  });
+
   it("answers a public field before sign-in and refuses the rest", async () => {
-    const open = await query(
-      base,
-      "{ globalSettings { maintenance { enabled } } }",
-    );
-    assert.deepEqual(open.body.data, {
-      globalSettings: { maintenance: { enabled: false } },
-    });
-    const closed = await query(
-      base,
-      "{ globalSettings { maintenance { enabled } } me { userId } }",
-    );
+    const open = await query(base, "{ status { name } }");
+    assert.deepEqual(open.body.data, { status: { name: "Fixture" } });
+    const closed = await query(base, "{ status { name } notes { id } }");
     assert.equal(closed.status, 401);
+    assert.equal(closed.body.errors?.[0]?.extensions.code, "UNAUTHENTICATED");
   });
 
   it("refuses what the schema doesn't have, and what doesn't parse", async () => {
-    const approver = await signIn(base, "ghopper");
-    const invalid = await query(base, "{ me { shoeSize } }", approver);
+    const ben = await signIn(base, "ben");
+    const invalid = await query(base, "{ me { shoeSize } }", ben);
     assert.equal(invalid.status, 422);
     assert.equal(
       invalid.body.errors?.[0]?.extensions.code,
       "GRAPHQL_VALIDATION_FAILED",
     );
-    const broken = await query(base, "{ me {", approver);
+    const broken = await query(base, "{ me {", ben);
     assert.equal(
       broken.body.errors?.[0]?.extensions.code,
       "GRAPHQL_PARSE_FAILED",
     );
   });
 
-  it("answers a role check with FORBIDDEN", async () => {
-    const approver = await signIn(base, "ghopper");
+  it("answers a role check with FORBIDDEN and a missing record with NOT_FOUND", async () => {
+    const ben = await signIn(base, "ben");
     const refused = await query(
       base,
-      SET_SETTINGS,
-      approver,
-      settingsTo("Refused"),
+      'mutation { removeNote(id: "note-1") }',
+      ben,
     );
     assert.equal(refused.body.errors?.[0]?.extensions.code, "FORBIDDEN");
-    const admin = await signIn(base, "demo-admin");
+    const ada = await signIn(base, "ada");
     assert.deepEqual(
-      (await query(base, SET_SETTINGS, admin, settingsTo("Allowed"))).body.data,
-      { setGlobalSettings: { announcement: { message: "Allowed" } } },
+      (await query(base, 'mutation { removeNote(id: "note-1") }', ada)).body
+        .data,
+      { removeNote: true },
     );
+    const gone = await query(
+      base,
+      'mutation { removeNote(id: "note-1") }',
+      ada,
+    );
+    assert.equal(gone.body.errors?.[0]?.extensions.code, "NOT_FOUND");
   });
 
   it("shares one state between every client", async () => {
-    const admin = await signIn(base, "demo-admin");
-    const author = await signIn(base, "alovelace", true);
-    await query(base, SET_SETTINGS, admin, settingsTo("Shared"));
+    const ben = await signIn(base, "ben");
+    const cy = await signIn(base, "cy", true);
+    await query(
+      base,
+      "mutation ($t: String!) { addNote(text: $t) { id } }",
+      ben,
+      { t: "Shared" },
+    );
     const { body } = await query(
       base,
-      "{ globalSettings { announcement { message } } }",
-      author,
+      "{ notes { text author { username } } }",
+      cy,
     );
-    assert.deepEqual(body.data, {
-      globalSettings: { announcement: { message: "Shared" } },
-    });
+    assert.ok(
+      (
+        body.data?.notes as { author: { username: string }; text: string }[]
+      ).some(
+        (note) => note.text === "Shared" && note.author.username === "ben",
+      ),
+    );
   });
 
   it("takes a query in the URL but never a mutation", async () => {
-    const approver = await signIn(base, "ghopper");
+    const ben = await signIn(base, "ben");
     const read = await fetch(
-      `${base}/query?query=${encodeURIComponent("{ me { username } }")}`,
-      { headers: headersFor(approver) },
+      `${base}/gql?query=${encodeURIComponent("{ me { username } }")}`,
+      { headers: headersFor(ben) },
     );
     assert.equal(read.status, 200);
     const write = await fetch(
-      `${base}/query?query=${encodeURIComponent(SET_SETTINGS)}`,
-      { headers: headersFor(approver) },
+      `${base}/gql?query=${encodeURIComponent('mutation { removeNote(id: "note-1") }')}`,
+      { headers: headersFor(ben) },
     );
     assert.equal(write.status, 405);
   });
@@ -332,53 +232,40 @@ describe("GraphQL", () => {
 
 describe("controls", () => {
   it("fails the next call once, as GraphQL or as HTTP", async () => {
-    const approver = await signIn(base, "ghopper");
+    const ben = await signIn(base, "ben");
     await control(base, { kind: "fail-next" });
     assert.equal(
-      (await query(base, "{ me { name } }", approver)).body.errors?.[0]
-        ?.extensions.code,
+      (await query(base, "{ me { name } }", ben)).body.errors?.[0]?.extensions
+        .code,
       "INTERNAL",
     );
-    assert.ok((await query(base, "{ me { name } }", approver)).body.data);
+    assert.ok((await query(base, "{ me { name } }", ben)).body.data);
     await control(base, { kind: "fail-next", mode: "http", status: 503 });
     assert.equal(
-      (
-        await post(
-          base,
-          "/query",
-          { query: "{ me { name } }" },
-          headersFor(approver),
-        )
-      ).status,
+      (await post(base, "/gql", { query: "{ me { name } }" }, headersFor(ben)))
+        .status,
       503,
     );
   });
 
   it("puts the data back and keeps people signed in", async () => {
-    const admin = await signIn(base, "demo-admin");
-    await query(base, SET_SETTINGS, admin, settingsTo("Before the reset"));
+    const ada = await signIn(base, "ada");
+    await query(base, 'mutation { removeNote(id: "note-1") }', ada);
     await control(base, { kind: "reset" });
-    const { body } = await query(
-      base,
-      "{ globalSettings { announcement { enabled } } }",
-      admin,
-    );
-    assert.deepEqual(body.data, {
-      globalSettings: { announcement: { enabled: false } },
-    });
-    assert.ok((await query(base, "{ me { name } }", admin)).body.data);
+    const { body } = await query(base, '{ note(id: "note-1") { id } }', ada);
+    assert.deepEqual(body.data, { note: { id: "note-1" } });
   });
 
   it("starts fresh with everyone signed out", async () => {
-    const approver = await signIn(base, "ghopper");
+    const ben = await signIn(base, "ben");
     await control(base, { kind: "fresh" });
-    assert.equal((await query(base, "{ me { name } }", approver)).status, 401);
+    assert.equal((await query(base, "{ me { name } }", ben)).status, 401);
   });
 
   it("signs someone in at once, and refuses an unknown kind", async () => {
     const answer = await post(base, "/_mock/controls", {
       kind: "sign-in",
-      personId: "user-alovelace",
+      personId: "person-cy",
       token: true,
     });
     assert.ok(((await answer.json()) as Record<string, string>).accessToken);
@@ -388,19 +275,70 @@ describe("controls", () => {
     );
   });
 
-  it("shows the product's counts", async () => {
-    const state = await control(base, { kind: "reset" });
-    assert.equal((state.summary as Record<string, number>).people, 6);
+  it("runs the product's own controls and shows its summary", async () => {
+    const state = await control(base, {
+      kind: "add-note",
+      text: "From the page",
+    });
+    assert.deepEqual(state.summary, { notes: 3 });
+    assert.ok(
+      (state.actions as { kind: string }[]).some(
+        (action) => action.kind === "add-note",
+      ),
+    );
   });
 
-  it("serves its page", async () => {
+  it("serves its page under the product's name", async () => {
     const page = await fetch(`${base}/_mock`);
-    assert.match(await page.text(), /Mock controls · Steward/);
+    assert.match(await page.text(), /Mock controls · Fixture/);
+  });
+});
+
+describe("product routes and schema", () => {
+  it("serves the product's own routes, with the session", async () => {
+    const ben = await signIn(base, "ben");
+    const answer = await fetch(`${base}/fixture/whoami`, {
+      headers: headersFor(ben),
+    });
+    assert.deepEqual(await answer.json(), { personId: "person-ben" });
+    const anonymous = await fetch(`${base}/fixture/whoami`);
+    assert.deepEqual(await anonymous.json(), { personId: null });
+  });
+
+  it("runs product routes ahead of the core's /auth catch-all", async () => {
+    const answer = await fetch(`${base}/auth/fixture-start`, {
+      redirect: "manual",
+    });
+    assert.equal(answer.status, 302);
+    assert.equal(answer.headers.get("location"), "/signed-in");
+    assert.equal((await fetch(`${base}/auth/unknown`)).status, 404);
+  });
+
+  it("never lets a product route replace the core's own paths", async () => {
+    assert.equal((await fetch(`${base}/livez`)).status, 200);
+  });
+
+  it("answers 500 when a route throws, instead of leaving the client waiting", async () => {
+    const answer = await fetch(`${base}/fixture/boom`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    assert.equal(answer.status, 500);
+    assert.deepEqual(await answer.json(), { error: "internal" });
+  });
+
+  it("answers 501 when neither the core nor the product serves a path", async () => {
+    assert.equal((await fetch(`${base}/fixture/elsewhere`)).status, 501);
+  });
+
+  it("serves schema from a second SDL file", async () => {
+    const ben = await signIn(base, "ben");
+    const { body } = await query(base, "{ noteCount }", ben);
+    assert.deepEqual(body.data, { noteCount: 2 });
   });
 });
 
 describe("first-run setup", () => {
-  it("bootstraps the first admin once, with the setup token, and signs nobody in", async () => {
+  it("creates the first admin once", async () => {
     await control(base, { firstRun: true, kind: "fresh" });
     assert.deepEqual(await (await fetch(`${base}/setup/state`)).json(), {
       needsSetup: true,
@@ -409,67 +347,46 @@ describe("first-run setup", () => {
       email: "first@example.org",
       name: "First Admin",
       password: "x",
-      setupToken: SETUP_TOKEN,
       username: "first",
     };
-    const badToken = await post(base, "/setup/bootstrap", {
-      ...admin,
-      setupToken: "nope",
-    });
-    assert.equal(badToken.status, 403);
-    const done = await post(base, "/setup/bootstrap", admin);
-    assert.equal(done.status, 200);
-    assert.equal(done.headers.get("set-cookie"), null);
-    assert.equal(
-      typeof ((await done.json()) as Record<string, unknown>).userId,
-      "string",
-    );
+    assert.equal((await post(base, "/setup/complete", admin)).status, 200);
     assert.deepEqual(await (await fetch(`${base}/setup/state`)).json(), {
       needsSetup: false,
     });
-    assert.equal((await post(base, "/setup/bootstrap", admin)).status, 409);
-    const first = await signIn(base, "first");
-    const { body } = await query(base, "{ me { roles } }", first);
-    assert.deepEqual(body.data, { me: { roles: ["site-admin"] } });
+    assert.equal((await post(base, "/setup/complete", admin)).status, 409);
   });
 });
 
 describe("websocket", () => {
-  const SUBSCRIPTION =
-    'subscription { liveEvents(topics: ["settings."]) { type } }';
+  const SUBSCRIPTION = "subscription { noteAdded { text } }";
 
   it("streams changes over graphql-transport-ws", async () => {
-    const admin = await signIn(base, "demo-admin", true);
+    const cy = await signIn(base, "cy", true);
     const ws = await openSocket(base, "graphql-transport-ws");
-    ws.send({ payload: { authToken: admin.token }, type: "connection_init" });
+    ws.send({ payload: { authToken: cy.token }, type: "connection_init" });
     await ws.next("connection_ack");
     ws.send({ id: "1", payload: { query: SUBSCRIPTION }, type: "subscribe" });
     await new Promise((settle) => setTimeout(settle, 50));
-    await query(base, SET_SETTINGS, admin, settingsTo("Heard"));
+    await control(base, { kind: "add-note", text: "Heard" });
     const message = await ws.next("next");
     assert.deepEqual(message.payload, {
-      data: { liveEvents: { type: "settings.updated" } },
+      data: { noteAdded: { text: "Heard" } },
     });
     ws.socket.close();
   });
 
   it("streams over the legacy graphql-ws protocol with a cookie", async () => {
-    const admin = await signIn(base, "demo-admin");
-    const ws = await openSocket(base, "graphql-ws", { cookie: admin.cookie });
+    const ben = await signIn(base, "ben");
+    const ws = await openSocket(base, "graphql-ws", { cookie: ben.cookie });
     ws.send({ type: "connection_init" });
     await ws.next("connection_ack");
     await ws.next("ka");
     ws.send({ id: "a", payload: { query: SUBSCRIPTION }, type: "start" });
     await new Promise((settle) => setTimeout(settle, 50));
-    await query(base, SET_SETTINGS, admin, settingsTo("Legacy"));
-    assert.equal(
-      (
-        (await ws.next("data")).payload as {
-          data: { liveEvents: { type: string } };
-        }
-      ).data.liveEvents.type,
-      "settings.updated",
-    );
+    await control(base, { kind: "add-note", text: "Legacy" });
+    assert.deepEqual((await ws.next("data")).payload, {
+      data: { noteAdded: { text: "Legacy" } },
+    });
     ws.socket.close();
   });
 
@@ -487,9 +404,9 @@ describe("websocket", () => {
   });
 
   it("closes with 4401 when the session ends", async () => {
-    const admin = await signIn(base, "demo-admin", true);
+    const cy = await signIn(base, "cy", true);
     const ws = await openSocket(base, "graphql-transport-ws");
-    ws.send({ payload: { authToken: admin.token }, type: "connection_init" });
+    ws.send({ payload: { authToken: cy.token }, type: "connection_init" });
     await ws.next("connection_ack");
     await control(base, { kind: "expire-session" });
     assert.equal(await ws.closed, 4401);
@@ -513,14 +430,14 @@ describe("routing", () => {
       "http://localhost:3000",
     );
     const other = await fetch(`${base}/livez`, {
-      headers: { origin: "https://evil.example" },
+      headers: { origin: "https://elsewhere.example" },
     });
     assert.equal(other.headers.get("access-control-allow-origin"), null);
     delete process.env.MOCK_CORS_ORIGINS;
   });
 
   it("answers in-process, with no port", async () => {
-    const answer = await handle(new Request("https://mock.invalid/readyz"));
+    const answer = await handle(new Request("http://mock.invalid/readyz"));
     assert.equal(answer.status, 200);
   });
 });

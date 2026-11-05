@@ -22,19 +22,23 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   CORS), `graphql.ts` (schema, execution, error codes), `websocket.ts` (both subscription
   protocols), `auth.ts` (`/auth/*`, cookie and bearer sessions), `setup.ts` (`/setup/*`),
   `health.ts`, `controls.ts` and `page.ts` (`/_mock`), `state.ts`, `events.ts`, `log.ts`.
-- `src/product/` - `product.ts`, `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
+- `src/core/product.ts` - the Product contract; `src/core/test-fixture.ts` - the fixture product
+  the core tests serve.
+- `src/product/` - `product.ts` (Steward as a Product), `routes.ts` (the gateway's sign-in and
+  `/setup/bootstrap`), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
   `access.ts` is the policy read model (who reads, edits and approves what).
 - `src/product/web-operations/` - steward-web's operations, byte for byte at the commit its README
   names; `web-operations.test.ts` sends every one of them. Keep the folder out of the formatter.
-- `src/core/server.test.ts` - the tests, against a real server on a free port;
-  `src/core/test-client.ts` holds their helpers, and `src/product/web-client.ts` the product
-  tests' (call a web operation by name as a sample person).
+- `src/core/server.test.ts` - the core's tests, against a real server on a free port, serving the
+  fixture; `src/core/test-client.ts` holds their helpers. `src/product/*.test.ts` test Steward,
+  through `src/product/test-client.ts` (Steward's product and its sign-in) and
+  `src/product/web-client.ts` (call a web operation by name as a sample person).
 
 ## Build, test, lint
 
 - Install: `npm ci --ignore-scripts`
-- Run: `npm start` (port 5180; `npm start -- --port 0` for a free one)
+- Run: `npm start` (port 5175; `npm start -- --port 0` for a free one)
 - Lint: `npm run lint` (oxlint, then `oxfmt --check`; `npm run format` fixes the formatting)
 - Typecheck: `npm run typecheck`
 - Test: `npm test`
@@ -49,14 +53,22 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 
 ## Template sync
 
-Known divergence from the template's `src/core/`: `server.test.ts` is rewritten onto Steward's
-people and fields, because the template's core tests use its example product. Drop the
-divergence once the template's core tests run against their own fixture product.
+- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.0.0**
+  (`1d952c5`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
+  metadata only: it never becomes a tag here.
+- `src/core/` is the template's file for file; only the two SPDX lines differ (Steward's holder).
+  Steward's sign-in and first-run bootstrap are product routes in `src/product/routes.ts`, which
+  answer before the core's `/auth` and `/setup`.
+- One gap until the template has a setting for it: `/query` without a session answers 401 with a
+  GraphQL error, where steward-gateway answers 401 `{"error":"unauthorized"}`, and 403
+  `{"error":"csrf"}` for a cookie without its CSRF token. steward-web reacts to the status, so it
+  behaves the same.
 
-This repo started from `the-rabbit-hole-tech/template-node-mock-server` at commit
-`14159069615ceda41559fcbf38fffca3178b3f7d`. Take later
-template fixes as `TEMPLATE.md` says, starting from that commit: `src/core/` moves file for
-file, `src/product/` stays Steward's.
+## Versioning
+
+This repo's version always matches steward-web's. It's released only together with steward-web,
+through Steward's release flow on the owner's Yes, never on its own. The release drafter only
+drafts.
 
 ## Conventions and gotchas
 
@@ -67,6 +79,8 @@ file, `src/product/` stays Steward's.
   its helpers, so a build at load time would read the resolvers before they exist.
 - The controls have no sign-in. The server listens on loopback unless `HOST` says otherwise; never
   change that default.
+- A route that throws answers 500 `internal` (logged), never a hung request. Product routes run
+  after the health probes, the controls and the GraphQL path, and before `/auth` and `/setup`.
 - Anything the mock doesn't serve answers 501 `not_mocked`. Keep that: a client must find out at
   once that it called something nobody mocked.
 - Health probes never fail, whatever the controls armed.

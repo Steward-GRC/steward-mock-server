@@ -9,8 +9,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { query, startForTests, startFresh } from "#core/test-client.ts";
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
+import { query, startForTests, startFresh } from "#product/test-client.ts";
 import { call, documentOf, signInAs } from "#product/web-client.ts";
 
 let base = "";

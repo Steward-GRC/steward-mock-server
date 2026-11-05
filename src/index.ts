@@ -5,7 +5,8 @@
 
 export { WRONG_CODE, WRONG_PASSWORD } from "#core/auth.ts";
 export { publish, subscribe } from "#core/events.ts";
-export { GRAPHQL_PATH, handle } from "#core/handle.ts";
+export { handle } from "#core/handle.ts";
+export { type Product, settings, useProduct } from "#core/product.ts";
 export {
   type MockServerOptions,
   type RunningMockServer,

@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
-import { control, query, type Signed } from "#core/test-client.ts";
+import { control, query, type Signed } from "#product/test-client.ts";
 
 const FOLDER = new URL("web-operations/", import.meta.url);
 

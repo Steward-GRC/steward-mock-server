@@ -21,17 +21,15 @@ import {
   subscribe,
   validate,
 } from "graphql";
-import { readFileSync } from "node:fs";
 
 import { createLogger } from "#core/log.ts";
+import { onProductChange, product, settings } from "#core/product.ts";
 import {
   mockState,
   type Person,
   personById,
   type Session,
 } from "#core/state.ts";
-import { product } from "#product/product.ts";
-import { resolvers } from "#product/resolvers.ts";
 
 const log = createLogger("graphql");
 
@@ -91,12 +89,10 @@ export interface SubscriptionField {
 
 type FieldResolvers = Record<string, GraphQLFieldResolver<unknown, Context>>;
 
-const SCHEMA_FILE = new URL("../product/schema.graphql", import.meta.url);
-
 /** Build the schema from the product's SDL and wire the product's resolvers into it. */
 const build = (): GraphQLSchema => {
-  const schema = buildSchema(readFileSync(SCHEMA_FILE, "utf8"));
-  for (const [typeName, fields] of Object.entries(resolvers)) {
+  const schema = buildSchema([product().schema].flat().join("\n"));
+  for (const [typeName, fields] of Object.entries(product().resolvers)) {
     const type = schema.getType(typeName);
     if (!isObjectType(type) || !fields)
       throw new Error(
@@ -133,6 +129,11 @@ let built: GraphQLSchema | undefined;
  */
 export const schema = (): GraphQLSchema => (built ??= build());
 
+// A new product brings its own schema and resolvers.
+onProductChange(() => {
+  built = undefined;
+});
+
 export interface Operation {
   operationName?: null | string;
   query?: string;
@@ -152,7 +153,7 @@ const rootFields = (operation: OperationDefinitionNode): string[] =>
 
 const isPublic = (operation: OperationDefinitionNode) =>
   rootFields(operation).every(
-    (name) => name === "__typename" || product.publicFields.includes(name),
+    (name) => name === "__typename" || settings().publicFields.includes(name),
   );
 
 /** A parsed, validated operation, or the errors that stop it, with the HTTP status to send. */

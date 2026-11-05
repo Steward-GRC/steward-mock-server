@@ -4,8 +4,10 @@
 // data/*.ts; seed() calls each of them, so a reset never shares an object with the last run.
 // The people's shape is the core's: the sign-in routes read it.
 
+import type { ProductData } from "#core/product.ts";
 import type { Person } from "#core/state.ts";
 
+import { mockState } from "#core/state.ts";
 import {
   type AuditRecord,
   auditTrail,
@@ -64,7 +66,7 @@ export interface BreakGlassGrant {
   userId: string;
 }
 
-export interface ProductData {
+export interface StewardData extends ProductData {
   acknowledgements: Acknowledgement[];
   audit: AuditRecord[];
   breakGlass: BreakGlassGrant[];
@@ -93,7 +95,7 @@ export interface ProductData {
   workflowDefs: Workflow[];
 }
 
-export const seed = (): ProductData => ({
+export const seed = (): StewardData => ({
   acknowledgements: acknowledgements(),
   audit: auditTrail(),
   breakGlass: [],
@@ -119,3 +121,6 @@ export const seed = (): ProductData => ({
   versions: versions(),
   workflowDefs: workflowDefs(),
 });
+
+/** The mock's state as Steward's data: the core holds it as its own minimal shape. */
+export const stewardData = (): StewardData => mockState.data as StewardData;

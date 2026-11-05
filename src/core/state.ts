@@ -5,7 +5,7 @@
 // the server restarts, from the controls page, and between tests.
 
 import { publish, SESSIONS_ENDED } from "#core/events.ts";
-import { type ProductData, seed } from "#product/data.ts";
+import { onProductChange, product, type ProductData } from "#core/product.ts";
 
 /** The fail-next control's armed failure, spent on the next GraphQL call. */
 export interface Failure {
@@ -14,24 +14,11 @@ export interface Failure {
   status: number;
 }
 
-/** A password check waiting for its second factor, or for one to be enrolled. */
-export interface Pending {
-  /** Wrong codes so far; the gateway gives up on the fifth. */
-  attempts: number;
-  personId: string;
-  purpose: "challenge" | "enrol";
-}
-
 /** Someone who can sign in. The product's seed data lists them. */
 export interface Person {
-  /** Can't sign in: the gateway answers invalid_credentials, as it does for a disabled user. */
+  /** Can't sign in: the gateway answers account_disabled. */
   disabled?: boolean;
   email: string;
-  /**
-   * Has no second factor yet but must enrol one before signing in: the gateway answers the
-   * password with enrollmentRequired, and enrolling turns secondFactor on.
-   */
-  enrolSecondFactor?: boolean;
   id: string;
   name: string;
   roles: string[];
@@ -52,14 +39,14 @@ const startedAt = new Date().toISOString();
 
 export const mockState = {
   /** The product's invented data: people and everything its schema serves. */
-  data: seed() as ProductData,
+  data: { people: [] } as ProductData,
   failNext: null as Failure | null,
   /** When Start fresh last ran. */
   freshAt: null as null | string,
-  /** A new install: the clients walk first-run setup until /setup/bootstrap. */
+  /** A new install: the clients walk first-run setup until /setup/complete. */
   needsSetup: process.env.MOCK_FRESH_INSTALL === "1",
   /** Password checks waiting for their second factor, by pending id. */
-  pending: new Map<string, Pending>(),
+  pending: new Map<string, string>(),
   sessions: new Map<string, Session>(),
   startedAt,
   /** A native client's bearer tokens, each standing for a session. */
@@ -71,7 +58,7 @@ export const personById = (id: string): Person | undefined =>
 
 /** Put the invented data back. Whoever is signed in stays signed in. */
 export const resetData = (): void => {
-  mockState.data = seed();
+  mockState.data = product().seed();
   mockState.failNext = null;
 };
 
@@ -94,3 +81,9 @@ export const startFresh = (firstRun = false): void => {
   mockState.needsSetup = firstRun;
   mockState.freshAt = new Date().toISOString();
 };
+
+// A new product starts on its own seed data, with nobody signed in.
+onProductChange(() => {
+  startFresh(process.env.MOCK_FRESH_INSTALL === "1");
+  mockState.freshAt = null;
+});

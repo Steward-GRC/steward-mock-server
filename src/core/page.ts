@@ -5,7 +5,7 @@
 // (the core's and the product's actions), it posts to the same path, and it reads the state
 // every couple of seconds, so a change made anywhere (another tab, a test, a phone) shows here.
 
-import { product } from "#product/product.ts";
+import { settings } from "#core/product.ts";
 
 const escape = (text: string) =>
   text
@@ -19,7 +19,7 @@ const page = () => `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mock controls · ${escape(product.name)}</title>
+<title>Mock controls · ${escape(settings().name)}</title>
 <style>
   :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #666; --bg: #fff; --line: #ccc; --ok: #1d6b3a; --okbg: #e3f4e8; --warn: #8a1c1c; }
   @media (prefers-color-scheme: dark) { :root { --fg: #eee; --muted: #aaa; --bg: #161616; --line: #444; --ok: #8fe0a8; --okbg: #12301c; --warn: #f19a9a; } }
@@ -39,7 +39,7 @@ const page = () => `<!doctype html>
 <main>
   <div>
     <h1>Mock controls</h1>
-    <p class="hint">The ${escape(product.name)} mock gateway's own page. No sign-in, and Start fresh never takes it down.</p>
+    <p class="hint">The ${escape(settings().name)} mock gateway's own page. No sign-in, and Start fresh never takes it down.</p>
   </div>
   <div id="status" role="status">Loading…</div>
   <section>

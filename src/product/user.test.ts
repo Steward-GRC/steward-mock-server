@@ -15,7 +15,7 @@ import {
   signIn,
   startForTests,
   startFresh,
-} from "#core/test-client.ts";
+} from "#product/test-client.ts";
 
 const ME = `query Me {
   me {
