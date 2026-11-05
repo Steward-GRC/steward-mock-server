@@ -1,0 +1,8 @@
+query CategoryRuleset($categoryId: ID!) {
+  categoryRuleset(categoryId: $categoryId) {
+    categoryId
+    rules {
+      ...RaciRuleFields
+    }
+  }
+}

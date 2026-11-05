@@ -1,0 +1,8 @@
+mutation SetCategoryRuleset($categoryId: ID!, $rules: [RaciRuleInput!]!) {
+  setCategoryRuleset(categoryId: $categoryId, rules: $rules) {
+    categoryId
+    rules {
+      ...RaciRuleFields
+    }
+  }
+}

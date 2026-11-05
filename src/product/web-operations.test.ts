@@ -23,6 +23,8 @@ import {
 import { documentOf, signInAs, webOperations } from "#product/web-client.ts";
 
 interface Case {
+  /** The field answers null as the gateway's normal answer (no AI summary stored, say). */
+  answersNull?: boolean;
   /** The person who calls it: someone whose role the gateway lets through. */
   as: string;
   /** The code the gateway answers with instead of data, when that's its normal answer. */
@@ -119,6 +121,10 @@ const cases: Record<string, Case> = {
   CategoryChildren: {
     as: READER,
     variables: { parentId: "category-information" },
+  },
+  CategoryRuleset: {
+    as: ADMIN,
+    variables: { categoryId: "category-facilities" },
   },
   CategoryTree: { as: READER },
   ChangeOrgProtocol: {
@@ -285,6 +291,11 @@ const cases: Record<string, Case> = {
   PolicyByNumber: { as: READER, variables: { number: EXPENSE_CLAIMS_NUMBER } },
   PolicyVersion: { as: READER, variables: { id: "version-2" } },
   PolicyVersions: { as: READER, variables: { policyId: "policy-1" } },
+  PolicyVersionSummary: {
+    answersNull: true,
+    as: READER,
+    variables: { versionId: "version-2" },
+  },
   PostCaseMessage: {
     as: OFFICER,
     variables: { body: "Could you tell us more?", caseId: "case-1" },
@@ -340,6 +351,10 @@ const cases: Record<string, Case> = {
   },
   ReportCase: { as: OFFICER, variables: { caseId: "case-1" } },
   ReportCases: { as: OFFICER, variables: {} },
+  ResolveUserLabels: {
+    as: READER,
+    variables: { ids: [AUTHOR, "user-nobody"] },
+  },
   RetireTemplate: { as: ADMIN, variables: { id: "template-2" } },
   RevokeRole: { as: ADMIN, variables: { role: "approver", userId: APPROVER } },
   RevokeUserSessions: {
@@ -379,6 +394,22 @@ const cases: Record<string, Case> = {
       id: "category-people",
       owners: [AUTHOR],
       reviewCadence: "ANNUAL",
+    },
+  },
+  SetCategoryRuleset: {
+    as: ADMIN,
+    variables: {
+      categoryId: "category-travel",
+      rules: [
+        {
+          ack: "ALLOW",
+          approve: "BLANK",
+          author: "BLANK",
+          read: "ALLOW",
+          subjectKind: "EVERYONE",
+          subjectRef: "",
+        },
+      ],
     },
   },
   SetContactBlockArchived: {
@@ -424,6 +455,10 @@ const cases: Record<string, Case> = {
       signal: "SIGNAL_TYPE_APPROVE",
       taskId: "task-1",
     },
+  },
+  SimulateCategory: {
+    as: ADMIN,
+    variables: { categoryId: "category-facilities", userId: READER },
   },
   SpCertificate: { as: ADMIN },
   StartDomainVerification: {
@@ -601,7 +636,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 130);
+    assert.equal(webOperations.length, 135);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());
@@ -619,7 +654,7 @@ describe("steward-web's operations", () => {
         expected.variables,
       );
       assertAnswered(name, expected, body.errors as Errors | undefined);
-      if (expected.refused) return;
+      if (expected.refused || expected.answersNull) return;
       // The seed has a record behind every id the cases name, so no root field answers null.
       for (const [field, value] of Object.entries(body.data ?? {}))
         assert.notEqual(value, null, `${name}: ${field} answered null`);

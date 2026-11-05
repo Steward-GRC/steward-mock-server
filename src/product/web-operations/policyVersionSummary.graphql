@@ -1,0 +1,6 @@
+query PolicyVersionSummary($versionId: ID!) {
+  policyVersionSummary(versionId: $versionId) {
+    summaryText
+    generatedAt
+  }
+}
