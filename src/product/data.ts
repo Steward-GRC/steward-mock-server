@@ -75,6 +75,8 @@ export interface StewardData extends ProductData {
   definitions: Definition[];
   emailServiceConfig: EmailServiceConfig;
   groupMappings: GroupMapping[];
+  /** Whether the next IdP test passes or fails (the controls set it). */
+  idpTestOutcome: "fail" | "pass";
   links: Record<string, PolicyLinks>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
@@ -104,6 +106,7 @@ export const seed = (): StewardData => ({
   definitions: definitions(),
   emailServiceConfig: emailServiceConfig(),
   groupMappings: groupMappings(),
+  idpTestOutcome: "pass",
   links: links(),
   next: {},
   organizations: organizations(),

@@ -25,6 +25,7 @@ import {
   personById,
   type Session,
 } from "#core/state.ts";
+import { ssoRoutes } from "#product/sso.ts";
 
 /** How long a session lasts, in seconds: the gateway's default SESSION_TTL of 168h. */
 const SESSION_SECONDS = 604_800;
@@ -290,5 +291,5 @@ export const stewardRoutes = (
   if (post && request.method === "POST") return post(request);
   if (path === "/auth/session" && request.method === "GET")
     return session(request);
-  return undefined;
+  return ssoRoutes(request, path);
 };
