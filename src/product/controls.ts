@@ -41,8 +41,16 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
   },
 ];
 
-/** The counts the controls page shows under Data, and how the next IdP test ends. */
-export const productSummary = (): Record<string, unknown> => ({
-  idpTestOutcome: stewardData().idpTestOutcome,
-  people: mockState.data.people.length,
-});
+/** The counts the controls page shows as tiles, and how the next IdP test ends. */
+export const productSummary = (): Record<string, unknown> => {
+  const data = stewardData();
+  return {
+    cases: data.reportCases.length,
+    idpTestOutcome: data.idpTestOutcome,
+    "open runs": data.runs.filter(
+      (run) => run.status === "APPROVAL_STATUS_IN_REVIEW",
+    ).length,
+    people: mockState.data.people.length,
+    policies: data.policies.length,
+  };
+};

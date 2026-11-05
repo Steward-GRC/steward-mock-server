@@ -19,6 +19,11 @@ const read = (file: string) =>
 
 export const steward: Product = {
   actions: productActions,
+  /**
+   * globalSettings is the banner query steward-web reads before sign-in, so it keeps answering
+   * while maintenance is on; everything else gets the core's 503 with a Retry-After.
+   */
+  maintenance: { fields: ["globalSettings"] },
   resolvers,
   routes: stewardRoutes,
   schema: [read("schema.graphql"), read("schema-pending.graphql")],

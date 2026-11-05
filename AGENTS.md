@@ -25,8 +25,9 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
   and the refusal while it's on), `state.ts`, `events.ts`, `log.ts`.
 - `src/core/product.ts` - the Product contract; `src/core/test-fixture.ts` - the fixture product
   the core tests serve.
-- `src/product/` - `product.ts` (Steward as a Product), `routes.ts` (the gateway's sign-in and
-  `/setup/bootstrap`), `sso.ts` (the IdP test link, `/auth/sso/start` with a test token, and
+- `src/product/` - `product.ts` (Steward as a Product; `maintenance.fields` keeps `globalSettings`
+  answering during maintenance, and `resolvers/admin.ts` reports the window in its banner),
+  `routes.ts` (the gateway's sign-in and `/setup/bootstrap`), `sso.ts` (the IdP test link, `/auth/sso/start` with a test token, and
   the `/admin/idp/*` imports from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain);
   `access.ts` is the policy read model (who reads, edits and approves what); `audit-actions.ts`
