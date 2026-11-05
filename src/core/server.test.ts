@@ -289,9 +289,64 @@ describe("controls", () => {
     );
   });
 
-  it("serves its page under the product's name", async () => {
-    const page = await fetch(`${base}/_mock`);
-    assert.match(await page.text(), /Mock controls · Fixture/);
+  it("serves its page under the product's name and version", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<title>Mock controls · Fixture<\/title>/);
+    assert.match(html, /class="brand__name">Fixture</);
+    assert.ok(html.includes(FIXTURE_VERSION));
+  });
+
+  it("is reachable by keyboard and at phone width", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<meta name="viewport" content="width=device-width, initial-scale=1">/,
+    );
+    assert.match(html, /<a class="skip-link" href="#main">/);
+    assert.match(html, /<main [^>]*id="main"/);
+    assert.match(
+      html,
+      /<button [^>]*aria-controls="sidebar"[^>]*aria-label="Open menu"/,
+    );
+    assert.match(html, /:focus-visible/);
+  });
+
+  it("follows the system theme until a theme is saved", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(
+      html,
+      /<html lang="en" data-theme="light" data-theme-choice="system">/,
+    );
+    assert.match(html, /prefers-color-scheme: dark/);
+  });
+
+  it("saves the theme setting and serves the page in it", async () => {
+    const saved = await post(base, "/_mock/theme", { theme: "dark" });
+    assert.equal(saved.status, 204);
+    const cookie =
+      (saved.headers.get("set-cookie") ?? "").split(";", 1)[0] ?? "";
+    assert.equal(cookie, "mock_theme=dark");
+    const html = await (
+      await fetch(`${base}/_mock`, { headers: { cookie } })
+    ).text();
+    assert.match(
+      html,
+      /<html lang="en" data-theme="dark" data-theme-choice="dark">/,
+    );
+    assert.match(html, /aria-label="Switch to light theme"/);
+  });
+
+  it("refuses a theme it doesn't know", async () => {
+    assert.equal(
+      (await post(base, "/_mock/theme", { theme: "sepia" })).status,
+      400,
+    );
+  });
+
+  it("still drives the controls from the page", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /fetch\("\/_mock\/controls"/);
+    assert.match(html, /kind: "sign-in"/);
   });
 });
 
