@@ -88,7 +88,10 @@ const person = (
   ...given,
 });
 
-/** One person per Steward role; reader is implicit and never listed, as in steward-authz. */
+/**
+ * One person per Steward role, and Heidi the group manager; reader is implicit and never listed,
+ * as in steward-authz.
+ */
 export const people = (): StewardPerson[] => [
   person({
     email: "alice@example.org",
@@ -156,5 +159,20 @@ export const people = (): StewardPerson[] => [
     name: "Frank Disabled",
     roles: [],
     username: "frank",
+  }),
+  // The brief's group manager: a password account with no second factor, so My groups (A22)
+  // can be walked without SSO.
+  person({
+    email: "heidi@example.org",
+    id: "user-heidi",
+    idpGroups: ["All staff", "Facilities team"],
+    managedGroupIds: ["group-3"],
+    memberships: [
+      { groupId: "group-1", source: "manual" },
+      { groupId: "group-3", source: "manual" },
+    ],
+    name: "Heidi Manager",
+    roles: [],
+    username: "heidi",
   }),
 ];
