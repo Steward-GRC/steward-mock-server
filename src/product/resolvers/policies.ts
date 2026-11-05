@@ -43,7 +43,8 @@ const BREAK_GLASS_MS = 5 * 60 * 1000;
 /** How long a collab token is valid. */
 const COLLAB_TOKEN_MS = 5 * 60 * 1000;
 
-const policyById = (id: string) => data().policies.find((p) => p.id === id);
+export const policyById = (id: string) =>
+  data().policies.find((p) => p.id === id);
 
 const versionById = (id: null | string) =>
   id ? data().versions.find((v) => v.id === id) : undefined;
@@ -91,8 +92,12 @@ const codeOf = (slug: string): string =>
     .replaceAll(/[^A-Z0-9]/g, "")
     .slice(0, 6) || "GEN";
 
-/** The next number in a category for a kind of document. */
-const numberFor = (
+/**
+ * The next number in a category for a kind of document: steward-core's category_policy_seq, a
+ * counter per category and kind that only goes up, so a number a policy moved away with is never
+ * reused.
+ */
+export const numberFor = (
   categoryId: string,
   documentType: Policy["documentType"],
 ): string => {
@@ -103,7 +108,10 @@ const numberFor = (
   const taken = data()
     .policies.filter((p) => p.number.startsWith(stem))
     .map((p) => Number(p.number.slice(stem.length)));
-  return `${stem}${String(Math.max(0, ...taken) + 1).padStart(6, "0")}`;
+  const counter = `seq:${categoryId}:${documentType}`;
+  const seq = Math.max(data().next[counter] ?? 0, ...taken, 0) + 1;
+  data().next[counter] = seq;
+  return `${stem}${String(seq).padStart(6, "0")}`;
 };
 
 const textNode = (value: string) => ({
@@ -255,7 +263,7 @@ const diff = (from: PolicyVersion, to: PolicyVersion, obscured: boolean) => {
   }));
 };
 
-const readable = (person: StewardPerson, id: string): PolicyVersion => {
+export const readable = (person: StewardPerson, id: string): PolicyVersion => {
   const version = versionById(id);
   const shown = version ? readableVersion(person, version) : undefined;
   if (!shown) throw notFound("policy version");
@@ -561,6 +569,7 @@ export const policyResolvers: Resolvers = {
         .policies.filter(
           (p) =>
             p.documentType === kind &&
+            p.retiredAt === null &&
             inScope(p.homeCategoryId) &&
             visible(person, p),
         )

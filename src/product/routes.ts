@@ -18,6 +18,7 @@ import { json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { settings } from "#core/product.ts";
 import { mockState, type Person, personById } from "#core/state.ts";
+import { deliveryRoutes } from "#product/delivery.ts";
 import { documentRoutes } from "#product/documents.ts";
 import { passkeyOwner, requestOptions } from "#product/passkeys.ts";
 import { globalSettingsNow } from "#product/resolvers/admin.ts";
@@ -253,6 +254,7 @@ export const stewardRoutes = (
     return maintenanceStatus();
   return (
     documentRoutes(request, path) ??
+    deliveryRoutes(request, path) ??
     signInRoutes(request, path) ??
     ssoRoutes(request, path)
   );

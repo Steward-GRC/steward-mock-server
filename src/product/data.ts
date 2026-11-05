@@ -6,6 +6,7 @@
 
 import type { ProductData } from "#core/product.ts";
 import type { Person } from "#core/state.ts";
+import type { MagicLink, PdfJob } from "#product/delivery.ts";
 
 import { mockState } from "#core/state.ts";
 import {
@@ -90,12 +91,16 @@ export interface StewardData extends ProductData {
   /** Whether the next IdP test passes or fails (the controls set it). */
   idpTestOutcome: "fail" | "pass";
   links: Record<string, PolicyLinks>;
+  /** steward-delivery's magic links, by token. */
+  magicLinks: Record<string, MagicLink>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
   organizations: Organization[];
   /** Emails a password reset code was sent to and not used yet. */
   passwordResets: string[];
   pastSessions: PastSession[];
+  /** steward-delivery's PDF export jobs, by id. */
+  pdfJobs: Record<string, PdfJob>;
   /** The core's sign-in records; the directory's fields are filled in by asSteward. */
   people: Person[];
   platformGroups: PlatformGroup[];
@@ -124,10 +129,12 @@ export const seed = (): StewardData => ({
   groupMappings: groupMappings(),
   idpTestOutcome: "pass",
   links: links(),
+  magicLinks: {},
   next: {},
   organizations: organizations(),
   passwordResets: [],
   pastSessions: pastSessions(),
+  pdfJobs: {},
   people: people(),
   platformGroups: platformGroups(),
   policies: policies(),
