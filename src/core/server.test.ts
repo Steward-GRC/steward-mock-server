@@ -10,7 +10,7 @@ import { WebSocket } from "ws";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { checkCredentials } from "#core/auth.ts";
-import { listen } from "#core/events.ts";
+import { listen, PEOPLE_CHANGED } from "#core/events.ts";
 import { handle } from "#core/handle.ts";
 import { MAINTENANCE_CHANGED } from "#core/maintenance.ts";
 import {
@@ -575,6 +575,51 @@ describe("sign-in users", () => {
     assert.match(html, /id="user-field-onCall" type="checkbox"/);
     assert.match(html, /data-fields="\[\{&quot;key&quot;:&quot;team&quot;/);
     assert.doesNotMatch(html, /Shadow/);
+  });
+
+  it("tells the product which fields of whom changed, the moment they change", async () => {
+    const heard: unknown[] = [];
+    const stop = listen(PEOPLE_CHANGED, (change) => heard.push(change));
+    await control(base, {
+      kind: "person-add",
+      password: "charlie-password",
+      username: "charlie",
+    });
+    await control(base, {
+      kind: "person-update",
+      name: "Cy Phone",
+      password: "a-new-password",
+      personId: "person-cy",
+      tags: "night",
+    });
+    await control(base, { kind: "person-update", personId: "person-cy" });
+    await control(base, { kind: "person-remove", personId: "person-cy" });
+    stop();
+    assert.deepEqual(heard, [
+      {
+        change: "added",
+        fields: [
+          "disabled",
+          "email",
+          "id",
+          "name",
+          "onCall",
+          "password",
+          "roles",
+          "secondFactor",
+          "tags",
+          "team",
+          "username",
+        ],
+        personId: "person-charlie",
+      },
+      {
+        change: "updated",
+        fields: ["password", "tags"],
+        personId: "person-cy",
+      },
+      { change: "removed", fields: [], personId: "person-cy" },
+    ]);
   });
 
   it("never hands out a password, on the list or in the state dump", async () => {

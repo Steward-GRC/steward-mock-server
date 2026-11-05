@@ -59,6 +59,9 @@ subscription. Replace it; don't build around it.
    them as `personFields` in `src/product/product.ts`, each with a `key`, a `label` and a `kind`
    (`text`, `list` or `boolean`). The Users card shows and edits them, they're stored on the
    person, `GET /_mock/people` lists them, and the product's resolvers decide what they mean.
+   Every add, edit or removal on `/_mock` is published on `PEOPLE_CHANGED` from
+   `src/core/events.ts`, with the person's id, the kind of change and the names of the fields that
+   changed (a password by name only), so the product can push it to open pages straight away.
 
 5. Write the resolvers in `src/product/resolvers.ts`. Start with the fields the clients call
    first; anything without a resolver answers `null`, or an error where the schema says non-null.

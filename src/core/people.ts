@@ -6,6 +6,7 @@
 // dev quick-login widget can read who to offer without seeing anyone's password. A product adds
 // fields of its own (Product.personFields), edited the same way and stored on the person.
 
+import { PEOPLE_CHANGED, type PeopleChange, publish } from "#core/events.ts";
 import { refuse } from "#core/http.ts";
 import { type PersonField, product } from "#core/product.ts";
 import {
@@ -104,6 +105,19 @@ const applyFields = (person: Person, body: Body, fresh: boolean) => {
   }
 };
 
+const announce = (change: PeopleChange) => {
+  publish(PEOPLE_CHANGED, change);
+};
+
+/** The fields whose values differ between two copies of a person, sorted. */
+const changedFields = (before: object, after: object): string[] => {
+  const was = before as Record<string, unknown>;
+  const now = after as Record<string, unknown>;
+  return [...new Set([...Object.keys(was), ...Object.keys(now)])]
+    .filter((key) => JSON.stringify(was[key]) !== JSON.stringify(now[key]))
+    .toSorted();
+};
+
 const capitalised = (word: string) =>
   word.charAt(0).toUpperCase() + word.slice(1);
 
@@ -127,6 +141,11 @@ export const peopleControls: Record<string, (body: Body) => unknown> = {
       person.id = `person-${name}-${String(Date.now())}`;
     applyFields(person, body, true);
     mockState.data.people.push(person);
+    announce({
+      change: "added",
+      fields: Object.keys(person).toSorted(),
+      personId: person.id,
+    });
     return publicPerson(person);
   },
   /** Take a person out, and end every session they have. */
@@ -137,12 +156,14 @@ export const peopleControls: Record<string, (body: Body) => unknown> = {
     for (const [pending, owner] of mockState.pending)
       if (owner === person.id) mockState.pending.delete(pending);
     endSessions(person.id);
+    announce({ change: "removed", fields: [], personId: person.id });
     return { removed: person.id };
   },
   /** Change the fields the body names; a password only when one is given. */
   "person-update": (body) => {
     const person = personById(String(body.personId ?? ""));
     if (!person) return refuse(404, "unknown_person", "No such person.");
+    const before = { ...person };
     if (body.username !== undefined) {
       const name = username(body.username, person);
       if (name instanceof Response) return name;
@@ -157,6 +178,9 @@ export const peopleControls: Record<string, (body: Body) => unknown> = {
       person.password = body.password;
     applyFields(person, body, false);
     if (person.disabled) endSessions(person.id);
+    const fields = changedFields(before, person);
+    if (fields.length > 0)
+      announce({ change: "updated", fields, personId: person.id });
     return publicPerson(person);
   },
 };

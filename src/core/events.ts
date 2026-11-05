@@ -63,3 +63,16 @@ export const SESSIONS_ENDED = "mock:sessions-ended";
 
 /** The core topic a product hears when the maintenance window changes (its payload is the window). */
 export const MAINTENANCE_CHANGED = "mock:maintenance-changed";
+
+/**
+ * The core topic a product hears when a person is added, edited or removed on /_mock (its payload
+ * is a PeopleChange), so it can push the change to open pages straight away.
+ */
+export const PEOPLE_CHANGED = "mock:people-changed";
+
+/** What PEOPLE_CHANGED carries: who, how, and which fields changed ("password" by name only). */
+export interface PeopleChange {
+  change: "added" | "removed" | "updated";
+  fields: string[];
+  personId: string;
+}
