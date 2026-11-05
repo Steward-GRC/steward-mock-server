@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Starts the mock gateway: mock-server [--port <n>] [--https-port <n>]. Port 0 picks a free one;
+// Starts the mock gateway: steward-mock-server [--port <n>] [--https-port <n>]. Port 0 picks a free one;
 // the ready line names the port it got. --https-port needs MOCK_TLS_CERT and MOCK_TLS_KEY.
 // Node runs the TypeScript sources directly (type stripping, Node 24 and later): no build step.
 
@@ -15,7 +15,7 @@ const port = flag("--port");
 const httpsPort = flag("--https-port");
 for (const value of [port, httpsPort]) {
   if (value !== undefined && !/^\d+$/.test(value)) {
-    console.error("usage: mock-server [--port <n>] [--https-port <n>]");
+    console.error("usage: steward-mock-server [--port <n>] [--https-port <n>]");
     process.exit(2);
   }
 }

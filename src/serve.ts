@@ -1,6 +1,6 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Start the mock from the command line (bin/mock-server.mjs sets the environment).
+// Start the mock from the command line (bin/steward-mock-server.mjs sets the environment).
 
 import { readFileSync } from "node:fs";
 

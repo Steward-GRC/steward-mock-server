@@ -9,4 +9,4 @@ COPY src ./src
 ENV HOST=0.0.0.0 PORT=5180 LOG_FORMAT=json LOG_LEVEL=info
 EXPOSE 5180
 USER node
-CMD ["node", "bin/mock-server.mjs"]
+CMD ["node", "bin/steward-mock-server.mjs"]

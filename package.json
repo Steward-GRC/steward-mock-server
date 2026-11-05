@@ -1,7 +1,7 @@
 {
-  "name": "template-node-mock-server",
+  "name": "steward-mock-server",
   "version": "0.0.0",
-  "description": "Starting point for a product's mock gateway: a standalone Node server that speaks the gateway's wire protocol with resettable invented data.",
+  "description": "Standalone in-memory mock of the whole Steward gateway API, shared by web, iOS and Android",
   "author": "The Steward Authors",
   "license": "Apache-2.0",
   "private": true,
@@ -10,7 +10,7 @@
     "node": ">=24"
   },
   "bin": {
-    "mock-server": "bin/mock-server.mjs"
+    "steward-mock-server": "bin/steward-mock-server.mjs"
   },
   "exports": {
     ".": "./src/index.ts"
@@ -21,14 +21,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/the-rabbit-hole-tech/template-node-mock-server.git"
+    "url": "git+https://github.com/Steward-GRC/steward-mock-server.git"
   },
-  "homepage": "https://github.com/the-rabbit-hole-tech/template-node-mock-server#readme",
+  "homepage": "https://github.com/Steward-GRC/steward-mock-server#readme",
   "bugs": {
-    "url": "https://github.com/the-rabbit-hole-tech/template-node-mock-server/issues"
+    "url": "https://github.com/Steward-GRC/steward-mock-server/issues"
   },
   "scripts": {
-    "start": "node bin/mock-server.mjs",
+    "start": "node bin/steward-mock-server.mjs",
     "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint && oxfmt --check",

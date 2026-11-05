@@ -11,5 +11,7 @@ export default {
     ".github/**",
     ".claude/**",
     "CLAUDE.md",
+    // A byte-exact copy of steward-gateway's SDL; schema.test.ts checks its hash.
+    "src/product/schema.graphql",
   ],
 };
