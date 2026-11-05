@@ -77,7 +77,12 @@ describe("sign-in", () => {
     const wrong = await verify("totp", WRONG_CODE);
     assert.equal(wrong.status, 401);
     assert.deepEqual(await wrong.json(), { error: "invalid_code" });
-    assert.equal((await verify("passkey", GOOD_CODE)).status, 401);
+    const passkey = await post(base, "/auth/mfa/verify", {
+      credentialJson: "{}",
+      kind: "passkey",
+      pendingId,
+    });
+    assert.equal(passkey.status, 401);
     const good = await verify("totp", GOOD_CODE);
     assert.equal(good.status, 200);
     assert.match(good.headers.get("set-cookie") ?? "", /^steward_sid=/);

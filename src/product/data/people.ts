@@ -26,6 +26,11 @@ export interface StewardPerson extends Person {
   managedGroupIds: string[];
   memberships: Membership[];
   mergedIntoUserId: null | string;
+  /**
+   * Has a passkey (src/product/passkeys.ts): it signs in on its own, and is offered as a second
+   * factor beside the authenticator app and the emailed code.
+   */
+  passkey?: boolean;
   /** identity's read-sensitive claim: may read SENSITIVE policies the RACI rules let them read. */
   readSensitive: boolean;
 }
@@ -90,6 +95,7 @@ export const people = (): StewardPerson[] => [
     managedGroupIds: ["group-2"],
     memberships: [{ groupId: "group-2", source: "manual" }],
     name: "Charlie Approver",
+    passkey: true,
     readSensitive: true,
     roles: ["approver"],
     secondFactor: true,

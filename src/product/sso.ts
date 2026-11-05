@@ -1,9 +1,11 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// steward-gateway's SSO admin routes (internal/bff ssotestlink.go, sso.go, idpimport.go): a site
-// admin mints an IdP test link, the link runs the connection test, and the result is what
+// steward-gateway's SSO routes (internal/bff discover.go, ssotestlink.go, sso.go, idpimport.go).
+// A site admin mints an IdP test link, the link runs the connection test, and the result is what
 // activateOrganization checks next. There's no IdP behind the mock, so opening a live link ends
-// the test at once with the outcome the controls chose (pass unless told otherwise). The IdP
+// the test at once with the outcome the controls chose (pass unless told otherwise). An SSO
+// sign-in is a pass-through: while SSO is on, discovery sends anyone to it, and /auth/sso/start
+// signs the person in at once and redirects back the way the gateway's callback does. The IdP
 // import routes answer from invented fixtures instead of fetching anything.
 
 import { randomBytes } from "node:crypto";
@@ -13,6 +15,14 @@ import { json, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { personById } from "#core/state.ts";
 import { stewardData } from "#product/data.ts";
+import {
+  cookie,
+  factorsOf,
+  findPerson,
+  newSession,
+  park,
+  SESSION_SECONDS,
+} from "#product/sign-in-state.ts";
 
 /** How long a test link stays live: the gateway's defaultTestLinkTTL. */
 const TEST_LINK_MS = 30 * 60_000;
@@ -202,10 +212,7 @@ const resultPage = (
   );
 };
 
-/**
- * GET /auth/sso/start with a test token. Without one the gateway would send the browser to its
- * IdP broker, which the mock doesn't have, so that path stays not mocked.
- */
+/** GET /auth/sso/start with a test token; without one it's a sign-in (startLogin). */
 const startTest = (request: Request): Response | undefined => {
   const url = new URL(request.url);
   const token = url.searchParams.get("testToken");
@@ -234,6 +241,65 @@ const startTest = (request: Request): Response | undefined => {
     passed,
     passed ? "" : FAILED_DETAIL,
   );
+};
+
+/** The connection alias discovery names while SSO is on; the start ignores it. */
+const MOCK_CONNECTION = "mock-sso";
+
+/** Who an SSO sign-in signs in when the identifier names nobody the mock can sign in. */
+const DEFAULT_SSO_USERNAME = "erin";
+
+/** Whether SSO is offered: the sign-in-methods control. */
+export const ssoAvailable = (): boolean => stewardData().signInMethods.sso;
+
+/** POST /auth/discover {identifier}: SSO for anyone while it's on, local otherwise. */
+const discover = async (request: Request): Promise<Response> => {
+  const { identifier } = await readJson<{ identifier: string }>(request);
+  if (typeof identifier !== "string" || !identifier)
+    return refuse(400, "invalid_request");
+  return json(
+    ssoAvailable()
+      ? {
+          allowLocal: true,
+          connectionAlias: MOCK_CONNECTION,
+          idpInitiatedSsoUrl: "",
+          method: "sso",
+        }
+      : {
+          allowLocal: false,
+          connectionAlias: "",
+          idpInitiatedSsoUrl: "",
+          method: "local",
+        },
+  );
+};
+
+const redirect = (location: string, headers: Record<string, string> = {}) =>
+  new Response(null, { headers: { ...headers, location }, status: 302 });
+
+/**
+ * GET /auth/sso/start without a test link: a pass-through sign-in. The person the identifier
+ * names (email or username), or Erin, gets a session and goes to /home, or, with a second factor,
+ * to /login?pendingMfa=<id>&mfaFactors=<kinds>, as the gateway's callback sends them.
+ */
+const startLogin = (url: URL): Response => {
+  const named = findPerson(url.searchParams.get("identifier") ?? "");
+  const person =
+    named && !named.disabled ? named : findPerson(DEFAULT_SSO_USERNAME);
+  if (!person) return redirect("/login?error=sso");
+  const factors = factorsOf(person);
+  if (factors.length > 0) {
+    const resume = new URLSearchParams({
+      mfaFactors: factors.join(","),
+      pendingMfa: park(person, "challenge"),
+    });
+    return redirect(`/login?${resume.toString()}`);
+  }
+  const session = newSession(person);
+  log.debug("sso sign-in passed through", { personId: person.id });
+  return redirect("/home", {
+    "set-cookie": cookie(session.id, SESSION_SECONDS),
+  });
 };
 
 /** Invented, and not a real certificate: the base64 of a sentence. */
@@ -294,6 +360,7 @@ const POST_ROUTES: Record<string, (request: Request) => Promise<Response>> = {
   "/admin/idp/import-metadata": fromUrl(() => INVENTED_METADATA),
   "/admin/idp/parse-metadata": parseMetadata,
   "/admin/sso/test-link": mintTestLink,
+  "/auth/discover": discover,
 };
 
 /** The SSO routes, or undefined for a path they don't serve. */
@@ -304,6 +371,6 @@ export const ssoRoutes = (
   const post = POST_ROUTES[path];
   if (post && request.method === "POST") return post(request);
   if (path === "/auth/sso/start" && request.method === "GET")
-    return startTest(request);
+    return startTest(request) ?? startLogin(new URL(request.url));
   return undefined;
 };

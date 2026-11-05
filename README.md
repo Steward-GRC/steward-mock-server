@@ -68,14 +68,14 @@ the six below.
 
 ### Who to sign in as
 
-| Username  | Role            | What they see                                                                                      |
-| --------- | --------------- | -------------------------------------------------------------------------------------------------- |
-| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.        |
-| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                       |
-| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. |
-| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                         |
-| `erin`    | reader          | Published, non-sensitive policies only.                                                            |
-| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                     |
+| Username  | Role            | What they see                                                                                                     |
+| --------- | --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `alice`   | site admin      | Everything; sensitive policies obfuscated until they break glass. Asks for a second factor.                       |
+| `bob`     | author          | The library, their drafts (sensitive ones too), authoring in every category.                                      |
+| `charlie` | approver        | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has a passkey. |
+| `dave`    | privacy officer | The report case queue. Has to enrol a second factor first.                                                        |
+| `erin`    | reader          | Published, non-sensitive policies only.                                                                           |
+| `frank`   | none            | Disabled: sign-in fails as the gateway's does.                                                                    |
 
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with
@@ -125,7 +125,42 @@ Reset and start fresh put it back to no maintenance. Steward's banner field is `
 which steward-web reads before sign-in: it keeps answering while maintenance is on, and while a
 window is announced or on its `maintenance` reports `enabled: true` with the window's message (or
 a line naming the window when it has none). Steward adds `idp-test-outcome` and
-`expire-test-links`.
+`expire-test-links`, and `sign-in-methods` below.
+
+### Sign-in methods
+
+`/auth/config` answers what steward-gateway's does, and `sign-in-methods` switches each method, so
+every variant of the sign-in page shows. Everything is on after a reset or a fresh start.
+
+| Body field           | Values            | What it does                                                                                                                                                                                                                         |
+| -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sso`                | `true` or `false` | `ssoAvailable`, and whether `/auth/discover` sends everyone to SSO or to the password.                                                                                                                                               |
+| `passkey`            | `true` or `false` | `passkeyEnabled`; off, passkey sign-in answers 404 `passkey_unavailable`.                                                                                                                                                            |
+| `passwordReset`      | `true` or `false` | The gateway has no switch for it: steward-web offers the reset whenever `/auth/config` answers. Off answers like a gateway without the reset routes: `/auth/config` and the reset routes 404, and the page offers the password only. |
+| `defaultLoginMethod` | `local` or `sso`  | The method the page shows first.                                                                                                                                                                                                     |
+
+How to walk each method:
+
+- **Password:** any person, any password but `wrong-password`; Alice and Charlie then give any six
+  digits but `000000`, and Dave enrols an authenticator first.
+- **SSO:** a pass-through test, not the gateway's SSO flow. While SSO is on, `POST /auth/discover`
+  sends anyone to the connection `mock-sso`, and `GET /auth/sso/start` signs the person straight
+  in: whoever `identifier` names (email or username), or Erin when it names nobody the mock can
+  sign in. It redirects to `/home` with the session cookie, or to
+  `/login?pendingMfa=<id>&mfaFactors=...` when the person has a second factor (Alice, Charlie).
+  It needs no connection or state, and there's no callback.
+- **Password reset:** request a code for any address (the answer is always the same), then confirm
+  with any six digits but `000000` and any new password. The mock sends no mail and doesn't keep
+  the new password, since any password signs in. A person without a local password, like Charlie,
+  gets the gateway's invalid-code refusal.
+- **Passkey:** there's no authenticator behind the mock, so it doesn't check signatures. The
+  options it hands out are valid WebAuthn request options for the host the caller used, and the
+  answer counts as the passkey whose `id` (or `rawId`) it carries, the way steward-gateway's own
+  tests fake the ceremony. Charlie's passkey id is the base64url of `mock-passkey:charlie`
+  (`bW9jay1wYXNza2V5OmNoYXJsaWU`). Post `{"id":"bW9jay1wYXNza2V5OmNoYXJsaWU"}` as the
+  `credentialJson` to `/auth/passkey/login/finish`, or to `/auth/mfa/verify` with `kind: "passkey"`
+  after `/auth/mfa/webauthn/begin`. In a browser, a Chrome DevTools virtual authenticator holding a
+  resident credential with that id for `localhost` completes the prompt.
 
 ## 📦 Use it from a client's tests
 

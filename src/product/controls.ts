@@ -6,10 +6,82 @@
 import type { Action, ProductControl } from "#core/controls.ts";
 
 import { mockState } from "#core/state.ts";
-import { stewardData } from "#product/data.ts";
+import { type SignInMethods, stewardData } from "#product/data.ts";
 import { expireTestLinks } from "#product/sso.ts";
 
+/**
+ * POST /_mock/controls {kind: "sign-in-methods"} with any of sso, passkey and passwordReset
+ * (true or false) and defaultLoginMethod ("local" or "sso"): what /auth/config offers, and
+ * whether the routes behind it answer.
+ */
+const switchMethods: ProductControl = (body) => {
+  const methods: SignInMethods = stewardData().signInMethods;
+  for (const key of ["passkey", "passwordReset", "sso"] as const)
+    if (typeof body[key] === "boolean") methods[key] = body[key];
+  if (body.defaultLoginMethod === "local" || body.defaultLoginMethod === "sso")
+    methods.defaultLoginMethod = body.defaultLoginMethod;
+  return methods;
+};
+
+/** One button per switch, both ways. */
+const methodButton = (
+  label: string,
+  body: Record<string, unknown>,
+  hint: string,
+): { run: ProductControl } & Action => ({
+  body,
+  hint,
+  kind: "sign-in-methods",
+  label,
+  run: switchMethods,
+  section: "Sign-in methods",
+});
+
+const signInMethodActions = [
+  methodButton(
+    "SSO off",
+    { sso: false },
+    "/auth/config says ssoAvailable false and discovery answers local for everyone.",
+  ),
+  methodButton(
+    "SSO on",
+    { sso: true },
+    "Discovery sends everyone to SSO, and /auth/sso/start signs them straight in.",
+  ),
+  methodButton(
+    "Passkeys off",
+    { passkey: false },
+    "passkeyEnabled false, and passkey sign-in answers 404 passkey_unavailable.",
+  ),
+  methodButton(
+    "Passkeys on",
+    { passkey: true },
+    "The passkey button, and Charlie's passkey signs in.",
+  ),
+  methodButton(
+    "Password reset off",
+    { passwordReset: false },
+    "Answers like a gateway without the reset package: /auth/config and the reset routes 404, so the page offers the password only.",
+  ),
+  methodButton(
+    "Password reset on",
+    { passwordReset: true },
+    "Reset codes are any six digits but 000000.",
+  ),
+  methodButton(
+    "SSO first",
+    { defaultLoginMethod: "sso" },
+    "defaultLoginMethod is sso.",
+  ),
+  methodButton(
+    "Password first",
+    { defaultLoginMethod: "local" },
+    "defaultLoginMethod is local.",
+  ),
+];
+
 export const productActions: ({ run: ProductControl } & Action)[] = [
+  ...signInMethodActions,
   {
     body: { outcome: "pass" },
     hint: "Opening an IdP test link passes the test, so the organisation can be activated.",
@@ -52,5 +124,10 @@ export const productSummary = (): Record<string, unknown> => {
     ).length,
     people: mockState.data.people.length,
     policies: data.policies.length,
+    "sign-in":
+      Object.entries(data.signInMethods)
+        .filter(([key, on]) => key !== "defaultLoginMethod" && on === true)
+        .map(([key]) => key)
+        .join(", ") || "password only",
   };
 };
