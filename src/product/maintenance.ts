@@ -5,11 +5,8 @@
 // (globalSettings, me and introspection) runs, so the lockdown can render and learn the caller's
 // role, and anything else answers the gateway's MAINTENANCE error. The gateway's other routes
 // (/auth, /setup, the SSO admin routes and GET /maintenance) keep answering. New websockets and
-// anything else get the core's 503.
-//
-// The gateway also lets a site admin run every operation during maintenance. The core decides
-// GraphQL before the product sees the caller, so that needs a hook the template doesn't have
-// yet; until it does, a site admin gets the same whitelist as everyone else.
+// anything else get the core's 503. A site admin runs every GraphQL operation, as on the gateway,
+// so the admin console stays open to them and they can lift maintenance there.
 
 import type { ProductMaintenance } from "#core/product.ts";
 
@@ -18,6 +15,7 @@ import { json, refuse } from "#core/http.ts";
 import { maintenanceAnswer } from "#core/maintenance.ts";
 import { settings } from "#core/product.ts";
 import { answerSetup } from "#core/setup.ts";
+import { personById } from "#core/state.ts";
 import { globalSettingsNow } from "#product/resolvers/admin.ts";
 import { stewardRoutes } from "#product/routes.ts";
 
@@ -40,6 +38,10 @@ const passThrough = async (request: Request, path: string) =>
   refuse(501, "not_mocked");
 
 export const stewardMaintenance: ProductMaintenance = {
+  /** The gateway's site-admin bypass: everyone else keeps the whitelist. */
+  allow: (_request, session) =>
+    !!session &&
+    (personById(session.personId)?.roles.includes("site-admin") ?? false),
   answer: (request, path, window) => {
     if (ungated(request, path))
       // The core awaits this answer for an HTTP request; the websocket upgrade, which doesn't,

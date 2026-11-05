@@ -132,6 +132,74 @@ describe("maintenance banner", () => {
     assert.deepEqual(user.roles, ["site-admin"]);
   });
 
+  it("lets a site admin run every operation during maintenance, and lift it from admin", async () => {
+    const admin = await signInAs(base, "user-alice");
+    await control(base, { kind: "maintenance-start", message: "Down now." });
+    const users = await query(
+      base,
+      "query { users { users { userId } } }",
+      admin,
+    );
+    assert.equal(users.body.errors, undefined);
+    const { users: page } = users.body.data as { users: { users: unknown[] } };
+    assert.ok(page.users.length > 0);
+    const lifted = await call(base, admin, "SetGlobalSettings", {
+      input: {
+        announcement: { enabled: false, level: "info", message: "" },
+        maintenance: { enabled: false, message: "" },
+      },
+    });
+    assert.equal(lifted.refused, undefined);
+    assert.deepEqual(await (await fetch(`${base}/maintenance`)).json(), {
+      enabled: false,
+      message: "",
+    });
+    const reader = await signInAs(base, "user-erin");
+    assert.equal(
+      (await call(base, reader, "MyManagedGroups")).refused,
+      undefined,
+    );
+  });
+
+  it("starts maintenance when a site admin saves it on, as the gateway's setting does", async () => {
+    const admin = await signInAs(base, "user-alice");
+    await call(base, admin, "SetGlobalSettings", {
+      input: {
+        announcement: { enabled: false, level: "info", message: "" },
+        maintenance: { enabled: true, message: "Patching." },
+      },
+    });
+    assert.deepEqual(await (await fetch(`${base}/maintenance`)).json(), {
+      enabled: true,
+      message: "Patching.",
+    });
+    const reader = await signInAs(base, "user-erin");
+    assert.equal(
+      (await call(base, reader, "MyManagedGroups")).refused,
+      "MAINTENANCE",
+    );
+  });
+
+  it("refuses a reader's operation beyond the whitelist", async () => {
+    const reader = await signInAs(base, "user-erin");
+    await control(base, { kind: "maintenance-start" });
+    const refused = await query(
+      base,
+      "query { myManagedGroups { id } }",
+      reader,
+    );
+    assert.equal(refused.body.errors?.[0]?.extensions.code, "MAINTENANCE");
+  });
+
+  it("refuses a signed-out caller's operation beyond the whitelist", async () => {
+    await control(base, { kind: "maintenance-start" });
+    const refused = await query(
+      base,
+      "query { me { userId } myManagedGroups { id } }",
+    );
+    assert.equal(refused.body.errors?.[0]?.extensions.code, "MAINTENANCE");
+  });
+
   it("keeps the sign-in and setup routes answering while maintenance is on", async () => {
     await control(base, { kind: "maintenance-start" });
     const login = await post(base, "/auth/login", {

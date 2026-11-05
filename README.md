@@ -129,15 +129,14 @@ steward-gateway does:
   Nothing is locked.
 - **On:** `globalSettings.maintenance` reports `enabled: true` with the message. GraphQL answers
   only operations whose root fields are all on the gateway's whitelist (`globalSettings`, `me`,
-  `__schema`, `__type`); anything else answers 200 with the gateway's `MAINTENANCE` error. Sign-in
+  `__schema`, `__type`); anything else answers 200 with the gateway's `MAINTENANCE` error. A site
+  admin runs every operation, as on the gateway, so the admin console stays open to them. Sign-in
   (`/auth`), `/setup`, the SSO admin routes and `GET /maintenance` keep answering; new websockets
   get a 503.
 - `GET /maintenance` answers `{enabled, message}`, as the gateway's public route does.
-
-One difference remains: the gateway lets a site admin run every operation during maintenance, so
-they can use the admin console and lift it there. The mock's shared core decides GraphQL before
-it knows the caller, so a site admin gets the same whitelist as everyone else until the template
-has a hook for it. End maintenance from `/_mock` instead.
+- A site admin's `setGlobalSettings` is the gateway's maintenance switch: saving
+  `maintenance.enabled` true starts maintenance with its message, and saving it false ends it,
+  just as `maintenance-start` and `maintenance-end` do.
 
 Steward adds `idp-test-outcome`, `expire-test-links`, `needs-onboarding` and `sign-in-methods`
 below.
