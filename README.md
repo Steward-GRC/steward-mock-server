@@ -112,7 +112,11 @@ The maintenance cycle has its own kinds, and its own card on the page:
 | `maintenance-end`      |                                 | Back to normal.                                                                                                                                                                     |
 | `maintenance-cancel`   |                                 | Drop an announcement that hasn't started.                                                                                                                                           |
 
-Reset and start fresh put it back to no maintenance. The sample product adds `add-item` and `finish-items`.
+Reset and start fresh put it back to no maintenance. Steward's banner field is `globalSettings`,
+which steward-web reads before sign-in: it keeps answering while maintenance is on, and while a
+window is announced or on its `maintenance` reports `enabled: true` with the window's message (or
+a line naming the window when it has none). Steward adds `idp-test-outcome` and
+`expire-test-links`.
 
 ## 📦 Use it from a client's tests
 
