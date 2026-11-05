@@ -100,6 +100,9 @@ export const fixture: Product = {
   // Its banner query keeps answering during maintenance, and its refusal carries a header of its
   // own on top of the core's default answer.
   maintenance: {
+    allow: (_request, session) =>
+      session !== null &&
+      (personById(session.personId)?.roles.includes("ADMIN") ?? false),
     answer: (_request, _path, window) => {
       const answer = maintenanceAnswer(window);
       answer.headers.set("x-fixture-maintenance", "on");

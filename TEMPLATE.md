@@ -82,8 +82,12 @@ subscription. Replace it; don't build around it.
    fields that keep answering while maintenance is on (the product's maintenance banner query),
    and `answer`, the response its gateway gives during maintenance when that isn't the core's
    default (503, a Retry-After until the window ends, and the message; `maintenanceAnswer` in
-   `src/core/maintenance.ts` builds it, so a product can start from it). Its resolvers read the
-   window with `maintenance()` and can push banner changes from `MAINTENANCE_CHANGED`.
+   `src/core/maintenance.ts` builds it, so a product can start from it). `allow(request, session,
+   operation)` lets a caller's GraphQL operation run as normal during maintenance, the way a
+   gateway lets a site admin keep using the admin console and end maintenance; `session` is null
+   when signed out. It covers the GraphQL path only, not /auth, /setup, the product's routes or
+   new websockets. Its resolvers read the window with `maintenance()` and can push banner changes
+   from `MAINTENANCE_CHANGED`.
 
 7. When the gateway's sign-in differs from `/auth/login` and `/auth/verify` (another path, an
    identity provider's flow), change `src/core/auth.ts` to match it, change the sign-in tests in

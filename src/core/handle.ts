@@ -83,11 +83,12 @@ const answerGraphql = async (request: Request, url: URL): Promise<Response> => {
   }
   const session = sessionOf(request);
   const prepared = prepare(input, session);
-  // During maintenance only the product's banner fields answer; everything else gets the
-  // maintenance refusal, signed in or not, as the gateway answers in front of a stopped service.
+  // During maintenance only the product's banner fields answer, and whatever the product's allow
+  // hook lets this caller run; everything else gets the maintenance refusal, as the gateway
+  // answers in front of a stopped service.
   if (
     maintenanceOn() &&
-    !(prepared.ok && maintenanceAllows(prepared.operation))
+    !(prepared.ok && maintenanceAllows(prepared.operation, request, session))
   ) {
     return maintenanceRefusal(request, url.pathname) as Response;
   }

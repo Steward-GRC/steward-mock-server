@@ -5,11 +5,12 @@
 // src/product, the core tests hand it a fixture of their own). That keeps src/core the same file
 // in every product that cloned the template, and lets the core tests pass whatever the product is.
 
+import type { OperationDefinitionNode } from "graphql";
 import type { WebSocket } from "ws";
 
 import type { Action, ProductControl } from "#core/controls.ts";
 import type { Resolvers } from "#core/graphql.ts";
-import type { MaintenanceWindow, Person } from "#core/state.ts";
+import type { MaintenanceWindow, Person, Session } from "#core/state.ts";
 
 export interface Product {
   /** The product's own controls. */
@@ -59,6 +60,18 @@ export interface ProductData {
 
 /** How a product's gateway behaves during maintenance (see Product.maintenance). */
 export interface ProductMaintenance {
+  /**
+   * Whether a GraphQL operation runs as normal during maintenance for this caller, the way a
+   * gateway lets a site admin keep using the admin console (and end maintenance) while everyone
+   * else is refused. The core calls it for an operation that parsed and selects more than
+   * `fields`, with the caller's session (null when signed out). It doesn't open /auth, /setup,
+   * the product's routes or new websockets.
+   */
+  allow?: (
+    request: Request,
+    session: null | Session,
+    operation: OperationDefinitionNode,
+  ) => boolean;
   /**
    * The answer a gateway call gets while maintenance is on. Without one, the core answers 503
    * with a Retry-After (`maintenanceAnswer` in src/core/maintenance.ts, which this can build on).
