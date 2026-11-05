@@ -545,6 +545,25 @@ const cases: Record<string, Case> = {
       },
     },
   },
+  SubmitPolicyRevision: {
+    as: AUTHOR,
+    refused: AI_DOWN,
+    variables: {
+      input: {
+        instruction: "Shorten the booking window to one week.",
+        policyId: "policy-9",
+        sections: [
+          {
+            content: "How staff book a desk.",
+            key: "purpose",
+            order: 0,
+            title: "Purpose",
+          },
+        ],
+        versionId: "version-11",
+      },
+    },
+  },
   SubmitWorkflow: {
     as: AUTHOR,
     variables: {
@@ -658,6 +677,8 @@ const SUBSCRIPTIONS: Record<string, Case> = {
     refused: AI_DOWN,
     variables: { jobId: "ai-job-1" },
   },
+  // liveEvents needs the audit log's read permission; a reader is refused at subscribe time.
+  LiveEvents: { as: READER, refused: "PermissionDenied", variables: {} },
 };
 
 let base = "";
@@ -695,7 +716,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 154);
+    assert.equal(webOperations.length, 156);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

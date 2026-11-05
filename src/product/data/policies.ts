@@ -639,6 +639,26 @@ export const runs = (): Run[] => [
   },
 ];
 
+/** An instant `days` days before now at `hour`:00 UTC, so recent activity stays recent. */
+const daysAgo = (days: number, hour = 10): string => {
+  const at = new Date(Date.now() - days * 86_400_000);
+  at.setUTCHours(hour, 0, 0, 0);
+  return at.toISOString().replace(/\.\d{3}Z$/, "Z");
+};
+
+/** An acknowledgement some days ago, by someone whose obligations no test pins down. */
+const ackedAgo = (
+  policyVersionId: string,
+  userId: string,
+  days: number,
+): Acknowledgement => ({ ackedAt: daysAgo(days), policyVersionId, userId });
+
+/**
+ * The fixed acknowledgements the reader screens show (Erin's Desk Booking on 3 Oct 2026, as the
+ * design's frame has it), then recent ones from Alice, Dave, Grace and Heidi on the three obligating
+ * policies, spread over the last 90 days, so the completion chart (A14) has bars at 30 and 90 days.
+ * Erin, Bob and Charlie keep exactly the obligations myObligations reports for them.
+ */
 export const acknowledgements = (): Acknowledgement[] => [
   {
     ackedAt: "2026-08-14T10:00:00Z",
@@ -660,4 +680,56 @@ export const acknowledgements = (): Acknowledgement[] => [
     policyVersionId: "version-11",
     userId: "user-erin",
   },
+  ackedAgo("version-11", "user-heidi", 4),
+  ackedAgo("version-11", "user-grace", 11),
+  ackedAgo("version-11", "user-alice", 18),
+  ackedAgo("version-11", "user-dave", 52),
+  ackedAgo("version-12", "user-heidi", 2),
+  ackedAgo("version-12", "user-grace", 8),
+  ackedAgo("version-12", "user-alice", 24),
+  ackedAgo("version-12", "user-dave", 45),
+  ackedAgo("version-2", "user-heidi", 6),
+  ackedAgo("version-2", "user-grace", 27),
+  ackedAgo("version-2", "user-alice", 38),
+  ackedAgo("version-2", "user-dave", 66),
+];
+
+/** A view of a version: steward-obligations' policy_views row (recordView writes one). */
+export interface PolicyView {
+  policyVersionId: string;
+  userId: string;
+  viewedAt: string;
+}
+
+/**
+ * Views over the last 90 days: everyone who acknowledged viewed it that day, and a few people
+ * came back to read without acknowledging, so the chart's views run ahead of its acks.
+ */
+export const policyViews = (): PolicyView[] => [
+  ...acknowledgements()
+    .filter((a) =>
+      ["version-11", "version-12", "version-2"].includes(a.policyVersionId),
+    )
+    .filter((a) => Date.parse(a.ackedAt) > Date.now() - 90 * 86_400_000)
+    .map((a) => ({
+      policyVersionId: a.policyVersionId,
+      userId: a.userId,
+      viewedAt: a.ackedAt,
+    })),
+  ...(
+    [
+      ["version-12", "user-erin", [1, 7, 15, 33, 60]],
+      ["version-12", "user-bob", [3, 19, 48]],
+      ["version-11", "user-bob", [5, 14, 40]],
+      ["version-11", "user-charlie", [3, 21, 70]],
+      ["version-2", "user-erin", [10, 29, 55, 80]],
+      ["version-2", "user-heidi", [12, 36]],
+    ] as const
+  ).flatMap(([policyVersionId, userId, days]) =>
+    days.map((days) => ({
+      policyVersionId,
+      userId,
+      viewedAt: daysAgo(days, 14),
+    })),
+  ),
 ];

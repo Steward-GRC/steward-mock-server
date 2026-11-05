@@ -1,0 +1,5 @@
+mutation SubmitPolicyRevision($input: SubmitPolicyRevisionInput!) {
+  submitPolicyRevision(input: $input) {
+    jobId
+  }
+}
