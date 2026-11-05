@@ -45,9 +45,9 @@ describe("sign-in", () => {
     assert.equal(missing.answer.status, 400);
     assert.deepEqual(missing.body, { error: "invalid_request" });
     for (const [username, password] of [
-      ["ghopper", "wrong-password"],
+      ["charlie", "wrong-password"],
       ["nobody", "x"],
-      ["hlamarr", "x"],
+      ["frank", "x"],
     ] as const) {
       const refused = await login(username, password);
       assert.equal(refused.answer.status, 401);
@@ -56,7 +56,7 @@ describe("sign-in", () => {
   });
 
   it("signs straight in without a second factor, with the gateway's cookie", async () => {
-    const { answer, body } = await login("alovelace");
+    const { answer, body } = await login("bob");
     assert.equal(answer.status, 200);
     assert.equal(typeof body.csrfToken, "string");
     const cookie = answer.headers.get("set-cookie") ?? "";
@@ -67,7 +67,7 @@ describe("sign-in", () => {
   });
 
   it("asks for the second factor, refuses a wrong code or kind, and spends the pending once", async () => {
-    const { answer, body } = await login("demo-admin");
+    const { answer, body } = await login("alice");
     assert.equal(answer.headers.get("set-cookie"), null);
     assert.equal(body.mfaRequired, true);
     assert.deepEqual(body.factors, ["totp", "email"]);
@@ -87,7 +87,7 @@ describe("sign-in", () => {
   });
 
   it("gives up on a pending sign-in after five wrong codes", async () => {
-    const { body } = await login("ghopper");
+    const { body } = await login("charlie");
     const verify = (code: string) =>
       post(base, "/auth/mfa/verify", {
         code,
@@ -101,7 +101,7 @@ describe("sign-in", () => {
   });
 
   it("sends an email code and takes it", async () => {
-    const { body } = await login("ghopper");
+    const { body } = await login("charlie");
     const sent = await post(base, "/auth/mfa/otp/send", {
       pendingId: body.pendingId,
     });
@@ -119,7 +119,7 @@ describe("sign-in", () => {
   });
 
   it("makes a person with no second factor enrol one before signing in", async () => {
-    const { body } = await login("mhamilton");
+    const { body } = await login("dave");
     assert.deepEqual(Object.keys(body).toSorted(), [
       "enrollmentRequired",
       "mfaRequired",
@@ -151,14 +151,11 @@ describe("sign-in", () => {
       pendingId,
     });
     assert.equal(confirmed.status, 200);
-    assert.deepEqual((await login("mhamilton")).body.factors, [
-      "totp",
-      "email",
-    ]);
+    assert.deepEqual((await login("dave")).body.factors, ["totp", "email"]);
   });
 
   it("only enrols on an enrolment pending", async () => {
-    const { body } = await login("demo-admin");
+    const { body } = await login("alice");
     const begun = await post(base, "/auth/mfa/enroll/totp/begin", {
       pendingId: body.pendingId,
     });
@@ -167,7 +164,7 @@ describe("sign-in", () => {
   });
 
   it("reports and ends the session", async () => {
-    const approver = await signIn(base, "ghopper");
+    const approver = await signIn(base, "charlie");
     const session = (await (
       await fetch(`${base}/auth/session`, {
         headers: { cookie: approver.cookie },
@@ -176,7 +173,7 @@ describe("sign-in", () => {
     assert.deepEqual(session, {
       authenticated: true,
       csrfToken: approver.csrf,
-      email: "grace.hopper@example.org",
+      email: "charlie@example.org",
     });
     const out = await post(
       base,
@@ -203,7 +200,7 @@ describe("sign-in", () => {
     // steward-gateway answers these 401 {"error":"unauthorized"} and 403 {"error":"csrf"}; the
     // template's core answers 401 with a GraphQL error for both. steward-web reacts to the
     // status alone, so it behaves the same; matching the body waits on a core setting.
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     assert.equal(
       (await post(base, "/query", { query: "{ me { name } }" })).status,
       401,
@@ -216,18 +213,18 @@ describe("sign-in", () => {
     );
     assert.equal(noCsrf.status, 401);
     const { body } = await query(base, "{ me { name } }", admin);
-    assert.deepEqual(body.data, { me: { name: "Demo Admin" } });
+    assert.deepEqual(body.data, { me: { name: "Alice Admin" } });
   });
 
   it("gives a native client a bearer token that works without a cookie", async () => {
-    const author = await signIn(base, "alovelace", true);
+    const author = await signIn(base, "bob", true);
     assert.ok(author.token);
     const { body } = await query(base, "{ me { username } }", {
       cookie: "",
       csrf: "",
       token: author.token,
     });
-    assert.deepEqual(body.data, { me: { username: "alovelace" } });
+    assert.deepEqual(body.data, { me: { username: "bob" } });
   });
 });
 

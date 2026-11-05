@@ -14,7 +14,7 @@ import {
 } from "#product/test-client.ts";
 import { call, signInAs } from "#product/web-client.ts";
 
-const OFFICER = "user-mhamilton";
+const OFFICER = "user-dave";
 
 let base = "";
 let server: RunningMockServer;

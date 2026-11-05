@@ -132,7 +132,7 @@ const publish = async (author: Signed, title: string, text: string) => {
 
 describe("searchPolicies", () => {
   it("finds a policy by a word only in its published text, with a marked snippet", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const page = await search(reader, { query: "INCURRED" });
     assert.deepEqual(titles(page), ["Expense Claims"]);
     const [hit] = page.hits;
@@ -145,7 +145,7 @@ describe("searchPolicies", () => {
   });
 
   it("finds a policy by its title and number, with no snippet when the text doesn't match", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const byTitle = await search(reader, { query: "runbook" });
     assert.deepEqual(titles(byTitle), ["Incident Response Runbook"]);
     assert.equal(byTitle.hits[0]?.snippet, null);
@@ -154,20 +154,20 @@ describe("searchPolicies", () => {
   });
 
   it("leaves out a policy the reader can't read", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     assert.deepEqual(titles(await search(reader, { query: "privileged" })), []);
     assert.deepEqual(
       titles(await search(reader, { query: "administrator" })),
       [],
     );
-    const author = await signIn(base, "alovelace");
+    const author = await signIn(base, "bob");
     assert.deepEqual(titles(await search(author, { query: "administrator" })), [
       "Privileged Access",
     ]);
   });
 
   it("matches an obfuscated viewer on title and number only, with no snippet", async () => {
-    const admin = await signIn(base, "demo-admin");
+    const admin = await signIn(base, "alice");
     const byTitle = await search(admin, { query: "privileged" });
     assert.deepEqual(titles(byTitle), ["Privileged Access"]);
     assert.equal(byTitle.hits[0]?.policy.viewerCan.contentObfuscated, true);
@@ -187,13 +187,13 @@ describe("searchPolicies", () => {
   });
 
   it("never matches a draft, a superseded version or a retired policy", async () => {
-    const author = await signIn(base, "alovelace");
+    const author = await signIn(base, "bob");
     assert.deepEqual(titles(await search(author, { query: "restricted" })), []);
     assert.deepEqual(titles(await search(author, { query: "dollars" })), []);
     assert.deepEqual(titles(await search(author, { query: "remotely" })), []);
     assert.deepEqual(titles(await search(author, { query: "remote" })), []);
 
-    const web = await signInAs(base, "user-alovelace");
+    const web = await signInAs(base, "user-bob");
     await call(base, web, "SaveDraft", {
       contentJson: paragraph("Zeppelin travel is never reimbursed."),
       policyId: "policy-1",
@@ -202,10 +202,10 @@ describe("searchPolicies", () => {
   });
 
   it("ranks title hits above text hits, then more matches first", async () => {
-    const web = await signInAs(base, "user-alovelace");
+    const web = await signInAs(base, "user-bob");
     await publish(web, "Travel Booking", "Claims go through the portal.");
     await publish(web, "Hotel Stays", "Claims and more claims, as claims go.");
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const page = await search(reader, { query: "claims" });
     assert.deepEqual(titles(page), [
       "Expense Claims",
@@ -225,14 +225,14 @@ describe("searchPolicies", () => {
   });
 
   it("cuts a long passage to a window around the match, offsets still on the word", async () => {
-    const web = await signInAs(base, "user-alovelace");
+    const web = await signInAs(base, "user-bob");
     const filler = "Staff book travel early and keep every receipt. ".repeat(8);
     await publish(
       web,
       "Long Travel",
       `${filler}Ferries need approval. ${filler}`,
     );
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const [hit] = (await search(reader, { query: "ferries" })).hits;
     assert.ok(hit?.snippet);
     assert.ok(hit.snippet.text.length <= 170, hit.snippet.text);
@@ -241,7 +241,7 @@ describe("searchPolicies", () => {
   });
 
   it("filters by document type", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     assert.deepEqual(
       titles(await search(reader, { documentType: "POLICY", query: "the" })),
       ["Expense Claims"],
@@ -253,10 +253,10 @@ describe("searchPolicies", () => {
   });
 
   it("pages with first and after", async () => {
-    const web = await signInAs(base, "user-alovelace");
+    const web = await signInAs(base, "user-bob");
     for (const title of ["Portal One", "Portal Two", "Portal Three"])
       await publish(web, title, "Book through the portal.");
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const all = titles(await search(reader, { query: "portal" }));
     assert.equal(all.length, 3);
 
@@ -275,7 +275,7 @@ describe("searchPolicies", () => {
   });
 
   it("refuses a page token it didn't hand out", async () => {
-    const reader = await signIn(base, "kjohnson");
+    const reader = await signIn(base, "erin");
     const { body } = await query(base, SEARCH, reader, {
       after: "not-a-token",
       query: "claims",

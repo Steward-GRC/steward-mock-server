@@ -40,8 +40,8 @@ const titles = (rows: unknown) =>
 
 describe("one state for every client", () => {
   it("shows a template the admin deleted as gone to the author", async () => {
-    const admin = await as("user-demo-admin");
-    const author = await as("user-alovelace");
+    const admin = await as("user-alice");
+    const author = await as("user-bob");
     const before = await call(base, author, "Templates");
     assert.ok(titles(before.data.templates).length > 0);
     assert.ok(
@@ -64,7 +64,7 @@ describe("one state for every client", () => {
 
 describe("the policy read model", () => {
   it("lets a reader see published, non-sensitive policies only", async () => {
-    const reader = await as("user-kjohnson");
+    const reader = await as("user-erin");
     const usage = await call(base, reader, "Policies", {
       categoryId: "category-usage",
     });
@@ -84,7 +84,7 @@ describe("the policy read model", () => {
   });
 
   it("hides a draft from everyone who can't edit it", async () => {
-    const reader = await as("user-kjohnson");
+    const reader = await as("user-erin");
     const governance = await call(base, reader, "Policies", {
       categoryId: "category-due-diligence",
     });
@@ -95,8 +95,8 @@ describe("the policy read model", () => {
     assert.equal(draft.refused, "NotFound");
   });
 
-  it("shows the author her drafts, sensitive ones included", async () => {
-    const author = await as("user-alovelace");
+  it("shows the author their drafts, sensitive ones included", async () => {
+    const author = await as("user-bob");
     const usage = await call(base, author, "Policies", {
       categoryId: "category-usage",
     });
@@ -112,7 +112,7 @@ describe("the policy read model", () => {
   });
 
   it("obfuscates a sensitive policy for a site admin until they break glass", async () => {
-    const admin = await as("user-demo-admin");
+    const admin = await as("user-alice");
     const policy = await call(base, admin, "PolicyByNumber", {
       number: "POL-USAGE-000002",
     });
@@ -139,7 +139,7 @@ describe("the policy read model", () => {
   });
 
   it("answers the reader's detail for a published policy", async () => {
-    const reader = await as("user-kjohnson");
+    const reader = await as("user-erin");
     const found = await call(base, reader, "PolicyByNumber", {
       number: EXPENSE_CLAIMS_NUMBER,
     });
@@ -161,10 +161,10 @@ describe("the policy read model", () => {
 
 describe("refusals", () => {
   const refusals: [string, string, Record<string, unknown>][] = [
-    ["user-kjohnson", "Users", {}],
-    ["user-kjohnson", "Organizations", {}],
+    ["user-erin", "Users", {}],
+    ["user-erin", "Organizations", {}],
     [
-      "user-alovelace",
+      "user-bob",
       "SetGlobalSettings",
       {
         input: {
@@ -174,7 +174,7 @@ describe("refusals", () => {
       },
     ],
     [
-      "user-kjohnson",
+      "user-erin",
       "CreatePolicy",
       {
         homeCategoryId: "category-reimbursement",
@@ -182,18 +182,14 @@ describe("refusals", () => {
         title: "Not mine to write",
       },
     ],
-    ["user-kjohnson", "SaveDraft", { contentJson: "{}", policyId: "policy-2" }],
-    ["user-ghopper", "CreateCategory", { name: "Legal", slug: "legal" }],
-    ["user-alovelace", "CreateTemplate", { name: "Mine" }],
-    ["user-alovelace", "AckRoster", { policyVersionId: "version-2" }],
-    ["user-kjohnson", "AuditLog", {}],
+    ["user-erin", "SaveDraft", { contentJson: "{}", policyId: "policy-2" }],
+    ["user-charlie", "CreateCategory", { name: "Legal", slug: "legal" }],
+    ["user-bob", "CreateTemplate", { name: "Mine" }],
+    ["user-bob", "AckRoster", { policyVersionId: "version-2" }],
+    ["user-erin", "AuditLog", {}],
     // A site admin isn't a privacy officer: the case queue is the officers' alone.
-    ["user-demo-admin", "ReportCases", {}],
-    [
-      "user-alovelace",
-      "BreakGlassReveal",
-      { policyId: "policy-8", reason: "x" },
-    ],
+    ["user-alice", "ReportCases", {}],
+    ["user-bob", "BreakGlassReveal", { policyId: "policy-8", reason: "x" }],
   ];
   for (const [personId, operation, variables] of refusals)
     it(`refuses ${operation} to ${personId}`, async () => {
@@ -202,9 +198,9 @@ describe("refusals", () => {
     });
 
   it("signs a disabled account out at once", async () => {
-    const admin = await as("user-demo-admin");
-    const reader = await as("user-kjohnson");
-    await call(base, admin, "DisableUser", { userId: "user-kjohnson" });
+    const admin = await as("user-alice");
+    const reader = await as("user-erin");
+    await call(base, admin, "DisableUser", { userId: "user-erin" });
     const { status } = await query(base, documentOf("Me"), reader);
     assert.equal(status, 401);
   });
@@ -212,14 +208,14 @@ describe("refusals", () => {
 
 describe("settings", () => {
   it("serves what setGlobalSettings saved", async () => {
-    const admin = await as("user-demo-admin");
+    const admin = await as("user-alice");
     const input = {
       announcement: { enabled: true, level: "warning", message: "Audit week." },
       maintenance: { enabled: true, message: "Back at noon." },
     };
     const saved = await call(base, admin, "SetGlobalSettings", { input });
     assert.deepEqual(saved.data.setGlobalSettings, input);
-    const reader = await as("user-kjohnson");
+    const reader = await as("user-erin");
     const read = await call(base, reader, "GlobalSettings");
     assert.deepEqual(read.data.globalSettings, input);
   });
@@ -227,7 +223,7 @@ describe("settings", () => {
 
 describe("Steward AI", () => {
   it("reports itself unavailable", async () => {
-    const answer = await call(base, await as("user-kjohnson"), "AiHealth");
+    const answer = await call(base, await as("user-erin"), "AiHealth");
     assert.deepEqual(answer.data.aiHealth, {
       available: false,
       reason: "ai_service_unavailable",
@@ -235,7 +231,7 @@ describe("Steward AI", () => {
   });
 
   it("answers a job as the gateway does when the ai service is down", async () => {
-    const author = await as("user-alovelace");
+    const author = await as("user-bob");
     const answer = await call(base, author, "SubmitDraftGeneration", {
       input: {
         brief: "Travel booking.",
