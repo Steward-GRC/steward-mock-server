@@ -7,19 +7,18 @@
 // schema says non-null.
 
 import { subscribe } from "#core/events.ts";
-import {
-  type Context,
-  MockError,
-  type Resolvers,
-  signedIn,
-} from "#core/graphql.ts";
+import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { adminResolvers } from "#product/resolvers/admin.ts";
 import { aiResolvers } from "#product/resolvers/ai.ts";
 import { caseResolvers } from "#product/resolvers/cases.ts";
 import { complianceResolvers } from "#product/resolvers/compliance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
-import { LIVE_EVENTS, type LiveEvent } from "#product/resolvers/shared.ts";
+import {
+  LIVE_EVENTS,
+  type LiveEvent,
+  refuse,
+} from "#product/resolvers/shared.ts";
 import { userResolvers } from "#product/resolvers/users.ts";
 import { workflowResolvers } from "#product/resolvers/workflow.ts";
 
@@ -40,7 +39,7 @@ const liveResolvers: Resolvers = {
       ) => {
         const person = signedIn(context);
         if (!person.roles.some((role) => AUDIT_READERS.has(role)))
-          throw new MockError(
+          throw refuse(
             "FORBIDDEN",
             "Live updates need the audit log's read permission.",
           );

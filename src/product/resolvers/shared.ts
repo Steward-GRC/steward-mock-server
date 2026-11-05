@@ -22,8 +22,9 @@ export interface LiveEvent {
 }
 
 /**
- * The codes the mock refuses with, in the core's spelling: the gateway relays a service's gRPC
- * status (FailedPrecondition, AlreadyExists) and the web reads them by these names.
+ * Why the mock refuses, by kind. Each goes on the wire with the code steward-gateway puts in
+ * extensions.code: a service's refusal is relayed with its gRPC status name
+ * (internal/server/errors.go, presentStatus), and a gateway fault is INTERNAL.
  */
 export type RefusalCode =
   | "ALREADY_EXISTS"
@@ -33,8 +34,17 @@ export type RefusalCode =
   | "INTERNAL"
   | "NOT_FOUND";
 
+const GATEWAY_CODES: Record<RefusalCode, string> = {
+  ALREADY_EXISTS: "AlreadyExists",
+  BAD_USER_INPUT: "InvalidArgument",
+  FAILED_PRECONDITION: "FailedPrecondition",
+  FORBIDDEN: "PermissionDenied",
+  INTERNAL: "INTERNAL",
+  NOT_FOUND: "NotFound",
+};
+
 export const refuse = (code: RefusalCode, message: string): GraphQLError =>
-  new GraphQLError(message, { extensions: { code } });
+  new GraphQLError(message, { extensions: { code: GATEWAY_CODES[code] } });
 
 export const forbidden = (): GraphQLError =>
   refuse("FORBIDDEN", "You don't have permission to do that.");
