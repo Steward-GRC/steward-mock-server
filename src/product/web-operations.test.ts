@@ -247,6 +247,12 @@ const cases: Record<string, Case> = {
   ForceRotateSpCertificate: { as: ADMIN },
   GlobalSettings: { as: READER },
   GrantRole: { as: ADMIN, variables: { role: "author", userId: READER } },
+  // Without a step-up code asked for first, identity refuses it; the one-step case can't ask.
+  GrantRoot: {
+    as: ADMIN,
+    refused: "InvalidArgument",
+    variables: { otp: "123456", userId: AUTHOR },
+  },
   GroupMappings: { as: ADMIN, variables: { connectionId: "connection-1" } },
   ImpersonationStatus: { answersNull: true, as: ADMIN },
   IssueCollabToken: {
@@ -312,6 +318,10 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { id: "template-version-3" },
   },
+  ReassignUserPolicies: {
+    as: ADMIN,
+    variables: { fromUserId: AUTHOR, toUserId: APPROVER },
+  },
   RecordAck: { as: READER, variables: { policyVersionId: "version-2" } },
   RecordRiskAssessment: {
     as: OFFICER,
@@ -332,6 +342,10 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { groupId: "group-2", userId: APPROVER },
   },
+  RemoveUserMfaFactor: {
+    as: ADMIN,
+    variables: { methodId: "totp", userId: APPROVER },
+  },
   RenameCategory: {
     as: ADMIN,
     variables: {
@@ -344,6 +358,10 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { id: "template-1", name: "Standard Policy, 2026" },
   },
+  RenameUserMfaFactor: {
+    as: ADMIN,
+    variables: { label: "Spare phone", methodId: "totp", userId: ADMIN },
+  },
   ReorderAppendices: {
     as: AUTHOR,
     variables: {
@@ -353,6 +371,12 @@ const cases: Record<string, Case> = {
   },
   ReportCase: { as: OFFICER, variables: { caseId: "case-1" } },
   ReportCases: { as: OFFICER, variables: {} },
+  RequestStepUpOtp: { as: ADMIN },
+  ResendWelcomeEmail: { as: ADMIN, variables: { userId: READER } },
+  ResetUserPassword: {
+    as: ADMIN,
+    variables: { newPassword: "a new password", userId: AUTHOR },
+  },
   ResolveUserLabels: {
     as: READER,
     variables: { ids: [AUTHOR, "user-nobody"] },
@@ -453,6 +477,14 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { archived: false, id: "reference-3" },
   },
+  SetUserPolicyOverride: {
+    as: ADMIN,
+    variables: {
+      effect: "DENY",
+      policyNumber: "POL-LEAVE-000001",
+      userId: AUTHOR,
+    },
+  },
   SignalWorkflow: {
     as: APPROVER,
     variables: {
@@ -471,6 +503,10 @@ const cases: Record<string, Case> = {
   StartDomainVerification: {
     as: ADMIN,
     variables: { domain: "partner.example.net", rotate: false },
+  },
+  StartImpersonation: {
+    as: ADMIN,
+    variables: { reason: "Checking her view", userId: READER },
   },
   StopImpersonation: { as: ADMIN },
   SubmitDraftGeneration: {
@@ -590,6 +626,7 @@ const cases: Record<string, Case> = {
       ],
     },
   },
+  UserFactors: { as: ADMIN, variables: { userId: APPROVER } },
   Users: { as: ADMIN, variables: { includeDeleted: true } },
   VerifyAuditChain: {
     as: ADMIN,
@@ -645,7 +682,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 140);
+    assert.equal(webOperations.length, 150);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

@@ -136,7 +136,10 @@ export const people = (): StewardPerson[] => [
     id: "user-dave",
     idpGroups: ["contractors"],
     localAccount: false,
-    memberships: [{ groupId: "group-2", source: "idp-sync" }],
+    memberships: [
+      { groupId: "group-2", source: "idp-sync" },
+      { groupId: "group-3", source: "manual" },
+    ],
     name: "Dave Officer",
     policyOverrides: [{ effect: "DENY", policyNumber: "PRC-DEVICES-000001" }],
     roles: ["privacy-officer"],
