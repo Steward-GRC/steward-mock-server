@@ -97,10 +97,11 @@ export const complianceResolvers: Resolvers = {
         };
         data().acknowledgements.push(ack);
         const policy = data().policies.find((p) => p.id === version.policyId);
+        // steward-obligations files an acknowledgement under its own id.
         record("ack.recorded", person, {
           groupId: policy?.homeCategoryId,
-          id: version.policyId,
-          kind: "policy",
+          id: `${ack.policyVersionId}:${ack.userId}`,
+          kind: "acknowledgment",
           label: policy?.title ?? null,
         });
       }
