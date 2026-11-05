@@ -35,6 +35,7 @@ import {
   record,
   refuse,
 } from "#product/resolvers/shared.ts";
+import { diffVersions } from "#product/sections.ts";
 
 /** How long a break-glass grant lasts. */
 const BREAK_GLASS_MS = 5 * 60 * 1000;
@@ -220,66 +221,38 @@ const appendixHolder = (id: string) =>
     "appendix",
   );
 
-interface StoredSection {
-  sectionKey?: unknown;
-  text?: unknown;
-  title?: unknown;
-}
-
-/** A version's sections by key, read from the reader's section list or, failing that, as one. */
-const sectionsOf = (
-  contentJson: string,
-): Map<string, { text: string; title: string }> => {
-  const out = new Map<string, { text: string; title: string }>();
-  try {
-    const parsed = JSON.parse(contentJson) as unknown;
-    if (Array.isArray(parsed)) {
-      for (const s of parsed as StoredSection[])
-        out.set(String(s.sectionKey ?? s.title ?? out.size), {
-          text: typeof s.text === "string" ? s.text : "",
-          title: typeof s.title === "string" ? s.title : "",
-        });
-      return out;
-    }
-  } catch {
-    // Not JSON: compared as one block of text below.
-  }
-  out.set("content", { text: contentJson, title: "Content" });
-  return out;
-};
-
-const escape = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
-const diff = (from: PolicyVersion, to: PolicyVersion, obscured: boolean) => {
-  const before = sectionsOf(from.contentJson);
-  const after = sectionsOf(to.contentJson);
-  const keys = [...new Set([...before.keys(), ...after.keys()])];
-  return keys.flatMap((key) => {
-    const old = before.get(key);
-    const next = after.get(key);
-    if (old && next && old.text === next.text && old.title === next.title)
-      return [];
-    const changeType = old ? (next ? "modified" : "removed") : "added";
-    const html = [
-      old ? `<del>${escape(old.text)}</del>` : "",
-      next ? `<ins>${escape(next.text)}</ins>` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    return [
-      {
-        changeType,
-        isBoilerplate: false,
-        sectionKey: key,
-        sectionTitle: (next ?? old)?.title ?? key,
-        wordDiffHtml: obscured ? null : html,
-      },
-    ];
+/** The gateway's scrambleText, for a section title an obfuscated read gets. */
+const SCRAMBLE = "xqzjvbkwflgncmdptrhsyuoaei";
+const scrambled = (value: string) =>
+  value.replaceAll(/[a-zA-Z]/g, (ch) => {
+    const lower = ch.toLowerCase();
+    const swap = SCRAMBLE[(lower.codePointAt(0) ?? 97) - 97] ?? lower;
+    return ch === lower ? swap : swap.toUpperCase();
   });
+
+/**
+ * core's DiffVersions over the "to" version's pinned template sections, keyed as core keys them
+ * (src/product/sections.ts). A version with no pinned template has no sections to diff, which
+ * core refuses as an internal fault. The gateway drops the word diff and scrambles the titles for
+ * an obfuscated read.
+ */
+const diff = (from: PolicyVersion, to: PolicyVersion, obscured: boolean) => {
+  const template = data().templateVersions.find(
+    (t) => t.id === to.templateVersionId,
+  );
+  if (!template) throw refuse("INTERNAL", "fetch template version: not found");
+  const diffs = diffVersions(
+    from.contentJson,
+    to.contentJson,
+    template.sections.toSorted((a, b) => a.order - b.order),
+    from.templateVersionId !== to.templateVersionId,
+  );
+  if (!diffs) throw refuse("INTERNAL", "diff: parse content");
+  return diffs.map((d) => ({
+    ...d,
+    sectionTitle: obscured ? scrambled(d.sectionTitle) : d.sectionTitle,
+    wordDiffHtml: obscured || d.wordDiffHtml === "" ? null : d.wordDiffHtml,
+  }));
 };
 
 const readable = (person: StewardPerson, id: string): PolicyVersion => {

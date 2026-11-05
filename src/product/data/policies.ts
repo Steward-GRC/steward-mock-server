@@ -101,12 +101,6 @@ export const EXPENSE_CLAIMS_NUMBER = "POL-EXPENSES-000002";
 /** steward-core's rendered number for the seeded Travel Booking Procedure, the draft in review. */
 export const TRAVEL_BOOKING_NUMBER = "PRC-TRAVEL-000003";
 
-/** A version's content as the reader reads it: one entry per section, in order. */
-const sections = (...entries: [string, string, string][]): string =>
-  JSON.stringify(
-    entries.map(([sectionKey, title, text]) => ({ sectionKey, text, title })),
-  );
-
 const text = (value: string) => ({
   detail: 0,
   format: 0,
@@ -127,14 +121,38 @@ const block = (type: string, value: string, extra: object = {}) => ({
   ...extra,
 });
 
-/** A draft's content as the editor writes it: a Lexical document, a heading per section. */
-const lexical = (...entries: [string, string][]): string =>
+/** One top-level block of a document: a heading, a paragraph or a table. */
+type Block = ReturnType<typeof block>;
+
+const h1 = (value: string) => block("heading", value, { tag: "h1" });
+const h2 = (value: string) => block("heading", value, { tag: "h2" });
+const p = (value: string) =>
+  block("paragraph", value, { textFormat: 0, textStyle: "" });
+
+/** A table whose first row is its header. */
+const table = (...rows: string[][]) => ({
+  children: rows.map((cells, index) => ({
+    children: cells.map((cell) => ({
+      children: [p(cell)],
+      headerState: index === 0 ? 1 : 0,
+      type: "tablecell",
+      version: 1,
+    })),
+    type: "tablerow",
+    version: 1,
+  })),
+  type: "table",
+  version: 1,
+});
+
+/**
+ * A version's content as the editor writes it and steward-core reads it: a Lexical document,
+ * whose top-level headings name its sections (src/product/sections.ts derives their keys).
+ */
+const document = (...children: (Block | ReturnType<typeof table>)[]): string =>
   JSON.stringify({
     root: {
-      children: entries.flatMap(([heading, paragraph]) => [
-        block("heading", heading, { tag: "h1" }),
-        block("paragraph", paragraph, { textFormat: 0, textStyle: "" }),
-      ]),
+      children,
       direction: null,
       format: "",
       indent: 0,
@@ -142,6 +160,25 @@ const lexical = (...entries: [string, string][]): string =>
       version: 1,
     },
   });
+
+/** A section per heading, each with its paragraphs. */
+const lexical = (...entries: [string, ...string[]][]): string =>
+  document(
+    ...entries.flatMap(([heading, ...paragraphs]) => [
+      h1(heading),
+      ...(paragraphs.length > 0 ? paragraphs : [""]).map((text) => p(text)),
+    ]),
+  );
+
+/** Expense Claims' purpose and scope, the same in every version. */
+const EXPENSES_PURPOSE: [string, string] = [
+  "Purpose",
+  "How staff claim back business expenses.",
+];
+const EXPENSES_SCOPE: [string, string] = [
+  "Scope",
+  "Everyone who travels or buys for the organisation.",
+];
 
 const policy = (
   given: Partial<Policy> &
@@ -291,15 +328,11 @@ const version = (
 
 export const versions = (): PolicyVersion[] => [
   version({
-    contentJson: sections(
-      ["purpose", "Purpose", "How staff claim back business expenses."],
-      ["scope", "Scope", "Everyone who travels or buys for the organisation."],
-      [
-        "policy-statement",
-        "Policy statement",
-        "Claims are paid in US dollars only.",
-      ],
-    ),
+    contentJson: lexical(EXPENSES_PURPOSE, EXPENSES_SCOPE, [
+      "Policy statement",
+      "File your claim within 90 days of spending the money.",
+      "Attach a receipt for every item. Post the original to the finance team. Claims are paid in US dollars only.",
+    ]),
     createdAt: "2025-06-02T09:00:00Z",
     id: "version-1",
     policyId: "policy-1",
@@ -309,15 +342,11 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
-    contentJson: sections(
-      ["purpose", "Purpose", "How staff claim back business expenses."],
-      ["scope", "Scope", "Everyone who travels or buys for the organisation."],
-      [
-        "policy-statement",
-        "Policy statement",
-        "File a claim within 60 days of spending the money and post the original receipts to Finance.",
-      ],
-    ),
+    contentJson: lexical(EXPENSES_PURPOSE, EXPENSES_SCOPE, [
+      "Policy statement",
+      "File your claim within 60 days of spending the money, using the expenses page.",
+      "Attach a receipt for every item. Post the original to the finance team.",
+    ]),
     createdAt: "2025-11-03T09:00:00Z",
     id: "version-10",
     policyId: "policy-1",
@@ -339,15 +368,11 @@ export const versions = (): PolicyVersion[] => [
         title: "Per-diem rates",
       },
     ],
-    contentJson: sections(
-      ["purpose", "Purpose", "How staff claim back business expenses."],
-      ["scope", "Scope", "Everyone who travels or buys for the organisation."],
-      [
-        "policy-statement",
-        "Policy statement",
-        "File your claim within 30 days of spending the money, using the expenses page. Attach a clear photo of each receipt; you don't need to post the originals. Claims are paid at the rate set for the country the cost was incurred in.",
-      ],
-    ),
+    contentJson: lexical(EXPENSES_PURPOSE, EXPENSES_SCOPE, [
+      "Policy statement",
+      "File your claim within 30 days of spending the money, using the expenses page.",
+      "Attach a receipt for every item. A clear photo of the receipt is enough.",
+    ]),
     createdAt: "2026-07-29T09:15:00Z",
     id: "version-2",
     policyId: "policy-1",
@@ -391,14 +416,12 @@ export const versions = (): PolicyVersion[] => [
     policyId: "policy-2",
   }),
   version({
-    contentJson: sections(
+    contentJson: lexical(
       [
-        "steps",
         "Steps",
         "Book trains, flights and hotels on the travel booking site at least 14 days ahead.",
       ],
       [
-        "afterwards",
         "Afterwards",
         "Business-class fares are restricted to journeys over six hours.",
       ],
@@ -409,8 +432,7 @@ export const versions = (): PolicyVersion[] => [
     status: "IN_REVIEW",
   }),
   version({
-    contentJson: sections([
-      "policy-statement",
+    contentJson: lexical([
       "Policy statement",
       "Staff may carry over up to five days of unused leave with their manager's agreement.",
     ]),
@@ -422,8 +444,7 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
-    contentJson: sections([
-      "policy-statement",
+    contentJson: lexical([
       "Policy statement",
       "Mileage in a private car is paid at the rate Finance sets each April.",
     ]),
@@ -433,14 +454,13 @@ export const versions = (): PolicyVersion[] => [
     status: "WITHDRAWN",
   }),
   version({
-    contentJson: sections(
+    contentJson: lexical(
       [
-        "steps",
         "Steps",
-        "Tell the IT Service Desk as soon as you notice the device is missing, then change your password from another device.",
+        "Report it straight away: tell the service desk within one hour of noticing the device is missing.",
+        "Change your password from another device.",
       ],
       [
-        "afterwards",
         "Afterwards",
         "If it turns up, bring it to the service desk to be checked before you use it again.",
       ],
@@ -454,8 +474,7 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
-    contentJson: sections([
-      "policy-statement",
+    contentJson: lexical([
       "Policy statement",
       "Declare any gift or hospitality worth more than a modest amount.",
     ]),
@@ -465,14 +484,12 @@ export const versions = (): PolicyVersion[] => [
     status: "REJECTED",
   }),
   version({
-    contentJson: sections(
+    contentJson: lexical(
       [
-        "purpose",
         "Purpose",
         "Who may hold administrator access to stored records, and how it is granted.",
       ],
       [
-        "policy-statement",
         "Policy statement",
         "Administrator access is granted for a named task and reviewed every quarter.",
       ],
@@ -485,14 +502,40 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
-    contentJson: sections(
-      ["purpose", "Purpose", "How staff book a desk in the office."],
-      ["scope", "Scope", "Everyone who works from an organisation office."],
-      [
-        "policy-statement",
-        "Policy statement",
-        "Book a desk up to two weeks ahead on the booking page. Cancel the booking by 10:00 if your plans change, so a colleague can use the desk.",
-      ],
+    appendices: [
+      {
+        contentJson: JSON.stringify({
+          text: "Quiet zone, team zone and drop-in zone, with the floors each one covers.",
+        }),
+        id: "appendix-4",
+        letter: "A",
+        orderIndex: 0,
+        policyVersionId: "version-11",
+        title: "Desk zones",
+      },
+    ],
+    // The design's reader frame (U7): its sections, the sub-section and the table.
+    contentJson: document(
+      h1("Purpose"),
+      p(
+        "This policy explains how staff book a desk in a shared office, how long a booking lasts, and what to do when plans change.",
+      ),
+      h1("Scope"),
+      p(
+        "It applies to everyone who works from an Example Organisation office, including contractors and visitors who are given a desk for the day.",
+      ),
+      h1("Booking a desk"),
+      p(
+        "Book a shared desk through the booking page within the booking window. A booking holds the desk until 10:00 on the day.",
+      ),
+      h2("Changing a booking"),
+      p("Cancel a booking you no longer need so a colleague can use the desk."),
+      h1("Responsibilities"),
+      table(
+        ["Role", "Responsibility"],
+        ["Staff", "Book ahead, and cancel when plans change."],
+        ["Facilities team", "Keep the booking page and desk zones up to date."],
+      ),
     ),
     createdAt: "2026-09-15T10:00:00Z",
     id: "version-11",
@@ -503,11 +546,10 @@ export const versions = (): PolicyVersion[] => [
     versionNo: 1,
   }),
   version({
-    contentJson: sections(
-      ["purpose", "Purpose", "How visitors are welcomed and kept safe."],
-      ["scope", "Scope", "Everyone who invites a visitor to an office."],
+    contentJson: lexical(
+      ["Purpose", "How visitors are welcomed and kept safe."],
+      ["Scope", "Everyone who invites a visitor to an office."],
       [
-        "policy-statement",
         "Policy statement",
         "Every visitor signs in at the front desk, wears a visitor badge and is met by their host. The host signs them out when they leave.",
       ],
