@@ -1,0 +1,8 @@
+query ImpersonationStatus {
+  impersonationStatus {
+    targetUserId
+    targetName
+    startedAt
+    expiresAt
+  }
+}
