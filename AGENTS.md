@@ -21,7 +21,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 - `src/core/` - `server.ts` (HTTP, HTTPS, websocket upgrade), `handle.ts` (routing, `/query`,
   CORS), `graphql.ts` (schema, execution, error codes), `websocket.ts` (both subscription
   protocols), `auth.ts` (`/auth/*`, cookie and bearer sessions), `setup.ts` (`/setup/*`),
-  `health.ts`, `controls.ts` and `page.ts` (`/_mock`), `state.ts`, `events.ts`, `log.ts`.
+  `health.ts`, `controls.ts` and `page.ts` (`/_mock`), `maintenance.ts` (the maintenance window
+  and the refusal while it's on), `state.ts`, `events.ts`, `log.ts`.
 - `src/core/product.ts` - the Product contract; `src/core/test-fixture.ts` - the fixture product
   the core tests serve.
 - `src/product/` - `product.ts` (Steward as a Product), `routes.ts` (the gateway's sign-in and
@@ -57,8 +58,8 @@ from steward-gateway at the commit in `schema-refs.env`: bump the ref, run
 
 ## Template sync
 
-- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.1.0**
-  (`c742664`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
+- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.3.0**
+  (`253fc31`). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
   metadata only: it never becomes a tag here.
 - `src/core/` is the template's file for file; only the two SPDX lines differ (Steward's holder).
   Steward's sign-in and first-run bootstrap are product routes in `src/product/routes.ts`, which
