@@ -350,6 +350,16 @@ export const accountResolvers: Resolvers = {
         current,
       );
     },
+    /**
+     * The caller's own factors, as identity's ListUserFactors answers: the authenticator app with
+     * its label, one passkey entry (unlabelled, dated from the first passkey), then the email.
+     */
+    myFactors: (_root, _given, context: Context) =>
+      factorsOf(caller(context)).map(({ enrolledAt, kind, label }) => ({
+        enrolledAt,
+        kind,
+        label: kind === "passkey" ? null : label,
+      })),
     userFactors: (_root, given: { userId: string }, context: Context) => {
       siteAdmin(context);
       return factorsOf(personFor(given.userId));

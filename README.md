@@ -160,7 +160,8 @@ The admin user screens answer as steward-gateway and steward-identity do:
   shown and kept, but the mock's read model doesn't apply them.
 - **Second factors:** `userFactors` lists the authenticator app, each passkey and the implicit
   email factor, and `removeUserMfaFactor` and `renameUserMfaFactor` change them. Removing one
-  takes it off sign-in too.
+  takes it off sign-in too. `myFactors` is the signed-in person's own list (one passkey entry,
+  unlabelled); Erin has only the email factor, so steward-web nudges her towards a stronger one.
 - **Password and welcome email:** `resetUserPassword` answers true for a local account (the
   password isn't kept, since any password signs in); `resendWelcomeEmail` answers true and sends
   nothing.

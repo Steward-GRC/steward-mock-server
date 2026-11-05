@@ -248,6 +248,7 @@ const cases: Record<string, Case> = {
   GlobalSettings: { as: READER },
   GrantRole: { as: ADMIN, variables: { role: "author", userId: READER } },
   GroupMappings: { as: ADMIN, variables: { connectionId: "connection-1" } },
+  ImpersonationStatus: { answersNull: true, as: ADMIN },
   IssueCollabToken: {
     as: AUTHOR,
     variables: { draftId: "version-3", policyId: "policy-2" },
@@ -277,6 +278,7 @@ const cases: Record<string, Case> = {
   },
   MyAckSummary: { as: READER },
   MyDrafts: { as: AUTHOR },
+  MyFactors: { as: READER },
   MyManagedGroups: { as: APPROVER },
   MyObligations: { as: READER },
   Organizations: { as: ADMIN },
@@ -470,6 +472,7 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { domain: "partner.example.net", rotate: false },
   },
+  StopImpersonation: { as: ADMIN },
   SubmitDraftGeneration: {
     as: AUTHOR,
     refused: AI_DOWN,
@@ -642,7 +645,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 137);
+    assert.equal(webOperations.length, 140);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());
