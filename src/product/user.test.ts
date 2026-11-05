@@ -97,7 +97,15 @@ describe("me", () => {
 
 describe("the sample people", () => {
   it("are the placeholder people, in order, each at example.org", () => {
-    const placeholders = ["alice", "bob", "charlie", "dave", "erin", "frank"];
+    const placeholders = [
+      "alice",
+      "bob",
+      "charlie",
+      "dave",
+      "erin",
+      "frank",
+      "heidi",
+    ];
     const sample = people();
     assert.deepEqual(
       sample.map((p) => p.username),
