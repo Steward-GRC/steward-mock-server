@@ -1,0 +1,7 @@
+query PolicyVersions($policyId: ID!) {
+  policyVersions(policyId: $policyId) {
+    id
+    versionNo
+    status
+  }
+}

@@ -1,0 +1,31 @@
+query PolicyAttachments($policyId: ID!) {
+  relatedPolicies(policyId: $policyId) {
+    policyId
+    number
+    title
+  }
+  policyReferences(policyId: $policyId) {
+    id
+    label
+    kind
+    clause
+    body
+    url
+  }
+  policyContactBlocks(policyId: $policyId) {
+    id
+    label
+    name
+    role
+    department
+    email
+    phone
+    hours
+    notes
+  }
+  policyDefinitionEntries(policyId: $policyId) {
+    id
+    term
+    definition
+  }
+}

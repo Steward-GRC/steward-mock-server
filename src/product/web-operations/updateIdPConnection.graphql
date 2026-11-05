@@ -1,0 +1,17 @@
+mutation UpdateIdPConnection(
+  $domain: String!
+  $jitEnabled: Boolean
+  $allowLocal: Boolean
+  $secretRef: String
+  $clientSecret: String
+) {
+  updateIdPConnection(
+    domain: $domain
+    jitEnabled: $jitEnabled
+    allowLocal: $allowLocal
+    secretRef: $secretRef
+    clientSecret: $clientSecret
+  ) {
+    ...OrganizationFields
+  }
+}

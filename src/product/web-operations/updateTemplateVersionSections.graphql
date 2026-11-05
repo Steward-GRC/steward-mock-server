@@ -1,0 +1,5 @@
+mutation UpdateTemplateVersionSections($id: ID!, $sections: [SectionInput!]!) {
+  updateTemplateVersionSections(id: $id, sections: $sections) {
+    ...TemplateVersionFields
+  }
+}

@@ -1,0 +1,8 @@
+query AiJob($jobId: ID!) {
+  aiJob(jobId: $jobId) {
+    jobId
+    phase
+    resultRef
+    error
+  }
+}

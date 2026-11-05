@@ -1,0 +1,5 @@
+query CategoryChildren($parentId: ID) {
+  categoryChildren(parentId: $parentId) {
+    ...CategoryFields
+  }
+}

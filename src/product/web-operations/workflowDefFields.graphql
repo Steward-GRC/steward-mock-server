@@ -1,0 +1,9 @@
+fragment WorkflowDefFields on WorkflowDef {
+  id
+  name
+  description
+  version
+  stages {
+    ...WorkflowStageDefFields
+  }
+}

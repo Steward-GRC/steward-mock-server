@@ -1,0 +1,5 @@
+mutation UpdateAppendix($id: ID!, $title: String!, $contentJson: String!) {
+  updateAppendix(id: $id, title: $title, contentJson: $contentJson) {
+    ...AppendixFields
+  }
+}

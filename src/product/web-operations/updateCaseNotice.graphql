@@ -1,0 +1,12 @@
+mutation UpdateCaseNotice($caseId: ID!, $noticeId: ID!, $status: NoticeStatus!, $sentOn: String) {
+  updateCaseNotice(caseId: $caseId, noticeId: $noticeId, status: $status, sentOn: $sentOn) {
+    id
+    recipient
+    label
+    method
+    daysAllowed
+    dueOn
+    status
+    sentOn
+  }
+}

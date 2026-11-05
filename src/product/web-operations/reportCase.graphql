@@ -1,0 +1,5 @@
+query ReportCase($caseId: ID!) {
+  reportCase(caseId: $caseId) {
+    ...ReportCaseFields
+  }
+}

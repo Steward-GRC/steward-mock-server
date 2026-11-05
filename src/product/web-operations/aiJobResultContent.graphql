@@ -1,0 +1,6 @@
+query AiJobResultContent($resultRef: String!) {
+  aiJobResultContent(resultRef: $resultRef) {
+    operation
+    resultJson
+  }
+}

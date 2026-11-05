@@ -1,0 +1,17 @@
+mutation CreatePolicy(
+  $homeCategoryId: ID!
+  $title: String!
+  $sensitivity: Sensitivity!
+  $templateId: ID
+  $documentType: DocumentType
+) {
+  createPolicy(
+    homeCategoryId: $homeCategoryId
+    title: $title
+    sensitivity: $sensitivity
+    templateId: $templateId
+    documentType: $documentType
+  ) {
+    ...AuthoringPolicyFields
+  }
+}

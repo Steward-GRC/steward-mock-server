@@ -1,0 +1,36 @@
+query Diagnostics {
+  diagnostics {
+    generatedAt
+    traceId
+    actor {
+      id
+      username
+      roles
+      actingAs {
+        id
+        username
+        roles
+      }
+    }
+    gateway {
+      name
+      version
+      commit
+      status
+    }
+    release
+    appliance
+    services {
+      name
+      version
+      commit
+      status
+    }
+    thirdParty {
+      name
+      version
+      commit
+      status
+    }
+  }
+}

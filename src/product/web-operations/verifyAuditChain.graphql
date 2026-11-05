@@ -1,0 +1,7 @@
+query VerifyAuditChain($fromRecordId: String!, $toRecordId: String!) {
+  verifyAuditChain(fromRecordId: $fromRecordId, toRecordId: $toRecordId) {
+    valid
+    recordsChecked
+    errors
+  }
+}

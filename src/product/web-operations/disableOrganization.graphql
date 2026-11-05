@@ -1,0 +1,5 @@
+mutation DisableOrganization($domain: String!) {
+  disableOrganization(domain: $domain) {
+    ...OrganizationFields
+  }
+}

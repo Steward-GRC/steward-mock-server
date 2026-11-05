@@ -1,0 +1,3 @@
+mutation ArchiveWorkflowDef($id: ID!) {
+  archiveWorkflowDef(id: $id)
+}

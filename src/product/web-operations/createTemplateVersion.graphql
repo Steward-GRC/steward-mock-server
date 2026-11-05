@@ -1,0 +1,5 @@
+mutation CreateTemplateVersion($templateId: ID!, $sections: [SectionInput!]!) {
+  createTemplateVersion(templateId: $templateId, sections: $sections) {
+    ...TemplateVersionFields
+  }
+}

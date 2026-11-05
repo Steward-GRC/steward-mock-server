@@ -1,0 +1,15 @@
+mutation SetContactBlockArchived($id: ID!, $archived: Boolean!) {
+  setContactBlockArchived(id: $id, archived: $archived) {
+    id
+    label
+    name
+    role
+    department
+    email
+    phone
+    hours
+    notes
+    archived
+    usedByCount
+  }
+}

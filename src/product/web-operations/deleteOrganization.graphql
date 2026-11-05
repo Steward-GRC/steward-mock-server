@@ -1,0 +1,3 @@
+mutation DeleteOrganization($domain: String!) {
+  deleteOrganization(domain: $domain)
+}

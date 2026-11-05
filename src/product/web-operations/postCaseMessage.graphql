@@ -1,0 +1,9 @@
+mutation PostCaseMessage($caseId: ID!, $body: String!) {
+  postCaseMessage(caseId: $caseId, body: $body) {
+    id
+    author
+    officerUserId
+    body
+    createdAt
+  }
+}

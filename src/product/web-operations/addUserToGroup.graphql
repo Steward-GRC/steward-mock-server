@@ -1,0 +1,5 @@
+mutation AddUserToGroup($userId: ID!, $groupId: ID!) {
+  addUserToGroup(userId: $userId, groupId: $groupId) {
+    ...UserFields
+  }
+}

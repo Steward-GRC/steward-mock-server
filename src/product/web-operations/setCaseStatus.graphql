@@ -1,0 +1,5 @@
+mutation SetCaseStatus($caseId: ID!, $status: CaseStatus!) {
+  setCaseStatus(caseId: $caseId, status: $status) {
+    ...ReportCaseFields
+  }
+}

@@ -1,0 +1,25 @@
+query WorkflowStatus($policyVersionId: ID!) {
+  workflowStatus(policyVersionId: $policyVersionId) {
+    status
+    runId
+    currentStageIdx
+    stageNames
+    stageAssignees {
+      userId
+      name
+      state
+      comment
+      decidedAt
+    }
+    stageUnitProgress {
+      groupId
+      groupName
+      quorum
+      required
+      approvals
+      pending
+      roster
+      status
+    }
+  }
+}

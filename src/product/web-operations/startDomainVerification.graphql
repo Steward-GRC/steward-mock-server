@@ -1,0 +1,8 @@
+mutation StartDomainVerification($domain: String!, $rotate: Boolean) {
+  startDomainVerification(domain: $domain, rotate: $rotate) {
+    dnsRecordName
+    dnsRecordValue
+    instructions
+    token
+  }
+}

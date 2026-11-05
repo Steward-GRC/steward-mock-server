@@ -1,0 +1,11 @@
+query Definitions($categoryId: ID, $includeArchived: Boolean) {
+  definitions(categoryId: $categoryId, includeArchived: $includeArchived) {
+    id
+    categoryId
+    term
+    definition
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

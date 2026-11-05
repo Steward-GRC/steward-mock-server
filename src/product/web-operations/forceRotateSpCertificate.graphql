@@ -1,0 +1,9 @@
+mutation ForceRotateSpCertificate {
+  forceRotateSpCertificate {
+    active
+    certPem
+    notAfter
+    serial
+    spMetadataXml
+  }
+}

@@ -1,0 +1,15 @@
+mutation SignalWorkflow(
+  $policyVersionId: ID!
+  $runId: ID!
+  $taskId: ID!
+  $signal: SignalType!
+  $comment: String!
+) {
+  signalWorkflow(
+    policyVersionId: $policyVersionId
+    runId: $runId
+    taskId: $taskId
+    signal: $signal
+    comment: $comment
+  )
+}

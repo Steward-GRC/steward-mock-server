@@ -1,0 +1,6 @@
+query AckStatus($policyVersionId: ID!) {
+  ackStatus(policyVersionId: $policyVersionId) {
+    acknowledged
+    ackedAt
+  }
+}

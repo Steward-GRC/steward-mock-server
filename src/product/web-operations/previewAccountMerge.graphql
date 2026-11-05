@@ -1,0 +1,25 @@
+query PreviewAccountMerge($sourceUserId: ID!, $targetUserId: ID!) {
+  previewAccountMerge(sourceUserId: $sourceUserId, targetUserId: $targetUserId) {
+    sourceUserId
+    targetUserId
+    counts {
+      policiesOwned
+      raciGrants
+      acknowledgmentsMoved
+      acknowledgmentsDeduped
+      workflowItems
+      preferences
+    }
+    items {
+      kind
+      refId
+      label
+      detail
+    }
+    warnings {
+      code
+      message
+    }
+    requiresPrivilegedConfirm
+  }
+}

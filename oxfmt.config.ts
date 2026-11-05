@@ -13,5 +13,7 @@ export default {
     "CLAUDE.md",
     // A byte-exact copy of steward-gateway's SDL; schema.test.ts checks its hash.
     "src/product/schema.graphql",
+    // Byte-exact copies of steward-web's operations; the contract test sends them as they are.
+    "src/product/web-operations/**",
   ],
 };

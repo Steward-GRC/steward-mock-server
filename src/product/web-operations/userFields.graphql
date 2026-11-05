@@ -1,0 +1,19 @@
+fragment UserFields on User {
+  userId
+  name
+  firstName
+  lastName
+  email
+  enabled
+  roles
+  idpGroups
+  isRoot
+  localAccount
+  username
+  deletedAt
+  mergedIntoUserId
+  memberships {
+    groupId
+    source
+  }
+}

@@ -1,0 +1,15 @@
+mutation UpdateContactBlock($id: ID!, $block: ContactBlockInput!) {
+  updateContactBlock(id: $id, block: $block) {
+    id
+    label
+    name
+    role
+    department
+    email
+    phone
+    hours
+    notes
+    archived
+    usedByCount
+  }
+}

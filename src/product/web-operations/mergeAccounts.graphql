@@ -1,0 +1,30 @@
+mutation MergeAccounts(
+  $sourceUserId: ID!
+  $targetUserId: ID!
+  $confirmPrivileged: Boolean
+  $idempotencyKey: String
+) {
+  mergeAccounts(
+    sourceUserId: $sourceUserId
+    targetUserId: $targetUserId
+    confirmPrivileged: $confirmPrivileged
+    idempotencyKey: $idempotencyKey
+  ) {
+    mergeOperationId
+    status
+    counts {
+      policiesOwned
+      raciGrants
+      acknowledgmentsMoved
+      acknowledgmentsDeduped
+      workflowItems
+      preferences
+    }
+    steps {
+      step
+      status
+      detail
+      error
+    }
+  }
+}

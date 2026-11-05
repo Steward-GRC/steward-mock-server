@@ -1,0 +1,13 @@
+query References($includeArchived: Boolean) {
+  references(includeArchived: $includeArchived) {
+    id
+    label
+    kind
+    clause
+    body
+    url
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

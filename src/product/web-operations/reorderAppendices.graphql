@@ -1,0 +1,5 @@
+mutation ReorderAppendices($policyVersionId: ID!, $orderedIds: [ID!]!) {
+  reorderAppendices(policyVersionId: $policyVersionId, orderedIds: $orderedIds) {
+    ...AppendixFields
+  }
+}

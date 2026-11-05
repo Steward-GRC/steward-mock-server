@@ -1,0 +1,3 @@
+mutation DeleteGroupMapping($mappingId: ID!) {
+  deleteGroupMapping(mappingId: $mappingId)
+}

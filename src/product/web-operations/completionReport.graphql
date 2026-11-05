@@ -1,0 +1,14 @@
+query CompletionReport($policyVersionId: ID!, $groupId: ID) {
+  completionReport(policyVersionId: $policyVersionId, groupId: $groupId) {
+    totalAudience
+    totalAcked
+    completionPct
+    avgDaysToAck
+    viewedNotAckedCount
+    overdue {
+      userId
+      email
+      userName
+    }
+  }
+}

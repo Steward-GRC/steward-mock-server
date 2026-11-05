@@ -1,0 +1,10 @@
+query EmailServiceConfig {
+  emailServiceConfig {
+    apiKeySet
+    provider
+    domain
+    region
+    fromAddress
+    enabled
+  }
+}

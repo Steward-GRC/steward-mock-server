@@ -1,0 +1,3 @@
+mutation DeleteReference($id: ID!) {
+  deleteReference(id: $id)
+}

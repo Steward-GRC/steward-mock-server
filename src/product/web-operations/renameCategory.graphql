@@ -1,0 +1,5 @@
+mutation RenameCategory($id: ID!, $name: String!, $slug: String!) {
+  renameCategory(id: $id, name: $name, slug: $slug) {
+    ...CategoryFields
+  }
+}

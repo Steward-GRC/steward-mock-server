@@ -1,0 +1,13 @@
+mutation SetReferenceArchived($id: ID!, $archived: Boolean!) {
+  setReferenceArchived(id: $id, archived: $archived) {
+    id
+    label
+    kind
+    clause
+    body
+    url
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

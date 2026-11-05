@@ -1,0 +1,10 @@
+query PendingTasks {
+  pendingTasks {
+    taskId
+    runId
+    policyVersionId
+    policyTitle
+    stageIndex
+    dueAt
+  }
+}

@@ -1,0 +1,5 @@
+mutation PublishDraft($policyId: ID!) {
+  publishDraft(policyId: $policyId) {
+    ...PolicyVersionFields
+  }
+}

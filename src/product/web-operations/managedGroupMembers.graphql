@@ -1,0 +1,5 @@
+query ManagedGroupMembers($groupId: ID!) {
+  managedGroupMembers(groupId: $groupId) {
+    ...UserFields
+  }
+}

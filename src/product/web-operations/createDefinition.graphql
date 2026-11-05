@@ -1,0 +1,11 @@
+mutation CreateDefinition($input: DefinitionEntryInput!) {
+  createDefinition(input: $input) {
+    id
+    categoryId
+    term
+    definition
+    archived
+    createdByUserId
+    usedByCount
+  }
+}

@@ -1,0 +1,3 @@
+mutation DiscardDraft($policyId: ID!) {
+  discardDraft(policyId: $policyId)
+}

@@ -1,0 +1,17 @@
+mutation ChangeOrgProtocol(
+  $domain: String!
+  $protocol: String!
+  $config: [KeyValueInput!]
+  $secretRef: String
+  $clientSecret: String
+) {
+  changeOrgProtocol(
+    domain: $domain
+    protocol: $protocol
+    config: $config
+    secretRef: $secretRef
+    clientSecret: $clientSecret
+  ) {
+    ...OrganizationFields
+  }
+}

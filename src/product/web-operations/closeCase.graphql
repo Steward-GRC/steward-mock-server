@@ -1,0 +1,15 @@
+mutation CloseCase(
+  $caseId: ID!
+  $outcome: CaseOutcome!
+  $correctiveActions: [CorrectiveActionInput!]
+  $closingMessage: String
+) {
+  closeCase(
+    caseId: $caseId
+    outcome: $outcome
+    correctiveActions: $correctiveActions
+    closingMessage: $closingMessage
+  ) {
+    ...ReportCaseFields
+  }
+}

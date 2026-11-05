@@ -1,0 +1,15 @@
+mutation SetCategoryDefaults(
+  $id: ID!
+  $defaultTemplateId: ID
+  $defaultWorkflowId: ID
+  $defaultTemplateNone: Boolean
+) {
+  setCategoryDefaults(
+    id: $id
+    defaultTemplateId: $defaultTemplateId
+    defaultWorkflowId: $defaultWorkflowId
+    defaultTemplateNone: $defaultTemplateNone
+  ) {
+    ...CategoryFields
+  }
+}

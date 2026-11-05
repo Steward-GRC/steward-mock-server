@@ -1,0 +1,5 @@
+mutation VerifyDomain($domain: String!) {
+  verifyDomain(domain: $domain) {
+    ...OrganizationFields
+  }
+}

@@ -1,0 +1,5 @@
+mutation AssignCase($caseId: ID!, $assigneeUserId: ID) {
+  assignCase(caseId: $caseId, assigneeUserId: $assigneeUserId) {
+    ...ReportCaseFields
+  }
+}

@@ -1,0 +1,18 @@
+fragment WorkflowStageDefFields on WorkflowStageDef {
+  id
+  name
+  approvers
+  approversByCategory {
+    categoryId
+    approverIds
+  }
+  groupUnits {
+    groupId
+    internalQuorum
+    memberUserIds
+  }
+  quorum
+  slaDays
+  rejectOnSlaBreach
+  pinnedLast
+}

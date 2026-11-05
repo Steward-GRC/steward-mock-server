@@ -1,0 +1,23 @@
+mutation SetCategoryGovernance(
+  $id: ID!
+  $owners: [ID!]!
+  $idpGroupIds: [String!]
+  $exclusionGroupIds: [String!]
+  $ackTriggers: AckTrigger!
+  $reviewCadence: ReviewCadence!
+  $reviewDate: String
+  $ackEveryone: Boolean
+) {
+  setCategoryGovernance(
+    id: $id
+    owners: $owners
+    idpGroupIds: $idpGroupIds
+    exclusionGroupIds: $exclusionGroupIds
+    ackTriggers: $ackTriggers
+    reviewCadence: $reviewCadence
+    reviewDate: $reviewDate
+    ackEveryone: $ackEveryone
+  ) {
+    ...CategoryFields
+  }
+}

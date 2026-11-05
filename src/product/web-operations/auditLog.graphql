@@ -1,0 +1,22 @@
+query AuditLog(
+  $tier: String
+  $groupId: ID
+  $actorUserId: ID
+  $subject: String
+  $pageSize: Int
+  $pageToken: String
+) {
+  auditLog(
+    tier: $tier
+    groupId: $groupId
+    actorUserId: $actorUserId
+    subject: $subject
+    pageSize: $pageSize
+    pageToken: $pageToken
+  ) {
+    nextPageToken
+    records {
+      ...AuditRecordFields
+    }
+  }
+}

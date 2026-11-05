@@ -1,0 +1,6 @@
+mutation DeleteUser($userId: ID!) {
+  deleteUser(userId: $userId) {
+    userId
+    revokedSessions
+  }
+}

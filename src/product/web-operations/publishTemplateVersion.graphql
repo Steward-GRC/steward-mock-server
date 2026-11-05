@@ -1,0 +1,5 @@
+mutation PublishTemplateVersion($id: ID!) {
+  publishTemplateVersion(id: $id) {
+    ...TemplateVersionFields
+  }
+}

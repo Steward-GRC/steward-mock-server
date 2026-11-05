@@ -1,0 +1,5 @@
+query Templates($ownerCategoryId: ID) {
+  templates(ownerCategoryId: $ownerCategoryId) {
+    ...TemplateFields
+  }
+}

@@ -1,0 +1,3 @@
+mutation DiscardTemplateVersion($id: ID!) {
+  discardTemplateVersion(id: $id)
+}

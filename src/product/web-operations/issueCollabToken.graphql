@@ -1,0 +1,9 @@
+mutation IssueCollabToken($policyId: ID!, $draftId: ID!, $templateVersionId: ID) {
+  issueCollabToken(
+    input: { policyId: $policyId, draftId: $draftId, templateVersionId: $templateVersionId }
+  ) {
+    token
+    wsUrl
+    expiresAt
+  }
+}

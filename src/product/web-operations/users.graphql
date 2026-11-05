@@ -1,0 +1,8 @@
+query Users($search: String, $includeDeleted: Boolean) {
+  users(search: $search, pageSize: 200, includeDeleted: $includeDeleted) {
+    nextPageToken
+    users {
+      ...UserFields
+    }
+  }
+}
