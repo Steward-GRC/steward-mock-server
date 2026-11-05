@@ -96,7 +96,7 @@ export const asUser = (person: StewardPerson) => ({
   memberships: person.memberships,
   mergedIntoUserId: person.mergedIntoUserId,
   name: person.name,
-  needsOnboarding: false,
+  needsOnboarding: person.needsOnboarding === true,
   permissions: permissionsOf(person.roles),
   policyOverrides: [],
   roles: person.roles,
@@ -271,6 +271,53 @@ export const userResolvers: Resolvers = {
       if (!person.memberships.some((m) => m.groupId === given.groupId))
         person.memberships.push({ groupId: given.groupId, source: "manual" });
       audit("group.member_added", actor, person);
+      return asUser(person);
+    },
+    /**
+     * identity's CompleteOnboarding for the caller: the terms must be accepted; a sent first name,
+     * last name or non-empty email replaces the stored one, and the name is derived from the two
+     * names; a sent username must be non-empty and free. Then needsOnboarding is cleared.
+     */
+    completeOnboarding: (
+      _root,
+      given: {
+        acceptTerms: boolean;
+        email?: null | string;
+        firstName?: null | string;
+        lastName?: null | string;
+        username?: null | string;
+      },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      if (!given.acceptTerms)
+        throw refuse("BAD_USER_INPUT", "accept_terms must be true");
+      let username: string | undefined;
+      if (given.username !== undefined && given.username !== null) {
+        username = given.username.trim();
+        if (!username)
+          throw refuse(
+            "BAD_USER_INPUT",
+            "username must not be empty when provided",
+          );
+        if (people().some((p) => p.username === username && p.id !== person.id))
+          throw refuse("ALREADY_EXISTS", "username already taken");
+      }
+      const current = firstAndLast(person.name);
+      const first =
+        given.firstName === undefined || given.firstName === null
+          ? current.firstName
+          : given.firstName.trim();
+      const last =
+        given.lastName === undefined || given.lastName === null
+          ? current.lastName
+          : given.lastName.trim();
+      if (first || last) person.name = `${first} ${last}`.trim();
+      const email = given.email?.trim();
+      if (email) person.email = email.toLowerCase();
+      if (username) person.username = username;
+      person.needsOnboarding = false;
+      audit("user.onboarding.completed", person, person);
       return asUser(person);
     },
     createPlatformGroup: (

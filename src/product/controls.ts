@@ -5,6 +5,7 @@
 
 import type { Action, ProductControl } from "#core/controls.ts";
 
+import { refuse } from "#core/http.ts";
 import { mockState } from "#core/state.ts";
 import { type SignInMethods, stewardData } from "#product/data.ts";
 import { expireTestLinks } from "#product/sso.ts";
@@ -80,8 +81,30 @@ const signInMethodActions = [
   ),
 ];
 
+/**
+ * POST /_mock/controls {kind: "needs-onboarding", personId, needsOnboarding?}: whether that person
+ * still owes first-run onboarding (true unless the body says false), so the welcome page shows.
+ */
+const needsOnboarding: ProductControl = (body) => {
+  const person = stewardData().people.find((p) => p.id === body.personId);
+  if (!person) return refuse(404, "unknown_person");
+  Object.assign(person, { needsOnboarding: body.needsOnboarding !== false });
+  return {
+    needsOnboarding: body.needsOnboarding !== false,
+    personId: person.id,
+  };
+};
+
 export const productActions: ({ run: ProductControl } & Action)[] = [
   ...signInMethodActions,
+  {
+    body: { personId: "user-erin" },
+    hint: "Erin's next page is the welcome (G10) until she completes onboarding.",
+    kind: "needs-onboarding",
+    label: "Erin owes onboarding",
+    run: needsOnboarding,
+    section: "Onboarding",
+  },
   {
     body: { outcome: "pass" },
     hint: "Opening an IdP test link passes the test, so the organisation can be activated.",

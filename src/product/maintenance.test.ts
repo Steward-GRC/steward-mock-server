@@ -1,9 +1,11 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Steward's side of the maintenance cycle the controls drive: globalSettings, the banner query
-// steward-web reads before sign-in, keeps answering and reports the window in its maintenance
-// fields, as steward-gateway reports a site admin's notice; everything else gets the 503. Also
-// the summary tiles the controls page shows.
+// Steward's side of the maintenance cycle the controls drive, as steward-gateway's
+// internal/maintenance answers it: an announced window is an announcement, maintenance shows as
+// on only once it starts, and then only the gateway's whitelisted reads (globalSettings, me and
+// introspection) answer GraphQL, with the gateway's MAINTENANCE error for the rest. The /auth and
+// /setup routes keep answering, and GET /maintenance reports the state. Also the summary tiles
+// the controls page shows.
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -59,19 +61,33 @@ describe("maintenance banner", () => {
     });
   });
 
-  it("reports an announced window with its message", async () => {
+  it("shows an announced window as a warning announcement, not as maintenance", async () => {
     await control(base, {
       kind: "maintenance-announce",
       message: "Upgrade on Saturday.",
       ...window(hour, hour),
     });
-    assert.deepEqual((await banners()).maintenance, {
-      enabled: true,
-      message: "Upgrade on Saturday.",
+    assert.deepEqual(await banners(), {
+      announcement: {
+        enabled: true,
+        level: "warning",
+        message: "Upgrade on Saturday.",
+      },
+      maintenance: { enabled: false, message: "" },
     });
+    const reader = await signInAs(base, "user-erin");
+    assert.equal((await call(base, reader, "Me")).refused, undefined);
   });
 
-  it("keeps answering globalSettings while maintenance is on, and refuses the rest", async () => {
+  it("names the announced window when it has no message", async () => {
+    const given = window(hour, hour);
+    await control(base, { kind: "maintenance-announce", ...given });
+    const { announcement } = await banners();
+    assert.equal(announcement.enabled, true);
+    assert.ok(String(announcement.message).includes(given.startsAt));
+  });
+
+  it("keeps answering globalSettings and me while maintenance is on, and refuses the rest the gateway's way", async () => {
     const reader = await signInAs(base, "user-erin");
     await control(base, {
       endsAt: new Date(Date.now() + hour).toISOString(),
@@ -82,14 +98,65 @@ describe("maintenance banner", () => {
       enabled: true,
       message: "Back at noon.",
     });
-    const read = await call(base, reader, "GlobalSettings");
-    assert.equal(read.refused, undefined);
+    assert.equal(
+      (await call(base, reader, "GlobalSettings")).refused,
+      undefined,
+    );
+    const own = await call(base, reader, "Me");
+    assert.equal(own.refused, undefined);
+    const { me: user } = own.data as { me: { userId: string } };
+    assert.equal(user.userId, "user-erin");
 
-    const refused = await post(base, "/query", {
-      query: documentOf("Me"),
+    const refused = await query(
+      base,
+      "query { me { userId } myManagedGroups { id } }",
+      reader,
+    );
+    assert.equal(refused.status, 200);
+    assert.deepEqual(refused.body, {
+      errors: [
+        {
+          extensions: { code: "MAINTENANCE", message: "Back at noon." },
+          message: "the system is in maintenance mode",
+        },
+      ],
     });
-    assert.equal(refused.status, 503);
-    assert.ok(Number(refused.headers.get("retry-after")) > 0);
+  });
+
+  it("lets a site admin see their roles during maintenance, so the lockdown can lead to admin", async () => {
+    const admin = await signInAs(base, "user-alice");
+    await control(base, { kind: "maintenance-start" });
+    const own = await call(base, admin, "Me");
+    assert.equal(own.refused, undefined);
+    const { me: user } = own.data as { me: { roles: string[] } };
+    assert.deepEqual(user.roles, ["site-admin"]);
+  });
+
+  it("keeps the sign-in and setup routes answering while maintenance is on", async () => {
+    await control(base, { kind: "maintenance-start" });
+    const login = await post(base, "/auth/login", {
+      password: "any password",
+      username: "bob",
+    });
+    assert.equal(login.status, 200);
+    const session = await fetch(`${base}/auth/session`);
+    assert.deepEqual(await session.json(), { authenticated: false });
+    const state = await fetch(`${base}/setup/state`);
+    assert.equal(state.status, 200);
+  });
+
+  it("reports the state at GET /maintenance, as the gateway's public route does", async () => {
+    const status = async () =>
+      (await fetch(`${base}/maintenance`)).json() as Promise<unknown>;
+    assert.deepEqual(await status(), { enabled: false, message: "" });
+    await control(base, {
+      kind: "maintenance-announce",
+      message: "Soon.",
+      ...window(hour, hour),
+    });
+    assert.deepEqual(await status(), { enabled: false, message: "" });
+    await control(base, { kind: "maintenance-start", message: "Down now." });
+    assert.deepEqual(await status(), { enabled: true, message: "Down now." });
   });
 
   it("gives the banner a message when the window has none", async () => {

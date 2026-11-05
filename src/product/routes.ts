@@ -14,6 +14,7 @@ import { createLogger } from "#core/log.ts";
 import { settings } from "#core/product.ts";
 import { mockState, type Person, personById } from "#core/state.ts";
 import { passkeyOwner, requestOptions } from "#product/passkeys.ts";
+import { globalSettingsNow } from "#product/resolvers/admin.ts";
 import {
   cookie,
   drop,
@@ -204,6 +205,12 @@ const bootstrap = async (request: Request) => {
   return json({ userId: admin.id });
 };
 
+/** GET /maintenance: the gateway's public maintenance state, for clients before sign-in. */
+const maintenanceStatus = () => {
+  const { enabled, message } = globalSettingsNow().maintenance;
+  return json({ enabled, message: enabled ? message : "" });
+};
+
 const POST_ROUTES: Record<
   string,
   (request: Request) => Promise<Response> | Response
@@ -227,5 +234,7 @@ export const stewardRoutes = (
   if (post && request.method === "POST") return post(request);
   if (path === "/auth/session" && request.method === "GET")
     return session(request);
+  if (path === "/maintenance" && request.method === "GET")
+    return maintenanceStatus();
   return signInRoutes(request, path) ?? ssoRoutes(request, path);
 };
