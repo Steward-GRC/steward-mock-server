@@ -95,8 +95,33 @@ const needsOnboarding: ProductControl = (body) => {
   };
 };
 
+/**
+ * POST /_mock/controls {kind: "ai-simulation", on}: whether Ask is simulated (the default) or AI
+ * answers as if the ai service were down.
+ */
+const aiSimulation: ProductControl = (body) => {
+  stewardData().aiSimulated = body.on !== false;
+  return { aiSimulated: stewardData().aiSimulated };
+};
+
 export const productActions: ({ run: ProductControl } & Action)[] = [
   ...signInMethodActions,
+  {
+    body: { on: true },
+    hint: "Ask answers from the policies the person may read, with citations; aiHealth says available.",
+    kind: "ai-simulation",
+    label: "Simulated AI on",
+    run: aiSimulation,
+    section: "AI",
+  },
+  {
+    body: { on: false },
+    hint: "AI answers as if the ai service were down: Ask shows its unavailable card.",
+    kind: "ai-simulation",
+    label: "Simulated AI off",
+    run: aiSimulation,
+    section: "AI",
+  },
   {
     body: { personId: "user-erin" },
     hint: "Erin's next page is the welcome (G10) until she completes onboarding.",

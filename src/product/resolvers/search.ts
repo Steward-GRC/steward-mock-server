@@ -28,7 +28,7 @@ interface Span {
 }
 
 /** The query's words, lower-cased, with punctuation trimmed from their ends. */
-const termsOf = (text: string): string[] => [
+export const termsOf = (text: string): string[] => [
   ...new Set(
     text
       .split(/\s+/)

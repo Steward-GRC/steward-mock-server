@@ -115,8 +115,10 @@ own). Both are read on every request, so an edit applies to the next call with n
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
-the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Steward AI isn't mocked: `aiHealth` says
-`ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
+the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
+published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. Every other AI call
+(generate, revise, review, the admin settings) answers as the gateway does while the ai service is down, on both settings.
 The co-editing relay passes edits between the browsers on a draft but doesn't keep the editor's
 checkpoints the way steward-collab does: the editor's Save button writes the draft.
 
