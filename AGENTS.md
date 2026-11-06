@@ -72,9 +72,10 @@ ahead of it while steward-web moves to the same commit).
 
 ## Template sync
 
-- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v2.0.1**
-  (the-rabbit-hole-tech/template-node-mock-server#35). The next sync starts there, tag to tag, as `TEMPLATE.md` says. That release is
-  metadata only: it never becomes a tag here.
+- Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v2.0.1**, plus its
+  unreleased commit 3d16ac1 (the-rabbit-hole-tech/template-node-mock-server#37: choices on the Users
+  card and its legend). The next sync starts at the release that carries it, tag to tag, as
+  `TEMPLATE.md` says. That release is metadata only: it never becomes a tag here.
 - `src/core/` is the template's file for file; only the two SPDX lines differ (Steward's holder).
   Steward's sign-in and first-run bootstrap are product routes in `src/product/routes.ts`, which
   answer before the core's `/auth` and `/setup`.

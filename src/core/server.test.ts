@@ -458,6 +458,7 @@ describe("sign-in users", () => {
     assert.deepEqual(
       { ...charlie, id: undefined },
       {
+        areas: [],
         disabled: false,
         email: "charlie@example.org",
         hasPassword: true,
@@ -466,6 +467,7 @@ describe("sign-in users", () => {
         onCall: false,
         roles: ["STAFF", "AUDITOR"],
         secondFactor: false,
+        shift: "",
         tags: [],
         team: "",
         username: "charlie",
@@ -608,6 +610,7 @@ describe("sign-in users", () => {
       {
         change: "added",
         fields: [
+          "areas",
           "disabled",
           "email",
           "id",
@@ -616,6 +619,7 @@ describe("sign-in users", () => {
           "password",
           "roles",
           "secondFactor",
+          "shift",
           "tags",
           "team",
           "username",
@@ -683,6 +687,56 @@ describe("sign-in users", () => {
       html,
       /"Signed in as " \+ [a-z.]+ \+ "\. Refresh this page\."/,
     );
+  });
+});
+
+/** The Users card as the page serves it. */
+const card = async () => {
+  const html = await (await fetch(`${base}/_mock`)).text();
+  const from = html.indexOf('id="users"');
+  return html.slice(from, html.indexOf("</section>", from));
+};
+
+describe("choices and the legend on the Users card", () => {
+  it("turns Roles into a dropdown of the product's roles", async () => {
+    const html = await card();
+    assert.match(html, /<details class="choices" id="user-roles"/);
+    assert.match(html, /<input class="choice" type="checkbox" value="ADMIN"/);
+    assert.match(html, /Runs the fixture/);
+    assert.match(html, /<input class="choice" type="checkbox" value="MEMBER"/);
+    assert.match(html, />Member</);
+    assert.doesNotMatch(html, /<input id="user-roles"/);
+  });
+
+  it("gives a list field with choices checkboxes and a text field a select", async () => {
+    const html = await card();
+    assert.match(html, /<details class="choices" id="user-field-areas"/);
+    assert.match(html, /<input class="choice" type="checkbox" value="south"/);
+    assert.match(html, /<select id="user-field-shift"/);
+    assert.match(html, /<option value="night">Night shift<\/option>/);
+  });
+
+  it("shows the legend as an info box", async () => {
+    const html = await card();
+    assert.match(html, /<aside class="info" id="users-legend"/);
+    assert.match(html, /<dt>ADMIN<\/dt>\s*<dd>May remove notes/);
+    assert.match(html, /<h3>Roles<\/h3>/);
+  });
+
+  it("keeps a free-text field free, and the script keeps a role outside the choices", async () => {
+    const html = await card();
+    assert.match(html, /<input id="user-field-team" type="text"/);
+    const added = await control(base, {
+      kind: "person-add",
+      roles: ["ADMIN", "LEGACY"],
+      username: "dee",
+    });
+    assert.deepEqual((added as { result: { roles: string[] } }).result.roles, [
+      "ADMIN",
+      "LEGACY",
+    ]);
+    const page = await (await fetch(`${base}/_mock`)).text();
+    assert.match(page, /choice--other/);
   });
 });
 

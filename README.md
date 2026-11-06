@@ -96,6 +96,10 @@ Who someone is and what they may do comes from the mock's own store of people, w
 the Users card on `/_mock`: each person's **roles** (the template's field) and **groups** (Steward's
 own). Both are read on every request, so an edit applies to the next call with no new sign-in.
 
+On the card, **Roles** is a dropdown of Steward's real roles (with `root`), **Groups** a dropdown of the
+platform groups and a "Manages <group>" for each, and an info box says what every role and group grants, so none is a bare name.
+Both lists come from `src/product/users-card.ts`, which reads the same table the permissions resolvers do.
+
 - **Roles** are Steward's: `site-admin`, `author`, `approver`, `privacy-officer`,
   `compliance-admin` and `template-admin`. They decide permissions as identity's do. `root` among
   them makes the person a root admin, which the User type reports as `isRoot` rather than a role.

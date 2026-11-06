@@ -12,8 +12,29 @@ import type { Action, ProductControl } from "#core/controls.ts";
 import type { Resolvers } from "#core/graphql.ts";
 import type { MaintenanceWindow, Person, Session } from "#core/state.ts";
 
+/** One pick in a list of choices on the Users card. */
+export interface Choice {
+  /** A line on what picking it means, shown beside it. */
+  hint?: string;
+  /** What it's called on the card; its value when left out. */
+  label?: string;
+  /** What is stored on the person. */
+  value: string;
+}
+
+/** A group of terms the Users card explains in its info box. */
+export interface LegendSection {
+  entries: { term: string; text: string }[];
+  title: string;
+}
+
 /** A per-person field a product adds to the Users card. */
 export interface PersonField {
+  /**
+   * The values to pick from, instead of typing: a "list" field shows a dropdown of checkboxes, a
+   * "text" field a select. A value a person already holds that isn't listed stays pickable.
+   */
+  choices?: Choice[];
   /** A short hint in the empty input. */
   hint?: string;
   /** The property on the person. It can't be one of the core's own fields. */
@@ -26,6 +47,11 @@ export interface PersonField {
 export interface Product {
   /** The product's own controls. */
   actions: ProductAction[];
+  /**
+   * What each term on the Users card means (the roles, the groups), as an info box under its
+   * introduction. Left out, the card has no info box.
+   */
+  legend?: LegendSection[];
   /**
    * The product's maintenance behaviour: how its gateway answers while maintenance is on, and
    * which fields keep answering for its banner. Its resolvers read the window with
@@ -40,6 +66,11 @@ export interface Product {
   personFields?: PersonField[];
   /** What each field of the schema answers, by type and field name. */
   resolvers: Resolvers;
+  /**
+   * The roles a person can hold, for the Roles dropdown. Left out, Roles is typed in as
+   * comma-separated text.
+   */
+  roleChoices?: Choice[];
   /**
    * The product's own HTTP routes: a Response for a request it serves, undefined for one it
    * doesn't. They run after the health probes, the controls and the GraphQL path (which a product

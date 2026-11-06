@@ -60,7 +60,7 @@ const ALL_PERMISSIONS = [
   "template.manage",
   "user.manage",
 ];
-const ROLE_GRANTS: Record<string, readonly string[]> = {
+export const ROLE_GRANTS: Record<string, readonly string[]> = {
   approver: ["policy.read", "policy.approve"],
   author: ["policy.read", "policy.author"],
   "compliance-admin": ["policy.read", "compliance.manage", "audit.read"],

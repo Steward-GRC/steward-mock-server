@@ -63,6 +63,16 @@ subscription. Replace it; don't build around it.
    `src/core/events.ts`, with the person's id, the kind of change and the names of the fields that
    changed (a password by name only), so the product can push it to open pages straight away.
 
+   To pick from a fixed set instead of typing, give a field `choices` (a list of `value`, with an
+   optional `label` and `hint`): a `list` field becomes a dropdown of checkboxes, a `text` field a
+   select. The core's Roles input takes its set from `roleChoices` on the product, the same way;
+   without it, roles are typed as comma-separated text. A value a person already holds that isn't
+   among the choices stays on the card as an extra checked choice, so editing someone never drops
+   it. The choices are only a way to fill the form in: the controls still accept any value. To say
+   what the roles, groups or fields mean, give the product a `legend` (sections of `term` and
+   `text`): it shows as an info box on the Users card. Names and meanings are the product's; the
+   template only draws them.
+
 5. Write the resolvers in `src/product/resolvers.ts`. Start with the fields the clients call
    first; anything without a resolver answers `null`, or an error where the schema says non-null.
    Use `signedIn(context)` and `withRole(context, role)` for the gateway's checks, throw
