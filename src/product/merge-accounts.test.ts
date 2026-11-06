@@ -29,6 +29,13 @@ beforeEach(() => {
   startFresh();
 });
 
+interface MergeCounts {
+  acknowledgmentsDeduped: number;
+  acknowledgmentsMoved: number;
+  policiesOwned: number;
+  raciGrants: number;
+}
+
 const alice = () => signInAs(base, "user-alice");
 const preview = async (source: string, target: string) =>
   call(base, await alice(), "PreviewAccountMerge", {
@@ -78,7 +85,7 @@ describe("previewAccountMerge", () => {
     const answer = await preview("user-jon", "user-jonathan");
     assert.equal(answer.refused, undefined);
     const result = answer.data.previewAccountMerge as {
-      counts: Record<string, number>;
+      counts: MergeCounts;
       items: { kind: string }[];
       warnings: { code: string }[];
     };
@@ -94,9 +101,8 @@ describe("previewAccountMerge", () => {
 
   it("says an acknowledgement both gave is counted once", async () => {
     const answer = await preview("user-jon", "user-jonathan");
-    const counts = (
-      answer.data.previewAccountMerge as { counts: Record<string, number> }
-    ).counts;
+    const counts = (answer.data.previewAccountMerge as { counts: MergeCounts })
+      .counts;
     assert.equal(counts.acknowledgmentsDeduped, 1);
   });
 
@@ -168,7 +174,7 @@ describe("mergeAccounts", () => {
   it("returns the counts and a step list", async () => {
     const answer = await merge("user-jon", "user-jonathan", true);
     const result = answer.data.mergeAccounts as {
-      counts: Record<string, number>;
+      counts: MergeCounts;
       status: string;
       steps: { step: string }[];
     };
