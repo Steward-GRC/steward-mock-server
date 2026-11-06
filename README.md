@@ -301,6 +301,24 @@ session.
   sign-in marker (`login`, `signin`, `sign-in`, `/sso`, `authwall`) "requires a login", a host under
   `.invalid` "couldn't be reached", and anything else is readable, titled from its host and path.
 
+### Editor images
+
+The editor's image card uses steward-gateway's `POST /api/assets` and `GET /api/assets/{id}`, with
+its shapes, limits and refusal texts, behind a signed-in session. The images live in memory and
+Start fresh forgets them.
+
+- **Upload** (multipart, the file under `file`, up to 10 MB) answers
+  `{id, url, contentType, sizeBytes, filename}`; the `url` is `/api/assets/{id}`. Only PNG, JPEG,
+  GIF and WebP are accepted, judged by the bytes and not by the declared type (SVG is refused). An
+  empty file, a missing `file` and an oversized one answer 400 with the gateway's `{error}` text.
+  A cookie session needs its CSRF token, as for any write.
+- **Read** serves the bytes with the stored type. A cookie session needs no CSRF token, so an
+  `<img src>` loads it. An unknown id answers 404 `Asset not found`.
+- **Controls** (the Image uploads section of `/_mock`): `{"kind":"asset-upload","mode":"fail"}`
+  makes uploads answer 503 `Failed to store image` until `"mode":"ok"`, and
+  `{"kind":"asset-limit","limit":"small"}` lowers the cap to 100 KB so the too-large error shows
+  without a huge file (`"limit":"real"` puts 10 MB back).
+
 ### Category access
 
 Each category keeps its own access rules (`categoryRuleset`, `setCategoryRuleset`), as

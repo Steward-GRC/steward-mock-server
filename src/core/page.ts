@@ -386,6 +386,7 @@ const SCRIPT = `
   // The product's own person fields, from the Users card's data-fields.
   const extra = JSON.parse($("users").dataset.fields || "[]");
   const extraInput = (field) => $("user-field-" + field.key);
+  const extraText = (field, value) => field.kind === "boolean" ? (value === true ? "yes" : "no") : field.kind === "list" ? (Array.isArray(value) ? value : []).join(", ") || "none" : value ?? "";
   // A list with choices is a dropdown of checkboxes (a details); a text field with choices is a select.
   const isBox = (id) => $(id).tagName === "DETAILS";
   const boxes = (id) => [...$(id).querySelectorAll("input.choice")];

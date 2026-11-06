@@ -7,6 +7,7 @@ import type { Action, ProductControl } from "#core/controls.ts";
 
 import { refuse } from "#core/http.ts";
 import { mockState } from "#core/state.ts";
+import { assetActions } from "#product/assets.ts";
 import { type SignInMethods, stewardData } from "#product/data.ts";
 import { expireTestLinks } from "#product/sso.ts";
 
@@ -106,6 +107,7 @@ const aiSimulation: ProductControl = (body) => {
 
 export const productActions: ({ run: ProductControl } & Action)[] = [
   ...signInMethodActions,
+  ...assetActions,
   {
     body: { on: true },
     hint: "Ask answers from the policies the person may read, with citations; aiHealth says available.",
