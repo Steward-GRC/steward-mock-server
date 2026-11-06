@@ -18,6 +18,7 @@ import { json, newId, readJson, refuse } from "#core/http.ts";
 import { createLogger } from "#core/log.ts";
 import { settings } from "#core/product.ts";
 import { mockState, type Person, personById } from "#core/state.ts";
+import { assetRoutes } from "#product/assets.ts";
 import { deliveryRoutes } from "#product/delivery.ts";
 import { documentRoutes } from "#product/documents.ts";
 import { passkeyOwner, requestOptions, stampUse } from "#product/passkeys.ts";
@@ -254,6 +255,7 @@ export const stewardRoutes = (
   if (path === "/maintenance" && request.method === "GET")
     return maintenanceStatus();
   return (
+    assetRoutes(request, path) ??
     documentRoutes(request, path) ??
     deliveryRoutes(request, path) ??
     signInRoutes(request, path) ??

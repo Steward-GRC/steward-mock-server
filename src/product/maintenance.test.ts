@@ -220,8 +220,8 @@ describe("maintenance banner", () => {
   it("leaves the gateway's other routes open: assets answer as without maintenance", async () => {
     await control(base, { kind: "maintenance-start" });
     const assets = await post(base, "/api/assets", {});
-    assert.equal(assets.status, 501);
-    assert.deepEqual(await assets.json(), { error: "not_mocked" });
+    assert.equal(assets.status, 401);
+    assert.deepEqual(await assets.json(), { error: "unauthorized" });
   });
 
   it("stays ready, as the gateway's /readyz does during maintenance", async () => {

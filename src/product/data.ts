@@ -6,6 +6,7 @@
 
 import type { ProductData } from "#core/product.ts";
 import type { Person } from "#core/state.ts";
+import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
 
 import { mockState } from "#core/state.ts";
@@ -91,6 +92,10 @@ export interface StewardData extends ProductData {
   aiSimulated: boolean;
   /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
   askedQuestions: string[];
+  /** The editor images' metadata by id (src/product/assets.ts keeps the bytes). */
+  assets: Record<string, StoredAsset>;
+  /** The /_mock switches for image uploads. */
+  assetSettings: AssetSettings;
   audit: AuditRecord[];
   breakGlass: BreakGlassGrant[];
   categories: Category[];
@@ -141,6 +146,8 @@ export const seed = (): StewardData => ({
   acknowledgements: acknowledgements(),
   aiSimulated: true,
   askedQuestions: [],
+  assets: {},
+  assetSettings: { fail: false, limit: "real" },
   audit: auditTrail(),
   breakGlass: [],
   categories: categories(),
