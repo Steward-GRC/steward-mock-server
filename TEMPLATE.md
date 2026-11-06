@@ -120,6 +120,7 @@ subscription. Replace it; don't build around it.
 9. Run the checks, then commit in one PR and say in its body which template release the product
    started from: the tag of the release the clone came from (the newest one on the template's
    Releases page when it was made, for example `v1.2.0`). That tag is where the next sync starts.
+   Record it in the product's AGENTS.md too, in the sync line below.
 
    ```bash
    npm run lint
@@ -134,7 +135,14 @@ web app's version, and it's released only in the same release as the web app, ne
 a web app and the mock it was tested against always ship as a pair.
 
 - The template release a product synced from (`v1.2.0`, say) is sync metadata: name it in the sync
-  PR and in the product's AGENTS.md, and never use it as the mock's version.
+  PR and in the product's AGENTS.md, and never use it as the mock's version. In AGENTS.md it goes
+  under `## Template sync`, as a bullet that starts with this line, so a check can compare it with this
+  template's latest release and flag a product that has fallen behind:
+
+  ```markdown
+  - Last synced to `the-rabbit-hole-tech/template-node-mock-server` release **v1.2.0**
+  ```
+
 - The release-drafter workflow that comes with the template drafts in a product and never
   publishes on its own. Set its version to the web app's (the action's `version` input, or
   `first-version` for the first release), or replace it with the product's own release workflow.
@@ -161,7 +169,7 @@ never from a commit between releases.
    ```
 
    `-x` records the template commit in the product's commit message. Name both tags in the PR
-   body; the new one is where the next sync starts.
+   body, and change the sync line in AGENTS.md to the new one: that's where the next sync starts.
 
 3. A conflict in `src/product/` keeps the product's side. A conflict in `src/core/` is a place the
    product changed the core (its sign-in in `auth.ts`): keep the product's change and the
