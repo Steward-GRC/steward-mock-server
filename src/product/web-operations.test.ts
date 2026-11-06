@@ -88,6 +88,15 @@ const cases: Record<string, Case> = {
       },
     },
   },
+  AddReviewThread: {
+    as: APPROVER,
+    variables: {
+      body: "What is this?",
+      occurrence: 1,
+      policyVersionId: "version-4",
+      quote: "travel",
+    },
+  },
   AddUserToGroup: {
     as: ADMIN,
     variables: { groupId: "group-2", userId: READER },
@@ -233,6 +242,11 @@ const cases: Record<string, Case> = {
   },
   DeletePolicy: { as: AUTHOR, variables: { id: "policy-5" } },
   DeleteReference: { as: ADMIN, variables: { id: "reference-2" } },
+  DeleteReviewThread: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { threadId: "review-thread-0" },
+  },
   DeleteTemplate: { as: ADMIN, variables: { id: "template-3" } },
   DeleteUser: { as: ADMIN, variables: { userId: "user-frank" } },
   Diagnostics: { as: ADMIN },
@@ -409,6 +423,11 @@ const cases: Record<string, Case> = {
       policyVersionId: "version-3",
     },
   },
+  ReplyReviewThread: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { body: "Agreed.", threadId: "review-thread-0" },
+  },
   ReportCase: { as: OFFICER, variables: { caseId: "case-1" } },
   ReportCases: { as: OFFICER, variables: {} },
   RequestPdfExport: {
@@ -427,6 +446,7 @@ const cases: Record<string, Case> = {
   },
   RetirePolicy: { as: AUTHOR, variables: { id: "policy-10" } },
   RetireTemplate: { as: ADMIN, variables: { id: "template-2" } },
+  ReviewThreads: { as: AUTHOR, variables: { policyVersionId: "version-4" } },
   RevokeMagicLink: { as: ADMIN, variables: { token: "a".repeat(64) } },
   RevokeMySessions: { as: READER },
   RevokeRole: { as: ADMIN, variables: { role: "approver", userId: APPROVER } },
@@ -546,6 +566,11 @@ const cases: Record<string, Case> = {
   SetReferenceArchived: {
     as: ADMIN,
     variables: { archived: false, id: "reference-3" },
+  },
+  SetReviewThreadResolved: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { resolved: true, threadId: "review-thread-0" },
   },
   SetTypeCadence: {
     as: READER,
@@ -788,7 +813,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 179);
+    assert.equal(webOperations.length, 184);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

@@ -1,0 +1,5 @@
+mutation SetReviewThreadResolved($threadId: ID!, $resolved: Boolean!) {
+  setReviewThreadResolved(threadId: $threadId, resolved: $resolved) {
+    ...ReviewThreadFields
+  }
+}

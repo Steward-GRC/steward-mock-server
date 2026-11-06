@@ -1,0 +1,3 @@
+mutation DeleteReviewThread($threadId: ID!) {
+  deleteReviewThread(threadId: $threadId)
+}

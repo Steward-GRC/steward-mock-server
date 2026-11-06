@@ -7,7 +7,7 @@ backend running, they talk to this instead: one Node process on port 5175 that a
 gateway's paths in the gateway's shapes (`/query`, `/auth/*`, `/setup/*`, the probes), from
 invented data that every client shares and anyone can put back with one click at `/_mock`. The
 schema is steward-gateway's own, pinned to one commit in `schema-refs.env`. Fields the clients
-need before the gateway ships them (for now `searchPolicies`, from steward-gateway#41) live apart
+need before the gateway ships them (for now `searchPolicies`, from steward-gateway#41, and the inline review threads, from steward-gateway#79) live apart
 in `src/product/schema-pending.graphql` and leave it once the pinned copy carries them.
 
 ## ✨ Highlights

@@ -42,3 +42,46 @@ type TextSpan {
   start: Int!
   length: Int!
 }
+
+# Inline review comments on a policy version, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/79 (steward-core#33 stores them). An
+# approver comments on text in the version under review; the drafter sees the threads on the
+# highlighted text, replies and resolves. A rejected version keeps its open threads as the
+# feedback. Anchors are the quoted text plus which match of it (counting from 1), so a client can
+# place the highlight again in the stored document.
+extend type Query {
+  # Every thread on a version the caller may read. An obfuscated reader gets no message bodies.
+  reviewThreads(policyVersionId: ID!): [ReviewThread!]!
+}
+
+extend type Mutation {
+  # Starts a thread with its first message. Approvers on the version's run, its authors and site
+  # admins only.
+  addReviewThread(policyVersionId: ID!, quote: String!, occurrence: Int!, body: String!): ReviewThread!
+  # Appends a message to a thread.
+  replyReviewThread(threadId: ID!, body: String!): ReviewThread!
+  # Resolves a thread, or reopens it with resolved: false.
+  setReviewThreadResolved(threadId: ID!, resolved: Boolean!): ReviewThread!
+  # Deletes a thread; only the person who started it.
+  deleteReviewThread(threadId: ID!): Boolean!
+}
+
+type ReviewThread {
+  id: ID!
+  policyVersionId: ID!
+  # The text the thread was made on.
+  quote: String!
+  # Which match of the quote in the version's text, counting from 1.
+  occurrence: Int!
+  resolved: Boolean!
+  createdAt: DateTime!
+  messages: [ReviewMessage!]!
+}
+
+type ReviewMessage {
+  id: ID!
+  authorUserId: ID!
+  authorName: String
+  body: String!
+  createdAt: DateTime!
+}
