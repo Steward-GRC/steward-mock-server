@@ -1,0 +1,5 @@
+query ReviewThreads($policyVersionId: ID!) {
+  reviewThreads(policyVersionId: $policyVersionId) {
+    ...ReviewThreadFields
+  }
+}

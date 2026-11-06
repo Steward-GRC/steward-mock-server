@@ -8,6 +8,7 @@ import type { ProductData } from "#core/product.ts";
 import type { Person } from "#core/state.ts";
 import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
+import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 
 import { mockState } from "#core/state.ts";
 import {
@@ -131,6 +132,8 @@ export interface StewardData extends ProductData {
   policyViews: PolicyView[];
   references: Reference[];
   reportCases: ReportCase[];
+  /** Inline review comment threads on policy versions (ahead of the gateway; see the pending schema). */
+  reviewThreads: ReviewThread[];
   runs: Run[];
   settings: GlobalSettings;
   /** Which sign-in methods the gateway offers (the controls switch them). */
@@ -171,6 +174,7 @@ export const seed = (): StewardData => ({
   policyViews: policyViews(),
   references: references(),
   reportCases: reportCases(),
+  reviewThreads: [],
   runs: runs(),
   settings: globalSettings(),
   signInMethods: {

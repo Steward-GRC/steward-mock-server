@@ -22,6 +22,7 @@ import { libraryResolvers } from "#product/resolvers/library.ts";
 import { notificationResolvers } from "#product/resolvers/notifications.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
 import { raciResolvers } from "#product/resolvers/raci.ts";
+import { reviewThreadResolvers } from "#product/resolvers/review-threads.ts";
 import { searchResolvers } from "#product/resolvers/search.ts";
 import {
   LIVE_EVENTS,
@@ -82,6 +83,7 @@ const domains: Resolvers[] = [
   notificationResolvers,
   policyResolvers,
   raciResolvers,
+  reviewThreadResolvers,
   searchResolvers,
   userResolvers,
   workflowResolvers,

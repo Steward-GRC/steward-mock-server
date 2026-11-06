@@ -1,0 +1,5 @@
+mutation ReplyReviewThread($threadId: ID!, $body: String!) {
+  replyReviewThread(threadId: $threadId, body: $body) {
+    ...ReviewThreadFields
+  }
+}

@@ -1,0 +1,15 @@
+fragment ReviewThreadFields on ReviewThread {
+  id
+  policyVersionId
+  quote
+  occurrence
+  resolved
+  createdAt
+  messages {
+    id
+    authorUserId
+    authorName
+    body
+    createdAt
+  }
+}
