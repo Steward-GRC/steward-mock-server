@@ -39,9 +39,13 @@ export const termsOf = (text: string): string[] => [
   ),
 ];
 
+/** `term` with every regular-expression character made literal. */
+export const escapeTerm = (term: string): string =>
+  term.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+
 /** Where `term` appears in `text` as a whole word, ignoring case. */
 const spansOf = (text: string, term: string): Span[] => {
-  const escaped = term.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  const escaped = escapeTerm(term);
   const pattern = new RegExp(
     String.raw`(?<![\p{L}\p{N}])${escaped}(?![\p{L}\p{N}])`,
     "giu",

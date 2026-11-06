@@ -10,7 +10,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 import type { Policy } from "#product/data/policies.ts";
 
 import { policyView, readEffect, visible } from "#product/access.ts";
-import { termsOf } from "#product/resolvers/search.ts";
+import { escapeTerm, termsOf } from "#product/resolvers/search.ts";
 import { data } from "#product/resolvers/shared.ts";
 import { extractSections } from "#product/sections.ts";
 
@@ -47,7 +47,9 @@ const rootOf = (term: string): string =>
 const mentions = (text: string, roots: string[]): number => {
   const lower = text.toLowerCase();
   return roots.filter((root) =>
-    new RegExp(String.raw`(?<![\p{L}\p{N}])${root}`, "u").test(lower),
+    new RegExp(String.raw`(?<![\p{L}\p{N}])${escapeTerm(root)}`, "u").test(
+      lower,
+    ),
   ).length;
 };
 

@@ -91,6 +91,15 @@ describe("Ask against the mock", () => {
     }
   });
 
+  it("reads brackets and parentheses in a question as plain words", async () => {
+    const { refused, result } = await ask(
+      bob,
+      "Which policy(s) cover expense [claims] {today}?",
+    );
+    assert.equal(refused, undefined);
+    assert.ok(result);
+  });
+
   it("answers that nothing matches when no readable source does", async () => {
     const { result } = await ask(
       bob,
