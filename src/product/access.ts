@@ -125,16 +125,37 @@ export const viewerCan = (person: StewardPerson, policy: Policy): ViewerCan => {
 const versionById = (id: null | string) =>
   id ? data().versions.find((v) => v.id === id) : undefined;
 
+/** Does the person hold a seat (their own or through a group) on a run over this version? */
+const approvesVersion = (
+  person: StewardPerson,
+  versionId: null | string,
+): boolean =>
+  versionId !== null &&
+  data().runs.some(
+    (run) =>
+      run.policyVersionId === versionId &&
+      run.stages.some((stage) =>
+        stage.seats.some((s) => s.userId === person.id),
+      ),
+  );
+
 /** Is the policy in the person's read model at all? */
 export const visible = (person: StewardPerson, policy: Policy): boolean => {
   if (readEffect(person, policy) === "deny") return false;
-  return policy.currentPublishedVersionId !== null || canEdit(person, policy);
+  return (
+    policy.currentPublishedVersionId !== null ||
+    canEdit(person, policy) ||
+    approvesVersion(person, policy.currentDraftVersionId)
+  );
 };
 
 /** A policy as the gateway's Policy type, for one viewer. */
 export const policyView = (person: StewardPerson, policy: Policy) => {
   const can = viewerCan(person, policy);
-  const draftId = can.edit ? policy.currentDraftVersionId : null;
+  const draftId =
+    can.edit || approvesVersion(person, policy.currentDraftVersionId)
+      ? policy.currentDraftVersionId
+      : null;
   const current =
     versionById(policy.currentPublishedVersionId) ?? versionById(draftId);
   const owner = data().people.find((p) => p.id === policy.ownerUserId);
@@ -181,7 +202,11 @@ export const readableVersion = (
   if (!policy) return undefined;
   const effect = readEffect(person, policy);
   if (effect === "deny") return undefined;
-  if (version.publishedAt === null && !canEdit(person, policy))
+  if (
+    version.publishedAt === null &&
+    !canEdit(person, policy) &&
+    !approvesVersion(person, version.id)
+  )
     return undefined;
   if (effect === "allow") return version;
   return {
