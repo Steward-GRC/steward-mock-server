@@ -11,6 +11,7 @@ import { after, before, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { platformGroups } from "#product/data/admin.ts";
+import { loadControlsPage, until } from "#product/page-dom.ts";
 import { ROLE_GRANTS } from "#product/resolvers/users.ts";
 import { startForTests } from "#product/test-client.ts";
 
@@ -64,5 +65,55 @@ describe("the Users card", () => {
       assert.match(html, new RegExp(`<dt>${name}</dt>`));
     }
     assert.match(html, /<dt>Manages &lt;group&gt;<\/dt>/);
+  });
+});
+
+describe("the Users card as the browser draws it", () => {
+  it("lists every person, and Roles and Groups are dropdowns that Edit fills", async () => {
+    const people = (await (await fetch(`${base}/_mock/people`)).json()) as {
+      name: string;
+      roles: string[];
+    }[];
+    assert.ok(people.length > 0, "the seed has people");
+    const page = await loadControlsPage(base);
+    try {
+      const { document } = page;
+      await until(
+        page,
+        () => document.querySelectorAll("#people-rows tr").length > 0,
+        "the Users table never drew a row",
+      );
+      const rows = [...document.querySelectorAll("#people-rows tr")];
+      assert.equal(rows.length, people.length);
+      for (const person of people)
+        assert.ok(
+          rows.some((row) => row.textContent?.includes(person.name)),
+          `${person.name} has a row`,
+        );
+
+      const roles = document.querySelector("details.choices#user-roles");
+      assert.ok(roles, "Roles is a dropdown");
+      assert.ok(roles.querySelectorAll("input.choice").length >= 7);
+      const groups = document.querySelector(
+        "details.choices#user-field-groups",
+      );
+      assert.ok(groups, "Groups is a dropdown");
+      assert.ok(groups.querySelectorAll("input.choice").length > 0);
+
+      // Edit on a person with a role ticks that role in the dropdown.
+      const target = people.find((person) => person.roles.length > 0);
+      assert.ok(target);
+      const row = rows.find((r) => r.textContent?.includes(target.name));
+      (row?.querySelector("button") as HTMLButtonElement).click();
+      const ticked = [
+        ...roles.querySelectorAll<HTMLInputElement>("input.choice"),
+      ]
+        .filter((box) => box.checked)
+        .map((box) => box.value);
+      assert.deepEqual(ticked.toSorted(), target.roles.toSorted());
+      assert.deepEqual(page.errors, []);
+    } finally {
+      page.close();
+    }
   });
 });
