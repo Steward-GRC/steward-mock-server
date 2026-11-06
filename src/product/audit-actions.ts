@@ -40,6 +40,7 @@ export const AUDIT_ACTIONS = {
     "policy.draft_content_updated",
     "policy.draft_discarded",
     "policy.draft_saved",
+    "policy.bulk_moved",
     "policy.moved",
     "policy.owner_changed",
     "policy.published",

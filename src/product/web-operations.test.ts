@@ -142,6 +142,7 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { categoryId: "category-expenses" },
   },
+  CategoryDocumentTypesAll: { as: ADMIN },
   CategoryRuleset: {
     as: ADMIN,
     variables: { categoryId: "category-facilities" },
@@ -319,6 +320,10 @@ const cases: Record<string, Case> = {
       newParentId: "category-information",
     },
   },
+  MovePolicies: {
+    as: ADMIN,
+    variables: { homeCategoryId: "category-finance", policyIds: ["policy-1"] },
+  },
   MovePolicy: {
     as: ADMIN,
     variables: { homeCategoryId: "category-travel", policyId: "policy-9" },
@@ -360,6 +365,10 @@ const cases: Record<string, Case> = {
   PreviewAccountMerge: {
     as: ADMIN,
     variables: { sourceUserId: "user-frank", targetUserId: READER },
+  },
+  PreviewMovePolicies: {
+    as: ADMIN,
+    variables: { homeCategoryId: "category-finance", policyIds: ["policy-1"] },
   },
   PreviewUserDeletion: { as: ADMIN, variables: { userId: APPROVER } },
   PublishDraft: { as: AUTHOR, variables: { policyId: "policy-2" } },
@@ -821,7 +830,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 186);
+    assert.equal(webOperations.length, 189);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

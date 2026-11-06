@@ -6,6 +6,35 @@
 # https://github.com/Steward-GRC/steward-gateway/issues/41 (policy text search), and each part
 # goes once the pinned gateway SDL carries it.
 
+# Moving several documents at once, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/82 (steward-core#35). All or nothing; site
+# admins only. The preview changes nothing.
+extend type Query {
+  previewMovePolicies(policyIds: [ID!]!, homeCategoryId: ID!): MovePoliciesPreview!
+}
+
+extend type Mutation {
+  movePolicies(policyIds: [ID!]!, homeCategoryId: ID!): MovePoliciesResult!
+}
+
+type MovePoliciesPreview {
+  items: [MovePolicyItem!]!
+}
+
+type MovePoliciesResult {
+  moved: [MovePolicyItem!]!
+}
+
+type MovePolicyItem {
+  policyId: ID!
+  title: String!
+  number: String!
+  # The number in the target's sequence; null when it cannot move.
+  newNumber: String
+  # Why it cannot move; null when it can.
+  refusal: String
+}
+
 # What a category holds, proposed in https://github.com/Steward-GRC/steward-gateway/issues/80
 # (steward-core#34 stores it). BOTH is the default. NONE makes the category a container that only
 # holds child categories. Creating a draft in a category, and moving a document into one, is

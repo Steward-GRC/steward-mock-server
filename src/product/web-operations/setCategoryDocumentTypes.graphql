@@ -1,5 +1,6 @@
 mutation SetCategoryDocumentTypes($id: ID!, $documentTypes: CategoryDocumentTypes!) {
   setCategoryDocumentTypes(id: $id, documentTypes: $documentTypes) {
-    ...CategoryFields
+    id
+    documentTypes
   }
 }

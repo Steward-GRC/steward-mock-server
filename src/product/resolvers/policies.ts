@@ -102,6 +102,16 @@ export const numberFor = (
   categoryId: string,
   documentType: Policy["documentType"],
 ): string => {
+  const { counter, seq, stem } = nextSequence(categoryId, documentType);
+  data().next[counter] = seq;
+  return `${stem}${String(seq).padStart(6, "0")}`;
+};
+
+/** The number a category would give next, without taking it. */
+export const nextSequence = (
+  categoryId: string,
+  documentType: Policy["documentType"],
+) => {
   const prefix = documentType === "PROCEDURE" ? "PRC" : "POL";
   const category = data().categories.find((c) => c.id === categoryId);
   const code = category?.code ?? codeOf(category?.slug ?? "");
@@ -110,9 +120,11 @@ export const numberFor = (
     .policies.filter((p) => p.number.startsWith(stem))
     .map((p) => Number(p.number.slice(stem.length)));
   const counter = `seq:${categoryId}:${documentType}`;
-  const seq = Math.max(data().next[counter] ?? 0, ...taken, 0) + 1;
-  data().next[counter] = seq;
-  return `${stem}${String(seq).padStart(6, "0")}`;
+  return {
+    counter,
+    seq: Math.max(data().next[counter] ?? 0, ...taken, 0) + 1,
+    stem,
+  };
 };
 
 const textNode = (value: string) => ({
