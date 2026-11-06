@@ -162,8 +162,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .live__dot { width: 8px; height: 8px; border-radius: 4px; background: var(--ok); flex: none; }
 .live.down { color: var(--danger); }
 .live.down .live__dot { background: var(--danger); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 16px; }
-.tile { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
+.tiles { display: flex; flex-wrap: wrap; gap: 16px; }
+.tile { display: flex; flex-direction: column; gap: 10px; flex: 1 1 170px; min-width: 0; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
 .tile__label { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); overflow-wrap: anywhere; }
 .tile__value { font: 700 30px/1 var(--font-mono); overflow-wrap: anywhere; }
 .tile__value--text { font: 700 16px/1.35 var(--font-mono); }
@@ -195,6 +195,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .result { margin: 0; min-height: 22px; font: 700 15px/22px var(--font-ui); }
 .result--ok { color: var(--ok); }
 .result--bad { color: var(--danger); }
+.secret { display: flex; align-items: center; gap: 8px; }
+.secret input { flex: 1; min-width: 0; }
 .check { display: inline-flex; align-items: center; gap: 8px; font: 400 15px/22px var(--font-ui); }
 .check input { width: 18px; height: 18px; accent-color: var(--primary); }
 .table-wrap { overflow-x: auto; }
@@ -379,6 +381,13 @@ const SCRIPT = `
   const extraValue = (field) => field.kind === "boolean" ? extraInput(field).checked : extraInput(field).value;
   const extraText = (field, value) => field.kind === "boolean" ? (value === true ? "yes" : "no") : field.kind === "list" ? (value ?? []).join(", ") || "none" : value ?? "";
   const form = () => ({ ...Object.fromEntries(extra.map((field) => [field.key, extraValue(field)])), disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: $("user-roles").value, secondFactor: $("user-second-factor").checked, username: $("user-username").value });
+  // The password stays masked unless someone asks to see it, and masks again for the next person.
+  const setShown = (shown) => {
+    $("user-password").type = shown ? "text" : "password";
+    $("user-password-toggle").textContent = shown ? "Hide" : "Show";
+    $("user-password-toggle").setAttribute("aria-pressed", String(shown));
+  };
+  $("user-password-toggle").addEventListener("click", () => setShown($("user-password").type === "password"));
   const clearForm = () => {
     editing = null;
     for (const id of ["user-name", "user-username", "user-email", "user-roles", "user-password"]) $(id).value = "";
@@ -386,6 +395,7 @@ const SCRIPT = `
     $("user-disabled").checked = false;
     for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = false; else extraInput(field).value = ""; }
     $("user-password").placeholder = "The password they sign in with";
+    setShown(false);
     $("user-save").hidden = true;
     $("user-add").hidden = false;
   };
@@ -397,6 +407,7 @@ const SCRIPT = `
     $("user-roles").value = p.roles.join(", ");
     $("user-password").value = "";
     $("user-password").placeholder = p.hasPassword ? "Leave empty to keep the password" : "No password yet: set one";
+    setShown(false);
     $("user-second-factor").checked = p.secondFactor;
     $("user-disabled").checked = p.disabled;
     for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = p[field.key] === true; else extraInput(field).value = field.kind === "list" ? (p[field.key] ?? []).join(", ") : p[field.key] ?? ""; }
@@ -589,7 +600,7 @@ const page = (saved: null | Theme) => {
             <div class="field"><label class="label" for="user-roles">Roles</label><input id="user-roles" type="text" placeholder="ADMIN, STAFF" autocomplete="off"></div>
           </div>
           <div class="row">
-            <div class="field"><label class="label" for="user-password">Password</label><input id="user-password" type="text" placeholder="The password they sign in with" autocomplete="off"></div>
+            <div class="field"><label class="label" for="user-password">Password</label><div class="secret"><input id="user-password" type="password" placeholder="The password they sign in with" autocomplete="new-password"><button class="button button--small" id="user-password-toggle" type="button" aria-controls="user-password" aria-pressed="false">Show</button></div></div>
           </div>
           <div class="row">
             <label class="check"><input id="user-second-factor" type="checkbox"> Asks for a second factor</label>

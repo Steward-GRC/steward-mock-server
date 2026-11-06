@@ -397,15 +397,24 @@ describe("controls", () => {
       /<span class="tile__label">signInMethods<\/span><span class="tile__value tile__value--text">passkey, passwordReset, sso<\/span>/,
     );
     assert.match(html, /"tile__value tile__value--text"/);
-    // Columns never ask for more than the row has, tiles can shrink, and nothing overflows.
-    assert.match(
-      html,
-      /\.tiles \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(170px, 100%\), 1fr\)\)/,
-    );
+    // Tiles can shrink below their basis on a narrow window, and nothing overflows.
     assert.match(html, /\.tile \{[^}]*min-width: 0/);
     assert.match(html, /\.tile__label \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value--text \{[^}]*font: 700 16px/);
+  });
+
+  it("stretches the tiles on a row that isn't full across the whole row", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    // A wrapping flex row, not a grid: each tile grows from a 170px basis, so the tiles on a
+    // part-filled last row share its full width and a lone tile spans all of it. A grid keeps a
+    // wrapped tile one column wide whatever its track sizing.
+    assert.match(
+      html,
+      /\.tiles \{ display: flex; flex-wrap: wrap; gap: 16px; \}/,
+    );
+    assert.match(html, /\.tile \{[^}]*flex: 1 1 170px/);
+    assert.doesNotMatch(html, /\.tiles \{[^}]*grid/);
   });
 
   it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {
@@ -649,6 +658,19 @@ describe("sign-in users", () => {
     const refused = checkCredentials("cy", "nope");
     assert.ok(refused instanceof Response);
     assert.equal(refused.status, 401);
+  });
+
+  it("masks the password in the Users form, with a show and hide toggle", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<input id="user-password" type="password"/);
+    assert.match(
+      html,
+      /<button class="button button--small" id="user-password-toggle" type="button" aria-controls="user-password" aria-pressed="false">Show<\/button>/,
+    );
+    assert.match(
+      html,
+      /\$\("user-password"\)\.type = shown \? "text" : "password"/,
+    );
   });
 
   it("manages the users from the page and says who was signed in", async () => {
