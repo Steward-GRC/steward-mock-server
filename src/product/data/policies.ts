@@ -265,7 +265,7 @@ export const policies = (): Policy[] => [
     homeCategoryId: "category-travel",
     id: "policy-5",
     number: "POL-TRAVEL-000001",
-    ownerUserId: "user-alice",
+    ownerUserId: "user-jon",
     title: "Car Mileage Policy",
     updatedAt: "2026-03-18T00:00:00Z",
   }),
@@ -762,6 +762,11 @@ export const acknowledgements = (): Acknowledgement[] => [
   ackedAgo("version-2", "user-grace", 27),
   ackedAgo("version-2", "user-alice", 38),
   ackedAgo("version-2", "user-dave", 66),
+  // The duplicate accounts to merge (bug log #110): both gave the version-12 acknowledgement, so a
+  // merge counts it once; only Jon gave the version-11 one.
+  ackedAgo("version-11", "user-jon", 9),
+  ackedAgo("version-12", "user-jon", 7),
+  ackedAgo("version-12", "user-jonathan", 3),
 ];
 
 /** A view of a version: steward-obligations' policy_views row (recordView writes one). */

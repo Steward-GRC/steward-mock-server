@@ -241,33 +241,147 @@ const deletionPreview = (person: StewardPerson) => {
   };
 };
 
-const mergeCounts = (source: StewardPerson) => ({
-  acknowledgmentsDeduped: 0,
-  acknowledgmentsMoved: data().acknowledgements.filter(
-    (a) => a.userId === source.id,
-  ).length,
-  policiesOwned: data().policies.filter((p) => p.ownerUserId === source.id)
-    .length,
-  preferences: 0,
-  raciGrants: 0,
-  workflowItems: pendingSeats(source.id).length,
-});
+/** Active sessions a person has now, live and past. */
+const activeSessionCount = (userId: string) =>
+  data().pastSessions.filter((s) => s.userId === userId && s.active).length +
+  liveSessions(userId).length;
 
-const mergePreview = (source: StewardPerson, target: StewardPerson) => ({
-  counts: mergeCounts(source),
-  items: data()
-    .policies.filter((p) => p.ownerUserId === source.id)
-    .map((p) => ({
-      detail: `Ownership moves to ${target.name}.`,
-      kind: "POLICY_OWNER",
-      label: p.title,
-      refId: p.id,
-    })),
-  requiresPrivilegedConfirm: source.roles.length > 0,
-  sourceUserId: source.id,
-  targetUserId: target.id,
-  warnings: [],
-});
+/** Categories that name the person: as an author or approver, an owner, or a user rule. */
+const categoriesNaming = (userId: string) =>
+  data().categories.filter(
+    (c) =>
+      c.authorRule.includes(userId) ||
+      c.approverRule.includes(userId) ||
+      c.owners.includes(userId) ||
+      c.rules.some((r) => r.subjectKind === "USER" && r.subjectRef === userId),
+  );
+
+/**
+ * What merging `source` INTO `target` would do, as steward-identity reports it: the source's
+ * policies, category rules, acknowledgements (one the target already gave is counted once, as
+ * deduped), pending approval seats and per-policy overrides go to the target; the source's roles
+ * and groups do not.
+ */
+const mergePlan = (source: StewardPerson, target: StewardPerson) => {
+  const targetVersions = new Set(
+    data()
+      .acknowledgements.filter((a) => a.userId === target.id)
+      .map((a) => a.policyVersionId),
+  );
+  const acks = data().acknowledgements.filter((a) => a.userId === source.id);
+  const deduped = acks.filter((a) => targetVersions.has(a.policyVersionId));
+  const moved = acks.filter((a) => !targetVersions.has(a.policyVersionId));
+  const policies = data().policies.filter((p) => p.ownerUserId === source.id);
+  const categories = categoriesNaming(source.id);
+  const seats = pendingSeats(source.id);
+  const overrides = source.policyOverrides.filter(
+    (o) =>
+      !target.policyOverrides.some((t) => t.policyNumber === o.policyNumber),
+  );
+  const sessions = activeSessionCount(source.id);
+  const warnings = [
+    ...(source.roles.length > 0
+      ? [
+          {
+            code: "ROLES_NOT_MOVED",
+            message: `${source.name} holds ${source.roles.join(", ")}. Roles are not merged: grant what ${target.name} needs afterwards.`,
+          },
+        ]
+      : []),
+    ...(deduped.length > 0
+      ? [
+          {
+            code: "ACKNOWLEDGMENTS_DEDUPED",
+            message: `${String(deduped.length)} acknowledgement${deduped.length === 1 ? "" : "s"} both accounts gave count once.`,
+          },
+        ]
+      : []),
+    ...(sessions > 0
+      ? [
+          {
+            code: "SESSIONS_ENDED",
+            message: `${source.name} is signed in; their ${String(sessions)} session${sessions === 1 ? "" : "s"} end.`,
+          },
+        ]
+      : []),
+    ...(source.email.toLowerCase() === target.email.toLowerCase()
+      ? []
+      : [
+          {
+            code: "EMAIL_DIFFERS",
+            message: `The emails differ (${source.email}, ${target.email}). Check they are one person.`,
+          },
+        ]),
+  ];
+  return {
+    acks,
+    categories,
+    counts: {
+      acknowledgmentsDeduped: deduped.length,
+      acknowledgmentsMoved: moved.length,
+      policiesOwned: policies.length,
+      preferences: overrides.length,
+      raciGrants: categories.length,
+      workflowItems: seats.length,
+    },
+    deduped,
+    items: [
+      ...policies.map((p) => ({
+        detail: `Ownership moves to ${target.name}.`,
+        kind: "POLICY_OWNER",
+        label: p.title,
+        refId: p.id,
+      })),
+      ...categories.map((c) => ({
+        detail: `${target.name} takes the place in ${c.name}'s rules.`,
+        kind: "RACI_GRANT",
+        label: c.name,
+        refId: c.id,
+      })),
+      ...acks.map((a) => ({
+        detail: targetVersions.has(a.policyVersionId)
+          ? `${target.name} already gave it; it counts once.`
+          : `Moves to ${target.name}.`,
+        kind: "ACKNOWLEDGMENT",
+        label: a.policyVersionId,
+        refId: `${a.policyVersionId}:${a.userId}`,
+      })),
+      ...seats.map(({ run }) => ({
+        detail: `The approval seat moves to ${target.name}.`,
+        kind: "WORKFLOW_ITEM",
+        label: run.id,
+        refId: run.id,
+      })),
+      ...overrides.map((o) => ({
+        detail: `${o.effect} on ${o.policyNumber} moves to ${target.name}.`,
+        kind: "PREFERENCE",
+        label: o.policyNumber,
+        refId: o.policyNumber,
+      })),
+    ],
+    moved,
+    overrides,
+    policies,
+    // Closing a signed-in account, or one that holds roles, needs the admin's say-so.
+    requiresPrivilegedConfirm: source.roles.length > 0 || sessions > 0,
+    seats,
+    sourceUserId: source.id,
+    targetUserId: target.id,
+    warnings,
+  };
+};
+
+const mergePreview = (source: StewardPerson, target: StewardPerson) => {
+  const plan = mergePlan(source, target);
+  return {
+    counts: plan.counts,
+    items: plan.items,
+    requiresPrivilegedConfirm: plan.requiresPrivilegedConfirm,
+    sourceUserId: plan.sourceUserId,
+    targetUserId: plan.targetUserId,
+    warnings: plan.warnings,
+  };
+};
 
 export const userResolvers: Resolvers = {
   Mutation: {
@@ -413,31 +527,52 @@ export const userResolvers: Resolvers = {
       const target = personFor(given.targetUserId);
       if (source.id === target.id)
         throw refuse("BAD_USER_INPUT", "Pick two different accounts.");
-      const preview = mergePreview(source, target);
-      if (preview.requiresPrivilegedConfirm && !given.confirmPrivileged)
+      if (source.deletedAt || target.deletedAt)
         throw refuse(
           "FAILED_PRECONDITION",
-          "The source account holds roles; confirm the privileged merge.",
+          "One of these accounts is already closed.",
         );
-      for (const policy of data().policies)
-        if (policy.ownerUserId === source.id) policy.ownerUserId = target.id;
-      for (const ack of data().acknowledgements)
-        if (ack.userId === source.id) ack.userId = target.id;
+      const plan = mergePlan(source, target);
+      if (plan.requiresPrivilegedConfirm && !given.confirmPrivileged)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "The source account holds roles or is signed in; confirm the privileged merge.",
+        );
+      for (const policy of plan.policies) policy.ownerUserId = target.id;
+      const dropped = new Set(plan.deduped);
+      data().acknowledgements = data()
+        .acknowledgements.filter((a) => !dropped.has(a))
+        .map((a) => (a.userId === source.id ? { ...a, userId: target.id } : a));
+      const swap = (ids: string[]) => [
+        ...new Set(ids.map((id) => (id === source.id ? target.id : id))),
+      ];
+      for (const category of plan.categories) {
+        category.authorRule = swap(category.authorRule);
+        category.approverRule = swap(category.approverRule);
+        category.owners = swap(category.owners);
+        for (const rule of category.rules)
+          if (rule.subjectKind === "USER" && rule.subjectRef === source.id)
+            rule.subjectRef = target.id;
+      }
+      for (const { seat } of plan.seats) seat.userId = target.id;
+      target.policyOverrides.push(...plan.overrides);
       source.deletedAt = new Date().toISOString();
       source.disabled = true;
       source.mergedIntoUserId = target.id;
       revokeAll(source.id);
       audit("user.accounts_merged", actor, source);
       return {
-        counts: preview.counts,
+        counts: plan.counts,
         mergeOperationId: newId("merge"),
         status: "COMPLETED",
-        steps: ["policies", "acknowledgments", "tombstone"].map((step) => ({
-          detail: "",
-          error: "",
-          status: "COMPLETED",
-          step,
-        })),
+        steps: [
+          "policies",
+          "raci",
+          "acknowledgments",
+          "workflow",
+          "preferences",
+          "tombstone",
+        ].map((step) => ({ detail: "", error: "", status: "COMPLETED", step })),
       };
     },
     removeUserFromGroup: (

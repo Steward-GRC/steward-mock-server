@@ -50,7 +50,7 @@ import {
   type NotificationPrefs,
   notificationPrefs,
 } from "#product/data/notifications.ts";
-import { people } from "#product/data/people.ts";
+import { duplicatePeople, people } from "#product/data/people.ts";
 import {
   type Acknowledgement,
   acknowledgements,
@@ -168,7 +168,7 @@ export const seed = (): StewardData => ({
   pastSessions: pastSessions(),
   pdfJobs: {},
   pendingFactors: { totp: [], webauthn: {} },
-  people: people(),
+  people: [...people(), ...duplicatePeople()],
   platformGroups: platformGroups(),
   policies: policies(),
   policyViews: policyViews(),
