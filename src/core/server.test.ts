@@ -400,12 +400,19 @@ describe("controls", () => {
     // Columns never ask for more than the row has, tiles can shrink, and nothing overflows.
     assert.match(
       html,
-      /\.tiles \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(170px, 100%\), 1fr\)\)/,
+      /\.tiles \{[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(170px, 100%\), 1fr\)\)/,
     );
     assert.match(html, /\.tile \{[^}]*min-width: 0/);
     assert.match(html, /\.tile__label \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value--text \{[^}]*font: 700 16px/);
+  });
+
+  it("keeps a tile its own size when its row isn't full", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    // auto-fill keeps the empty columns, so one tile on a row stays one column wide; auto-fit
+    // would fold them away and stretch it across the row.
+    assert.doesNotMatch(html, /\.tiles \{[^}]*auto-fit/);
   });
 
   it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {
@@ -649,6 +656,19 @@ describe("sign-in users", () => {
     const refused = checkCredentials("cy", "nope");
     assert.ok(refused instanceof Response);
     assert.equal(refused.status, 401);
+  });
+
+  it("masks the password in the Users form, with a show and hide toggle", async () => {
+    const html = await (await fetch(`${base}/_mock`)).text();
+    assert.match(html, /<input id="user-password" type="password"/);
+    assert.match(
+      html,
+      /<button class="button button--small" id="user-password-toggle" type="button" aria-controls="user-password" aria-pressed="false">Show<\/button>/,
+    );
+    assert.match(
+      html,
+      /\$\("user-password"\)\.type = shown \? "text" : "password"/,
+    );
   });
 
   it("manages the users from the page and says who was signed in", async () => {
