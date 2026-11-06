@@ -10,6 +10,7 @@ query WorkflowStatus($policyVersionId: ID!) {
       state
       comment
       decidedAt
+      groupId
     }
     stageUnitProgress {
       groupId
