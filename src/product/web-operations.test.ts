@@ -443,7 +443,6 @@ const cases: Record<string, Case> = {
   },
   SearchAndAnswer: {
     as: READER,
-    refused: AI_DOWN,
     variables: { question: "How do I book a desk?" },
   },
   SearchUsers: { as: AUTHOR, variables: { limit: 5, query: "charlie" } },

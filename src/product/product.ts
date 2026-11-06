@@ -15,20 +15,24 @@ import "#product/groups.ts";
 import { stewardMaintenance } from "#product/maintenance.ts";
 import { resolvers } from "#product/resolvers.ts";
 import { stewardRoutes } from "#product/routes.ts";
+import { groupChoices, legend, roleChoices } from "#product/users-card.ts";
 
 const read = (file: string) =>
   readFileSync(new URL(file, import.meta.url), "utf8");
 
 export const steward: Product = {
   actions: productActions,
+  /** What the roles and groups on the Users card grant (src/product/users-card.ts). */
+  legend: legend(),
   /** The gateway's maintenance gate (src/product/maintenance.ts). */
   maintenance: stewardMaintenance,
   /**
    * Each person's free-text groups, edited in /_mock's Users card beside the template's roles
-   * (src/product/groups.ts says what they mean).
+   * (src/product/groups.ts says what they mean), picked from the platform groups.
    */
   personFields: [
     {
+      choices: groupChoices(),
       hint: "All staff, Facilities team, Manages Facilities team",
       key: "groups",
       kind: "list",
@@ -36,6 +40,8 @@ export const steward: Product = {
     },
   ],
   resolvers,
+  /** Steward's real roles, for the Roles dropdown (src/product/users-card.ts). */
+  roleChoices,
   routes: stewardRoutes,
   schema: [read("schema.graphql"), read("schema-pending.graphql")],
   seed,

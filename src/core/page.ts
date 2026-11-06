@@ -17,7 +17,7 @@
 // it; the switch posts /_mock/theme, which saves the choice in a cookie the page is then served
 // with, so it opens in the saved theme with no flash and nothing kept in the browser's storage.
 
-import type { PersonField } from "#core/product.ts";
+import type { Choice, LegendSection, PersonField } from "#core/product.ts";
 import type { MaintenanceWindow } from "#core/state.ts";
 
 import { cookieOf, readJson, refuse } from "#core/http.ts";
@@ -199,6 +199,14 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .secret input { flex: 1; min-width: 0; }
 .check { display: inline-flex; align-items: center; gap: 8px; font: 400 15px/22px var(--font-ui); }
 .check input { width: 18px; height: 18px; accent-color: var(--primary); }
+.choices { border: 1.5px solid var(--control); border-radius: 10px; background: var(--bg); }
+.choices summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px; cursor: pointer; font: 400 15px/1 var(--font-ui); }
+.choices__list { display: flex; flex-direction: column; gap: 8px; padding: 8px 12px 12px; border-top: 1.5px solid var(--border); }
+.info { border: 1.5px solid var(--border); border-left: 4px solid var(--primary); border-radius: 10px; padding: 12px 16px; background: var(--surface, var(--bg)); }
+.info h3 { margin: 0 0 6px; font: 700 15px/22px var(--font-ui); }
+.info dl { margin: 0 0 8px; display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font: 400 14px/20px var(--font-ui); }
+.info dt { font: 700 13px/20px var(--font-mono); }
+.info dd { margin: 0; }
 .table-wrap { overflow-x: auto; }
 .people { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-ui); }
 .people th { text-align: left; padding: 8px 10px; font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--border); }
@@ -378,9 +386,35 @@ const SCRIPT = `
   // The product's own person fields, from the Users card's data-fields.
   const extra = JSON.parse($("users").dataset.fields || "[]");
   const extraInput = (field) => $("user-field-" + field.key);
-  const extraValue = (field) => field.kind === "boolean" ? extraInput(field).checked : extraInput(field).value;
-  const extraText = (field, value) => field.kind === "boolean" ? (value === true ? "yes" : "no") : field.kind === "list" ? (value ?? []).join(", ") || "none" : value ?? "";
-  const form = () => ({ ...Object.fromEntries(extra.map((field) => [field.key, extraValue(field)])), disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: $("user-roles").value, secondFactor: $("user-second-factor").checked, username: $("user-username").value });
+  // A list with choices is a dropdown of checkboxes (a details); a text field with choices is a select.
+  const isBox = (id) => $(id).tagName === "DETAILS";
+  const boxes = (id) => [...$(id).querySelectorAll("input.choice")];
+  const getList = (id) => isBox(id) ? boxes(id).filter((b) => b.checked).map((b) => b.value).join(", ") : $(id).value;
+  const summarize = (id) => { $(id).querySelector("summary").textContent = getList(id) || "None chosen"; };
+  const setList = (id, values) => {
+    if (!isBox(id)) { $(id).value = values.join(", "); return; }
+    for (const old of $(id).querySelectorAll(".choice--other")) old.remove();
+    for (const b of boxes(id)) b.checked = values.includes(b.value);
+    const known = boxes(id).map((b) => b.value);
+    for (const value of values.filter((v) => !known.includes(v))) {
+      const label = el("label", "check choice--other");
+      const box = el("input", "choice");
+      box.type = "checkbox";
+      box.value = value;
+      box.checked = true;
+      label.append(box, " ", el("span", "", value));
+      $(id).querySelector(".choices__list").append(label);
+    }
+    summarize(id);
+  };
+  const setText = (field, value) => {
+    const input = extraInput(field);
+    if (input.tagName === "SELECT" && value && ![...input.options].some((o) => o.value === value)) { const o = el("option", "", value); o.value = value; input.append(o); }
+    input.value = value;
+  };
+  for (const box of document.querySelectorAll("details.choices")) box.addEventListener("change", () => summarize(box.id));
+  const extraValue = (field) => field.kind === "boolean" ? extraInput(field).checked : field.kind === "list" ? getList("user-field-" + field.key) : extraInput(field).value;
+  const form = () => ({ ...Object.fromEntries(extra.map((field) => [field.key, extraValue(field)])), disabled: $("user-disabled").checked, email: $("user-email").value, name: $("user-name").value, password: $("user-password").value, roles: getList("user-roles"), secondFactor: $("user-second-factor").checked, username: $("user-username").value });
   // The password stays masked unless someone asks to see it, and masks again for the next person.
   const setShown = (shown) => {
     $("user-password").type = shown ? "text" : "password";
@@ -390,10 +424,11 @@ const SCRIPT = `
   $("user-password-toggle").addEventListener("click", () => setShown($("user-password").type === "password"));
   const clearForm = () => {
     editing = null;
-    for (const id of ["user-name", "user-username", "user-email", "user-roles", "user-password"]) $(id).value = "";
+    for (const id of ["user-name", "user-username", "user-email", "user-password"]) $(id).value = "";
+    setList("user-roles", []);
     $("user-second-factor").checked = false;
     $("user-disabled").checked = false;
-    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = false; else extraInput(field).value = ""; }
+    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = false; else if (field.kind === "list") setList("user-field-" + field.key, []); else extraInput(field).value = ""; }
     $("user-password").placeholder = "The password they sign in with";
     setShown(false);
     $("user-save").hidden = true;
@@ -404,13 +439,13 @@ const SCRIPT = `
     $("user-name").value = p.name;
     $("user-username").value = p.username;
     $("user-email").value = p.email;
-    $("user-roles").value = p.roles.join(", ");
+    setList("user-roles", p.roles);
     $("user-password").value = "";
     $("user-password").placeholder = p.hasPassword ? "Leave empty to keep the password" : "No password yet: set one";
     setShown(false);
     $("user-second-factor").checked = p.secondFactor;
     $("user-disabled").checked = p.disabled;
-    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = p[field.key] === true; else extraInput(field).value = field.kind === "list" ? (p[field.key] ?? []).join(", ") : p[field.key] ?? ""; }
+    for (const field of extra) { if (field.kind === "boolean") extraInput(field).checked = p[field.key] === true; else if (field.kind === "list") setList("user-field-" + field.key, p[field.key] ?? []); else setText(field, p[field.key] ?? ""); }
     $("user-save").hidden = false;
     $("user-add").hidden = true;
     $("user-name").focus();
@@ -503,14 +538,60 @@ const tilesHtml = (summary: Record<string, unknown>) =>
     )
     .join("");
 
-/** The product's own person fields in the Users form: text inputs, then checkboxes. */
+/** A dropdown of checkboxes, one per choice, for a list with choices (the Roles among them). */
+const choiceBox = (id: string, label: string, choices: Choice[]) =>
+  `<div class="field"><span class="label" id="${id}-label">${escape(label)}</span><details class="choices" id="${id}" aria-labelledby="${id}-label"><summary>None chosen</summary><div class="choices__list">${choices
+    .map(
+      (choice) =>
+        `<label class="check"><input class="choice" type="checkbox" value="${escape(choice.value)}"> <span>${escape(choice.label ?? choice.value)}</span>${choice.hint ? ` <span class="hint">${escape(choice.hint)}</span>` : ""}</label>`,
+    )
+    .join("")}</div></details></div>`;
+
+/** The Roles input: a dropdown when the product lists its roles, typed text when it doesn't. */
+const rolesHtml = () => {
+  const choices = product().roleChoices ?? [];
+  return choices.length > 0
+    ? choiceBox("user-roles", "Roles", choices)
+    : `<div class="field"><label class="label" for="user-roles">Roles</label><input id="user-roles" type="text" placeholder="ADMIN, STAFF" autocomplete="off"></div>`;
+};
+
+/** The product's legend as an info box on the Users card, or nothing when it has none. */
+const legendHtml = (legend: LegendSection[]) =>
+  legend.length === 0
+    ? ""
+    : `<aside class="info" id="users-legend" aria-label="What the roles and groups mean">${legend
+        .map(
+          (section) =>
+            `<h3>${escape(section.title)}</h3><dl>${section.entries
+              .map(
+                (entry) =>
+                  `<dt>${escape(entry.term)}</dt><dd>${escape(entry.text)}</dd>`,
+              )
+              .join("")}</dl>`,
+        )
+        .join("")}</aside>`;
+
+/** One non-boolean field: a dropdown of checkboxes, a select or a text input. */
+const inputHtml = (field: PersonField) => {
+  const id = `user-field-${escape(field.key)}`;
+  const choices = field.choices ?? [];
+  if (choices.length > 0 && field.kind === "list")
+    return choiceBox(id, field.label, choices);
+  if (choices.length > 0)
+    return `<div class="field"><label class="label" for="${id}">${escape(field.label)}</label><select id="${id}"><option value="">None</option>${choices
+      .map(
+        (choice) =>
+          `<option value="${escape(choice.value)}"${choice.hint ? ` title="${escape(choice.hint)}"` : ""}>${escape(choice.label ?? choice.value)}</option>`,
+      )
+      .join("")}</select></div>`;
+  return `<div class="field"><label class="label" for="${id}">${escape(field.label)}</label><input id="${id}" type="text" placeholder="${escape(field.hint ?? (field.kind === "list" ? "Comma-separated" : ""))}" autocomplete="off"></div>`;
+};
+
+/** The product's own person fields in the Users form: inputs and dropdowns, then checkboxes. */
 const fieldsHtml = (fields: PersonField[]) => {
   const inputs = fields
     .filter((field) => field.kind !== "boolean")
-    .map(
-      (field) =>
-        `<div class="field"><label class="label" for="user-field-${escape(field.key)}">${escape(field.label)}</label><input id="user-field-${escape(field.key)}" type="text" placeholder="${escape(field.hint ?? (field.kind === "list" ? "Comma-separated" : ""))}" autocomplete="off"></div>`,
-    )
+    .map((field) => inputHtml(field))
     .join("");
   const checks = fields
     .filter((field) => field.kind === "boolean")
@@ -590,6 +671,7 @@ const page = (saved: null | Theme) => {
         <section class="card" id="users" aria-labelledby="users-title" data-fields="${escape(JSON.stringify(fields))}">
           <h2 id="users-title">Users</h2>
           <p class="hint">The people who can sign in, and the only passwords that work for them. A change counts from the next sign-in; removing someone signs them out.</p>
+          ${legendHtml(product().legend ?? [])}
           <div class="table-wrap"><table class="people"><thead><tr><th scope="col">Name</th><th scope="col">Username</th><th scope="col">Roles</th><th scope="col">Password</th><th scope="col">Status</th>${fields.map((field) => `<th scope="col">${escape(field.label)}</th>`).join("")}<th scope="col"><span class="label">Actions</span></th></tr></thead><tbody id="people-rows"></tbody></table></div>
           <div class="row">
             <div class="field"><label class="label" for="user-name">Name</label><input id="user-name" type="text" placeholder="Charlie Example" autocomplete="off"></div>
@@ -597,7 +679,7 @@ const page = (saved: null | Theme) => {
           </div>
           <div class="row">
             <div class="field"><label class="label" for="user-email">Email</label><input id="user-email" type="email" placeholder="charlie@example.org" autocomplete="off"></div>
-            <div class="field"><label class="label" for="user-roles">Roles</label><input id="user-roles" type="text" placeholder="ADMIN, STAFF" autocomplete="off"></div>
+            ${rolesHtml()}
           </div>
           <div class="row">
             <div class="field"><label class="label" for="user-password">Password</label><div class="secret"><input id="user-password" type="password" placeholder="The password they sign in with" autocomplete="new-password"><button class="button button--small" id="user-password-toggle" type="button" aria-controls="user-password" aria-pressed="false">Show</button></div></div>

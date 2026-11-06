@@ -96,6 +96,10 @@ Who someone is and what they may do comes from the mock's own store of people, w
 the Users card on `/_mock`: each person's **roles** (the template's field) and **groups** (Steward's
 own). Both are read on every request, so an edit applies to the next call with no new sign-in.
 
+On the card, **Roles** is a dropdown of Steward's real roles (with `root`), **Groups** a dropdown of the
+platform groups and a "Manages <group>" for each, and an info box says what every role and group grants, so none is a bare name.
+Both lists come from `src/product/users-card.ts`, which reads the same table the permissions resolvers do.
+
 - **Roles** are Steward's: `site-admin`, `author`, `approver`, `privacy-officer`,
   `compliance-admin` and `template-admin`. They decide permissions as identity's do. `root` among
   them makes the person a root admin, which the User type reports as `isRoot` rather than a role.
@@ -115,8 +119,10 @@ own). Both are read on every request, so an edit applies to the next call with n
 Rights follow steward-gateway: the category rules decide who authors and approves, a draft is only
 its editors', and the case queue is the officers' alone. A draft goes for review with
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
-the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Steward AI isn't mocked: `aiHealth` says
-`ai_service_unavailable` and every AI call answers as the gateway does while the ai service is down.
+the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
+published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. Every other AI call
+(generate, revise, review, the admin settings) answers as the gateway does while the ai service is down, on both settings.
 The co-editing relay passes edits between the browsers on a draft but doesn't keep the editor's
 checkpoints the way steward-collab does: the editor's Save button writes the draft.
 

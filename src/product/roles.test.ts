@@ -10,7 +10,12 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
-import { query, startForTests, startFresh } from "#product/test-client.ts";
+import {
+  control,
+  query,
+  startForTests,
+  startFresh,
+} from "#product/test-client.ts";
 import { call, documentOf, signInAs } from "#product/web-client.ts";
 
 let base = "";
@@ -222,7 +227,8 @@ describe("settings", () => {
 });
 
 describe("Steward AI", () => {
-  it("reports itself unavailable", async () => {
+  it("reports itself unavailable while the simulation is off", async () => {
+    await control(base, { kind: "ai-simulation", on: false });
     const answer = await call(base, await as("user-erin"), "AiHealth");
     assert.deepEqual(answer.data.aiHealth, {
       available: false,

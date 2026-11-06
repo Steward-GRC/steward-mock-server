@@ -87,6 +87,10 @@ export interface SignInMethods {
 
 export interface StewardData extends ProductData {
   acknowledgements: Acknowledgement[];
+  /** Whether Ask and the AI health answer from the simulation (the controls switch it). */
+  aiSimulated: boolean;
+  /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
+  askedQuestions: string[];
   audit: AuditRecord[];
   breakGlass: BreakGlassGrant[];
   categories: Category[];
@@ -135,6 +139,8 @@ export interface StewardData extends ProductData {
 
 export const seed = (): StewardData => ({
   acknowledgements: acknowledgements(),
+  aiSimulated: true,
+  askedQuestions: [],
   audit: auditTrail(),
   breakGlass: [],
   categories: categories(),

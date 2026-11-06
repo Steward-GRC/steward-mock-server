@@ -97,6 +97,19 @@ export const fixture: Product = {
       section: "Notes",
     },
   ],
+  // The Users card explains its roles.
+  legend: [
+    {
+      entries: [
+        {
+          term: "ADMIN",
+          text: "May remove notes and keep working in maintenance.",
+        },
+        { term: "MEMBER", text: "May add notes." },
+      ],
+      title: "Roles",
+    },
+  ],
   // Its banner query keeps answering during maintenance, and its refusal carries a header of its
   // own on top of the core's default answer.
   maintenance: {
@@ -116,6 +129,21 @@ export const fixture: Product = {
     { hint: "night, weekend", key: "tags", kind: "list", label: "Tags" },
     { key: "onCall", kind: "boolean", label: "On call" },
     { key: "name", kind: "text", label: "Shadow" },
+    {
+      choices: [
+        { hint: "Mornings", value: "day" },
+        { label: "Night shift", value: "night" },
+      ],
+      key: "shift",
+      kind: "text",
+      label: "Shift",
+    },
+    {
+      choices: [{ value: "north" }, { hint: "The annexe", value: "south" }],
+      key: "areas",
+      kind: "list",
+      label: "Areas",
+    },
   ],
   resolvers: {
     Mutation: {
@@ -164,6 +192,11 @@ export const fixture: Product = {
       },
     },
   },
+  // The Roles input is a dropdown of these.
+  roleChoices: [
+    { hint: "Runs the fixture", value: "ADMIN" },
+    { label: "Member", value: "MEMBER" },
+  ],
   routes: (request, path) => {
     if (request.method === "GET" && path === "/fixture/whoami") {
       return json({ personId: sessionOf(request)?.personId ?? null });
