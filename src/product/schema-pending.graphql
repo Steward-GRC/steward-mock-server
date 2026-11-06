@@ -6,6 +6,39 @@
 # https://github.com/Steward-GRC/steward-gateway/issues/41 (policy text search), and each part
 # goes once the pinned gateway SDL carries it.
 
+# What a category holds, proposed in https://github.com/Steward-GRC/steward-gateway/issues/80
+# (steward-core#34 stores it). BOTH is the default. NONE makes the category a container that only
+# holds child categories. Creating a draft in a category, and moving a document into one, is
+# refused (CATEGORY_REFUSES_TYPE) when the category does not accept the type. Narrowing is
+# refused (CATEGORY_HOLDS_DOCUMENTS, with the count in the message) while documents the
+# category would no longer accept are in it, published or draft.
+enum CategoryDocumentTypes {
+  BOTH
+  POLICIES
+  PROCEDURES
+  NONE
+}
+
+extend type Category {
+  documentTypes: CategoryDocumentTypes!
+}
+
+extend type Query {
+  # How many documents a category holds now, for the settings form's check before it narrows.
+  categoryDocumentCounts(categoryId: ID!): CategoryDocumentCounts!
+}
+
+type CategoryDocumentCounts {
+  policies: Int!
+  procedures: Int!
+}
+
+extend type Mutation {
+  # Site admin only. Widening always works; narrowing is refused while the category holds
+  # documents it would no longer accept.
+  setCategoryDocumentTypes(id: ID!, documentTypes: CategoryDocumentTypes!): Category!
+}
+
 extend type Query {
   # searchPolicies -> core's search RPC over published policy text, filtered by the reader's read
   #   decision (steward-authz). A policy the viewer can't read never appears. A viewer whose

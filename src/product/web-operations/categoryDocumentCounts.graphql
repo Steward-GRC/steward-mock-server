@@ -1,0 +1,6 @@
+query CategoryDocumentCounts($categoryId: ID!) {
+  categoryDocumentCounts(categoryId: $categoryId) {
+    policies
+    procedures
+  }
+}

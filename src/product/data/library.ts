@@ -16,6 +16,7 @@ export interface Category {
   defaultTemplateId: null | string;
   defaultTemplateNone: boolean;
   defaultWorkflowId: null | string;
+  documentTypes: CategoryDocumentTypes;
   exclusionGroupIds: null | string[];
   id: string;
   idpGroupIds: null | string[];
@@ -28,6 +29,9 @@ export interface Category {
   rules: RaciRule[];
   slug: string;
 }
+
+/** Which document types a category holds; NONE is a container for child categories only. */
+export type CategoryDocumentTypes = "BOTH" | "NONE" | "POLICIES" | "PROCEDURES";
 
 /** A RACI cell: BLANK leaves the action to the next rule, then to the default deny. */
 export type RaciGrant = "ALLOW" | "BLANK" | "DENY";
@@ -153,6 +157,7 @@ const category = (
   defaultTemplateId: null,
   defaultTemplateNone: false,
   defaultWorkflowId: null,
+  documentTypes: "BOTH",
   exclusionGroupIds: null,
   idpGroupIds: null,
   owners: [],
@@ -188,6 +193,7 @@ export const categories = (): Category[] => [
   category({
     code: "EXPENSES",
     defaultWorkflowId: "workflow-1",
+    documentTypes: "POLICIES",
     id: "category-expenses",
     name: "Expenses",
     parentId: "category-finance",
@@ -227,6 +233,7 @@ export const categories = (): Category[] => [
   category({
     code: "CONDUCT",
     defaultWorkflowId: "workflow-1",
+    documentTypes: "PROCEDURES",
     id: "category-conduct",
     name: "Conduct",
     parentId: "category-people",
@@ -275,6 +282,7 @@ export const categories = (): Category[] => [
     approverRule: ["user-charlie"],
     authorRule: ["user-bob"],
     code: "WORKPLACE",
+    documentTypes: "NONE",
     id: "category-workplace",
     name: "Workplace",
     rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],

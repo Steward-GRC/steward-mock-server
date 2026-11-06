@@ -18,6 +18,7 @@ import type { PolicyLinks } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
+import { documentCounts, stranded } from "#product/category-types.ts";
 import {
   caller,
   data,
@@ -319,6 +320,7 @@ export const libraryResolvers: Resolvers = {
         defaultTemplateId: null,
         defaultTemplateNone: false,
         defaultWorkflowId: null,
+        documentTypes: "BOTH",
         exclusionGroupIds: null,
         id: newId("category"),
         idpGroupIds: null,
@@ -651,6 +653,23 @@ export const libraryResolvers: Resolvers = {
       record("category.defaults_set", admin, categorySubject(category));
       return category;
     },
+    setCategoryDocumentTypes: (
+      _root,
+      given: { documentTypes: Category["documentTypes"]; id: string },
+      context: Context,
+    ) => {
+      const admin = siteAdmin(context);
+      const category = categoryFor(given.id);
+      const count = stranded(category, given.documentTypes);
+      if (count > 0)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          `CATEGORY_HOLDS_DOCUMENTS (${String(count)}): ${category.name} holds ${String(count)} documents it would no longer accept. Move them out first.`,
+        );
+      category.documentTypes = given.documentTypes;
+      record("category.document_types_set", admin, categorySubject(category));
+      return category;
+    },
     setCategoryGovernance: (
       _root,
       given: {
@@ -816,6 +835,15 @@ export const libraryResolvers: Resolvers = {
       return data().categories.filter(
         (c) => c.parentId === (given.parentId ?? null),
       );
+    },
+    categoryDocumentCounts: (
+      _root,
+      given: { categoryId: string },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      categoryFor(given.categoryId);
+      return documentCounts(given.categoryId);
     },
     categoryTree: (
       _root,

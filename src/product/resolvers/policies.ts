@@ -22,6 +22,7 @@ import {
   readEffect,
   visible,
 } from "#product/access.ts";
+import { accepts, refusesType } from "#product/category-types.ts";
 import { collabPath, collabToken } from "#product/collab.ts";
 import {
   caller,
@@ -342,7 +343,7 @@ export const policyResolvers: Resolvers = {
       context: Context,
     ) => {
       const person = caller(context);
-      found(
+      const home = found(
         data().categories.find((c) => c.id === given.homeCategoryId),
         "category",
       );
@@ -350,6 +351,7 @@ export const policyResolvers: Resolvers = {
       if (!given.title.trim())
         throw refuse("BAD_USER_INPUT", "A policy needs a title.");
       const documentType = given.documentType ?? "POLICY";
+      if (!accepts(home, documentType)) throw refusesType(home, documentType);
       const templateId = templateFor(given.homeCategoryId, given.templateId);
       const templateVersion = latestPublished(templateId);
       if (given.templateId && !templateVersion) throw notFound("template");
