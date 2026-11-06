@@ -397,22 +397,24 @@ describe("controls", () => {
       /<span class="tile__label">signInMethods<\/span><span class="tile__value tile__value--text">passkey, passwordReset, sso<\/span>/,
     );
     assert.match(html, /"tile__value tile__value--text"/);
-    // Columns never ask for more than the row has, tiles can shrink, and nothing overflows.
-    assert.match(
-      html,
-      /\.tiles \{[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(170px, 100%\), 1fr\)\)/,
-    );
+    // Tiles can shrink below their basis on a narrow window, and nothing overflows.
     assert.match(html, /\.tile \{[^}]*min-width: 0/);
     assert.match(html, /\.tile__label \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value \{[^}]*overflow-wrap: anywhere/);
     assert.match(html, /\.tile__value--text \{[^}]*font: 700 16px/);
   });
 
-  it("keeps a tile its own size when its row isn't full", async () => {
+  it("stretches the tiles on a row that isn't full across the whole row", async () => {
     const html = await (await fetch(`${base}/_mock`)).text();
-    // auto-fill keeps the empty columns, so one tile on a row stays one column wide; auto-fit
-    // would fold them away and stretch it across the row.
-    assert.doesNotMatch(html, /\.tiles \{[^}]*auto-fit/);
+    // A wrapping flex row, not a grid: each tile grows from a 170px basis, so the tiles on a
+    // part-filled last row share its full width and a lone tile spans all of it. A grid keeps a
+    // wrapped tile one column wide whatever its track sizing.
+    assert.match(
+      html,
+      /\.tiles \{ display: flex; flex-wrap: wrap; gap: 16px; \}/,
+    );
+    assert.match(html, /\.tile \{[^}]*flex: 1 1 170px/);
+    assert.doesNotMatch(html, /\.tiles \{[^}]*grid/);
   });
 
   it("lays out the shell: rail toggle, mock badge, sidebar and page head", async () => {

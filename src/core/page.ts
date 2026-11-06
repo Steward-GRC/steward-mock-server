@@ -162,8 +162,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 .live__dot { width: 8px; height: 8px; border-radius: 4px; background: var(--ok); flex: none; }
 .live.down { color: var(--danger); }
 .live.down .live__dot { background: var(--danger); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(170px, 100%), 1fr)); gap: 16px; }
-.tile { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
+.tiles { display: flex; flex-wrap: wrap; gap: 16px; }
+.tile { display: flex; flex-direction: column; gap: 10px; flex: 1 1 170px; min-width: 0; padding: 18px; border: 1.5px solid var(--border); border-radius: 16px; background: var(--surface); }
 .tile__label { font: 700 12px/16px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); overflow-wrap: anywhere; }
 .tile__value { font: 700 30px/1 var(--font-mono); overflow-wrap: anywhere; }
 .tile__value--text { font: 700 16px/1.35 var(--font-mono); }
