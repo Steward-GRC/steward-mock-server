@@ -9,6 +9,7 @@ import { refuse } from "#core/http.ts";
 import { mockState } from "#core/state.ts";
 import { assetActions } from "#product/assets.ts";
 import { type SignInMethods, stewardData } from "#product/data.ts";
+import { asSteward, type StewardPerson } from "#product/data/people.ts";
 import { expireTestLinks } from "#product/sso.ts";
 
 /**
@@ -105,7 +106,57 @@ const aiSimulation: ProductControl = (body) => {
   return { aiSimulated: stewardData().aiSimulated };
 };
 
+/**
+ * POST /_mock/controls {kind: "add-duplicate-person", personId}: a second account for the same
+ * person, to try Merge accounts on (steward-web bug log #110). Same email, the name spelled
+ * differently, and the other kind of sign-in (local or SSO), no roles. Numbered per person.
+ */
+const addDuplicatePerson: ProductControl = (body) => {
+  const people = mockState.data.people as StewardPerson[];
+  const source = people.find(
+    (p) => p.id === String(body.personId ?? "user-erin"),
+  );
+  if (!source) throw refuse(404, "unknown_person", "No such person.");
+  let n = 1;
+  while (people.some((p) => p.id === `${source.id}-dup${String(n)}`)) n++;
+  const [first = source.name, ...rest] = source.name.split(" ");
+  const copy: StewardPerson = {
+    ...asSteward(source),
+    deletedAt: null,
+    disabled: false,
+    groups: [...(asSteward(source).groups ?? [])].filter(
+      (g) => !g.startsWith("Manages "),
+    ),
+    id: `${source.id}-dup${String(n)}`,
+    localAccount: !asSteward(source).localAccount,
+    mergedIntoUserId: null,
+    name: [`${first}${first.slice(-1)}`, ...rest].join(" "),
+    policyOverrides: [],
+    roles: [],
+    secondFactor: false,
+    username: `${source.username}.dup${String(n)}`,
+  };
+  people.push(copy);
+  return { id: copy.id, name: copy.name };
+};
+
 export const productActions: ({ run: ProductControl } & Action)[] = [
+  {
+    body: { personId: "user-erin" },
+    hint: "Adds a second account for Erin (same email, name spelled differently, the other kind of sign-in) to try Merge accounts on.",
+    kind: "add-duplicate-person",
+    label: "Add a duplicate of Erin",
+    run: addDuplicatePerson,
+    section: "Merge accounts",
+  },
+  {
+    body: { personId: "user-bob" },
+    hint: "Adds a second account for Bob to try Merge accounts on.",
+    kind: "add-duplicate-person",
+    label: "Add a duplicate of Bob",
+    run: addDuplicatePerson,
+    section: "Merge accounts",
+  },
   ...signInMethodActions,
   ...assetActions,
   {

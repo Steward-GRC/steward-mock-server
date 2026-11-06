@@ -191,3 +191,59 @@ export const people = (): StewardPerson[] => [
     username: "heidi",
   }),
 ];
+
+/**
+ * Duplicate accounts to try Merge accounts on (steward-web bug log #110), joined to the store
+ * beside the sample people. Jon and Jonathan are one person, a local and an SSO account that
+ * spell the name differently; Jane and John Smith share a mailbox but are two people; the two Pat
+ * Quinns share a name but not an email, so an email match never offers them.
+ */
+export const duplicatePeople = (): StewardPerson[] => [
+  person({
+    email: "jsmith@example.org",
+    groups: ["All staff"],
+    id: "user-jon",
+    name: "Jon Smyth",
+    roles: ["author"],
+    username: "jon.smyth",
+  }),
+  person({
+    email: "jsmith@example.org",
+    groups: ["finance-staff", "Finance team"],
+    id: "user-jonathan",
+    localAccount: false,
+    name: "Jonathan Smith",
+    roles: [],
+    username: "jonathan.smith",
+  }),
+  person({
+    email: "smith@example.org",
+    groups: ["All staff"],
+    id: "user-jane",
+    name: "Jane Smith",
+    roles: [],
+    username: "jane.smith",
+  }),
+  person({
+    email: "smith@example.org",
+    groups: ["All staff"],
+    id: "user-johnsmith",
+    name: "John Smith",
+    roles: [],
+    username: "john.smith",
+  }),
+  person({
+    email: "pat.quinn@example.org",
+    id: "user-pat",
+    name: "Pat Quinn",
+    roles: [],
+    username: "pat.quinn",
+  }),
+  person({
+    email: "p.quinn@example.net",
+    id: "user-pat2",
+    name: "Pat Quinn",
+    roles: [],
+    username: "p.quinn",
+  }),
+];

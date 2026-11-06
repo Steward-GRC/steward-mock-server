@@ -301,6 +301,7 @@ export const categories = (): Category[] => [
     slug: "facilities",
   }),
   category({
+    authorRule: ["user-jon"],
     code: "TRAVEL",
     id: "category-travel",
     name: "Travel",
