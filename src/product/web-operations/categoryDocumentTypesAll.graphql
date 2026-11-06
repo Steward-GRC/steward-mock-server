@@ -1,0 +1,9 @@
+# What each category holds, asked on its own so a gateway that does not carry the field yet
+# (steward-gateway#80) leaves every other category read untouched; the edge reads a refusal as
+# "every category holds both".
+query CategoryDocumentTypesAll {
+  categoryTree {
+    id
+    documentTypes
+  }
+}

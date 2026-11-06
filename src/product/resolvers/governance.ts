@@ -8,6 +8,8 @@
 
 import { GraphQLError } from "graphql";
 
+import type { Category } from "#product/data/library.ts";
+
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { policyView, readEffect } from "#product/access.ts";
 import { accepts, refusesType } from "#product/category-types.ts";
@@ -22,6 +24,7 @@ import {
 } from "#product/delivery.ts";
 import {
   editablePolicy,
+  nextSequence,
   numberFor,
   policyById,
   policySubject,
@@ -57,6 +60,39 @@ const readableInFull = (context: Context, policyVersionId: string) => {
   const policy = found(policyById(version.policyId), "policy");
   if (readEffect(person, policy) !== "allow") throw notFound("policy version");
   return { person, version };
+};
+
+/**
+ * What moving each document to `target` would do: the number it would get, or why it cannot
+ * move. Nothing changes. A document already there keeps its number.
+ */
+const planMoves = (policyIds: readonly string[], target: Category) => {
+  const taken = new Map<string, number>();
+  return policyIds.map((id) => {
+    const policy = policyById(id);
+    if (!policy) throw refuse("NOT_FOUND", "policy not found");
+    const item = {
+      newNumber: null as null | string,
+      number: policy.number,
+      policyId: policy.id,
+      refusal: null as null | string,
+      title: policy.title,
+    };
+    if (policy.retiredAt !== null)
+      item.refusal = "RETIRED: a retired document cannot be moved.";
+    else if (!accepts(target, policy.documentType))
+      item.refusal = refusesType(target, policy.documentType).message;
+    else if (policy.homeCategoryId === target.id)
+      item.newNumber = policy.number;
+    else {
+      // The n-th document of a kind gets the n-th number, as the moves will in order.
+      const { seq, stem } = nextSequence(target.id, policy.documentType);
+      const earlier = taken.get(stem) ?? 0;
+      taken.set(stem, earlier + 1);
+      item.newNumber = `${stem}${String(seq + earlier).padStart(6, "0")}`;
+    }
+    return item;
+  });
 };
 
 export const governanceResolvers: Resolvers = {
@@ -106,6 +142,48 @@ export const governanceResolvers: Resolvers = {
       delete data().links[policy.id];
       record("policy.deleted", person, subject);
       return true;
+    },
+    /** core's bulk move (steward-core#35): all or nothing, each renumbered in the target's sequence. */
+    movePolicies: (
+      _root,
+      given: { homeCategoryId: string; policyIds: string[] },
+      context: Context,
+    ) => {
+      const admin = siteAdmin(context);
+      if (given.policyIds.length === 0)
+        throw refuse("BAD_USER_INPUT", "Pick at least one document to move.");
+      const target = data().categories.find(
+        (c) => c.id === given.homeCategoryId,
+      );
+      if (!target) throw refuse("NOT_FOUND", "target category not found");
+      const plan = planMoves(given.policyIds, target);
+      const refused = plan.find((item) => item.refusal);
+      if (refused) throw refuse("FAILED_PRECONDITION", refused.refusal!);
+      const moved = given.policyIds.map((id) => {
+        const policy = policyById(id)!;
+        const before = policy.number;
+        if (policy.homeCategoryId !== target.id) {
+          policy.number = numberFor(target.id, policy.documentType);
+          policy.homeCategoryId = target.id;
+          policy.updatedAt = now();
+          record("policy.moved", admin, policySubject(policy));
+        }
+        return {
+          newNumber: policy.number,
+          number: before,
+          policyId: policy.id,
+          refusal: null,
+          title: policy.title,
+        };
+      });
+      record("policy.bulk_moved", admin, {
+        groupId: target.id,
+        groupName: target.name,
+        id: target.id,
+        kind: "category",
+        label: `${String(moved.length)} documents to ${target.name}`,
+      });
+      return { moved };
     },
     /** core's MovePolicy: a new home and the next number in its sequence; the same home is a no-op. */
     movePolicy: (
@@ -190,6 +268,18 @@ export const governanceResolvers: Resolvers = {
         expiresAt: rfc3339(expiresAt),
         signedUrl: signedPdfUrl(given.jobId, expiresAt),
       };
+    },
+    previewMovePolicies: (
+      _root,
+      given: { homeCategoryId: string; policyIds: string[] },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      const target = data().categories.find(
+        (c) => c.id === given.homeCategoryId,
+      );
+      if (!target) throw refuse("NOT_FOUND", "target category not found");
+      return { items: planMoves(given.policyIds, target) };
     },
   },
 };

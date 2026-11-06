@@ -1,0 +1,11 @@
+query PreviewMovePolicies($policyIds: [ID!]!, $homeCategoryId: ID!) {
+  previewMovePolicies(policyIds: $policyIds, homeCategoryId: $homeCategoryId) {
+    items {
+      policyId
+      title
+      number
+      newNumber
+      refusal
+    }
+  }
+}

@@ -6,7 +6,6 @@ fragment CategoryFields on Category {
   defaultTemplateId
   defaultTemplateNone
   defaultWorkflowId
-  documentTypes
   owners
   idpGroupIds
   exclusionGroupIds
