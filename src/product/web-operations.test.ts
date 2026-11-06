@@ -138,6 +138,10 @@ const cases: Record<string, Case> = {
     as: READER,
     variables: { parentId: "category-information" },
   },
+  CategoryDocumentCounts: {
+    as: ADMIN,
+    variables: { categoryId: "category-expenses" },
+  },
   CategoryRuleset: {
     as: ADMIN,
     variables: { categoryId: "category-facilities" },
@@ -498,6 +502,10 @@ const cases: Record<string, Case> = {
       id: "category-people",
     },
   },
+  SetCategoryDocumentTypes: {
+    as: ADMIN,
+    variables: { documentTypes: "BOTH", id: "category-workplace" },
+  },
   SetCategoryGovernance: {
     as: ADMIN,
     variables: {
@@ -813,7 +821,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 184);
+    assert.equal(webOperations.length, 186);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

@@ -10,6 +10,7 @@ import { GraphQLError } from "graphql";
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { policyView, readEffect } from "#product/access.ts";
+import { accepts, refusesType } from "#product/category-types.ts";
 import {
   createMagicLink,
   createPdfJob,
@@ -117,8 +118,12 @@ export const governanceResolvers: Resolvers = {
       if (!policy) throw refuse("NOT_FOUND", "policy not found");
       if (policy.homeCategoryId === given.homeCategoryId)
         return policyView(admin, policy);
-      if (!data().categories.some((c) => c.id === given.homeCategoryId))
-        throw refuse("NOT_FOUND", "target category not found");
+      const target = data().categories.find(
+        (c) => c.id === given.homeCategoryId,
+      );
+      if (!target) throw refuse("NOT_FOUND", "target category not found");
+      if (!accepts(target, policy.documentType))
+        throw refusesType(target, policy.documentType);
       policy.number = numberFor(given.homeCategoryId, policy.documentType);
       policy.homeCategoryId = given.homeCategoryId;
       policy.updatedAt = now();

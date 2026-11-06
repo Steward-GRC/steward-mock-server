@@ -17,6 +17,7 @@ export const AUDIT_ACTIONS = {
     // steward-core/internal/grpcsvc/category_handler.go
     "category.created",
     "category.defaults_set",
+    "category.document_types_set",
     "category.deleted",
     "category.governance_updated",
     "category.moved",
