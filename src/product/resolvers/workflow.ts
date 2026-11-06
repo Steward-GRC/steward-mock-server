@@ -7,7 +7,7 @@
 // version; a rejection ends the run, the other seats and the version; a seat decides once.
 
 import type { StewardPerson } from "#product/data/people.ts";
-import type { Run, RunStage } from "#product/data/policies.ts";
+import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canEdit } from "#product/access.ts";
@@ -82,6 +82,38 @@ const required = (stage: RunStage): number => {
   return 1;
 };
 
+const unitOf = (stage: RunStage, group: RunGroup) => {
+  const members = stage.seats.filter((s) => s.groupId === group.id);
+  const approvals = members.filter((s) => s.state === "approved").length;
+  const rejected = members.filter((s) => s.state === "rejected").length;
+  let status = "PENDING";
+  if (approvals >= group.required) status = "SATISFIED";
+  else if (members.length - rejected < group.required) status = "REJECTED";
+  return {
+    approvals,
+    groupId: group.id,
+    groupName: group.name,
+    pending: members.filter((s) => s.state === "pending").length,
+    quorum: group.quorum,
+    required: group.required,
+    roster: members.length,
+    status,
+  };
+};
+
+/** The stage's own rule applies to its individual seats; each group needs its own quorum. */
+const stageMet = (stage: RunStage): boolean => {
+  const single = stage.seats.filter((s) => !s.groupId);
+  const needed = required({ ...stage, seats: single });
+  const singlesMet =
+    single.length === 0 ||
+    single.filter((s) => s.state === "approved").length >= needed;
+  return (
+    singlesMet &&
+    (stage.groups ?? []).every((g) => unitOf(stage, g).status === "SATISFIED")
+  );
+};
+
 /** Seats nobody needs any more once a stage or the run is settled. */
 const closePending = (stages: RunStage[]) => {
   for (const stage of stages)
@@ -105,8 +137,7 @@ const partsOf = (run: Run) => {
 const advance = (run: Run, person: StewardPerson) => {
   const stage = run.stages[run.currentStageIdx];
   if (!stage) return;
-  const approvals = stage.seats.filter((s) => s.state === "approved").length;
-  if (approvals < required(stage)) return;
+  if (!stageMet(stage)) return;
   closePending([stage]);
   if (run.currentStageIdx < run.stages.length - 1) {
     run.currentStageIdx += 1;
@@ -304,14 +335,16 @@ export const workflowResolvers: Resolvers = {
           stage.seats.map((s) => ({
             comment: s.comment,
             decidedAt: s.decidedAt,
-            groupId: null,
+            groupId: s.groupId ?? null,
             name: personOf(s.userId)?.name ?? null,
             state: s.state,
             userId: s.userId,
           })),
         ),
         stageNames: run.stages.map((stage) => stage.name),
-        stageUnitProgress: run.stages.map(() => []),
+        stageUnitProgress: run.stages.map((stage) =>
+          (stage.groups ?? []).map((g) => unitOf(stage, g)),
+        ),
         status: run.status,
       };
     },

@@ -79,8 +79,19 @@ export interface Run {
   workflowDefId: string;
 }
 
-export interface RunStage {
+/** One approve-as-group unit: it is satisfied once `required` of its members approve. */
+export interface RunGroup {
+  id: string;
   name: string;
+  quorum: string;
+  required: number;
+}
+
+export interface RunStage {
+  /** Approve-as-group units on the stage; their members are the seats with that `groupId`. */
+  groups?: RunGroup[];
+  name: string;
+  /** The rule for the stage's individual seats (those with no `groupId`). */
   quorum: string;
   seats: Seat[];
 }
@@ -89,6 +100,8 @@ export interface RunStage {
 export interface Seat {
   comment: null | string;
   decidedAt: null | string;
+  /** The group whose seat this is; absent or null for an individual seat. */
+  groupId?: null | string;
   /** pending, approved, rejected, or cancelled once the run ends without them. */
   state: string;
   taskId: string;
@@ -414,6 +427,7 @@ export const versions = (): PolicyVersion[] => [
     createdAt: "2026-09-02T00:00:00Z",
     id: "version-3",
     policyId: "policy-2",
+    status: "IN_REVIEW",
   }),
   version({
     contentJson: lexical(
@@ -583,9 +597,11 @@ const seat = (
   taskId: string,
   userId: string,
   decided?: { at: string; comment: string; state: string },
+  groupId: null | string = null,
 ): Seat => ({
   comment: decided?.comment ?? null,
   decidedAt: decided?.at ?? null,
+  groupId,
   state: decided?.state ?? "pending",
   taskId,
   userId,
@@ -636,6 +652,60 @@ export const runs = (): Run[] => [
     submittedAt: "2026-06-25T09:15:00Z",
     submittedBy: "user-bob",
     workflowDefId: "workflow-1",
+  },
+  // Records Retention: a review that mixes one user with two groups (one half-voted, one not yet
+  // voted in), then a parallel step of two users, so the approval flow shows every box shape.
+  {
+    currentStageIdx: 0,
+    id: "run-3",
+    policyId: "policy-2",
+    policyVersionId: "version-3",
+    stages: [
+      {
+        groups: [
+          {
+            id: "group-finance",
+            name: "Finance team",
+            quorum: "majority",
+            required: 2,
+          },
+          {
+            id: "group-facilities",
+            name: "Facilities team",
+            quorum: "all",
+            required: 2,
+          },
+        ],
+        name: "Review",
+        quorum: "one",
+        seats: [
+          seat("task-5", "user-dave"),
+          seat(
+            "task-6",
+            "user-grace",
+            {
+              at: "2026-11-04T10:00:00Z",
+              comment: "The retention periods match finance's.",
+              state: "approved",
+            },
+            "group-finance",
+          ),
+          seat("task-7", "user-heidi", undefined, "group-finance"),
+          seat("task-8", "user-erin", undefined, "group-finance"),
+          seat("task-9", "user-alice", undefined, "group-facilities"),
+          seat("task-10", "user-charlie", undefined, "group-facilities"),
+        ],
+      },
+      {
+        name: "Compliance check",
+        quorum: "all",
+        seats: [seat("task-11", "user-heidi"), seat("task-12", "user-charlie")],
+      },
+    ],
+    status: "APPROVAL_STATUS_IN_REVIEW",
+    submittedAt: "2026-11-03T09:00:00Z",
+    submittedBy: "user-bob",
+    workflowDefId: "workflow-2",
   },
 ];
 
