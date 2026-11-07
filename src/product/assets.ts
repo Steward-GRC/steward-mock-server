@@ -1,14 +1,17 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// steward-gateway's editor image routes (internal/assets), over core's AssetService, kept in
+// steward-gateway's editor asset routes (internal/assets), over core's AssetService, kept in
 // memory:
 //
 // - POST /api/assets takes one multipart file under "file" and answers
-//   {id, url, contentType, sizeBytes, filename}. Core's rules apply: not empty, at most 10 MiB, and
-//   PNG, JPEG, GIF or WebP by what the bytes are (the declared type is ignored, SVG is refused).
-//   Errors are {error} with the gateway's texts.
-// - GET /api/assets/{id} serves the bytes back with the stored type. Like the gateway's, it needs
-//   a session but not the CSRF token, so an <img src> can load it.
+//   {id, url, contentType, sizeBytes, filename}. Not empty, at most 10 MiB, and an image or an
+//   ordinary attachment (PDF, Word, video, text and the like) by what the bytes are: the declared
+//   type is ignored, and a name that says something else is refused. HTML, SVG, XML, scripts,
+//   executables, archives and macro-enabled Office files are refused whatever they are called.
+//   This is the demo's simple check, not the real rules (steward-core#36). Errors are {error}.
+// - GET /api/assets/{id} serves the bytes back with the stored type: an image inline, any other
+//   file as a download. Like the gateway's, it needs a session but not the CSRF token, so an
+//   <img src> can load it.
 //
 // Two /_mock switches try the error paths: uploads that fail as if the object store were down, and
 // a 100 KB cap in place of 10 MB, so the too-large message shows without a huge file. Start fresh
@@ -26,7 +29,12 @@ export const MAX_ASSET_BYTES = 10 << 20;
 export const SMALL_ASSET_BYTES = 100 << 10;
 /** The slack the gateway allows the multipart framing. */
 const MULTIPART_OVERHEAD = 64 << 10;
-const ALLOWED = ["image/gif", "image/jpeg", "image/png", "image/webp"];
+const IMAGE_TYPES = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 export interface AssetSettings {
   /** Uploads answer 503 "Failed to store image". */
@@ -79,6 +87,134 @@ const sniff = (data: Uint8Array): string => {
     : "text/plain";
 };
 
+/** What the bytes are: the stored type, and the extensions a name may carry for it. */
+interface Detected {
+  contentType: string;
+  extensions: string[];
+  /** A kind that is never stored, with the words for the refusal. */
+  never?: string;
+}
+
+const MIME: Record<string, string> = {
+  csv: "text/csv; charset=utf-8",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  md: "text/markdown; charset=utf-8",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odt: "application/vnd.oasis.opendocument.text",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  txt: "text/plain; charset=utf-8",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+const startsWith = (data: Uint8Array, text: string, at = 0): boolean =>
+  data.length >= at + text.length &&
+  [...text].every((char, index) => data[at + index] === char.codePointAt(0));
+
+const extensionOf = (name: string): string => {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
+};
+
+/** A simple, byte-based stand-in for the real check: signatures and a look inside zip names. */
+const detect = (data: Uint8Array, name: string): Detected => {
+  const image = IMAGE_TYPES.has(sniff(data)) ? sniff(data) : undefined;
+  if (image) {
+    const extensions =
+      image === "image/jpeg" ? ["jpg", "jpeg"] : [image.slice(6)];
+    return { contentType: image, extensions };
+  }
+  const extension = extensionOf(name);
+  if (
+    startsWith(data, "MZ") ||
+    startsWith(data, "\u007FELF") ||
+    startsWith(data, "#!")
+  )
+    return {
+      contentType: "",
+      extensions: [],
+      never: "an executable or script",
+    };
+  if (
+    [
+      "\u00CA\u00FE\u00BA\u00BE",
+      "\u00CE\u00FA\u00ED\u00FE",
+      "\u00CF\u00FA\u00ED\u00FE",
+    ].some((magic) => startsWith(data, magic))
+  )
+    return { contentType: "", extensions: [], never: "an executable" };
+  if (startsWith(data, "%PDF-"))
+    return { contentType: "application/pdf", extensions: ["pdf"] };
+  if (startsWith(data, "\u00D0\u00CF\u0011\u00E0\u00A1\u00B1\u001A\u00E1")) {
+    const latin = Buffer.from(data).toString("latin1");
+    if (latin.includes("VBA"))
+      return { contentType: "", extensions: [], never: "a file with macros" };
+    return {
+      contentType: MIME[extension] ?? MIME.doc!,
+      extensions: ["doc", "xls", "ppt"],
+    };
+  }
+  if (startsWith(data, "PK\u0003\u0004")) {
+    const latin = Buffer.from(data).toString("latin1");
+    if (latin.includes("vbaProject.bin"))
+      return { contentType: "", extensions: [], never: "a file with macros" };
+    if (latin.includes("word/"))
+      return { contentType: MIME.docx!, extensions: ["docx"] };
+    if (latin.includes("xl/"))
+      return { contentType: MIME.xlsx!, extensions: ["xlsx"] };
+    if (latin.includes("ppt/"))
+      return { contentType: MIME.pptx!, extensions: ["pptx"] };
+    const odf =
+      /application\/vnd\.oasis\.opendocument\.(text|spreadsheet|presentation)/.exec(
+        latin,
+      )?.[1];
+    if (odf) {
+      const odfExtension = {
+        presentation: "odp",
+        spreadsheet: "ods",
+        text: "odt",
+      }[odf]!;
+      return { contentType: MIME[odfExtension]!, extensions: [odfExtension] };
+    }
+    return { contentType: "", extensions: [], never: "an archive" };
+  }
+  if (startsWith(data, "ftyp", 4))
+    return startsWith(data, "qt  ", 8)
+      ? { contentType: "video/quicktime", extensions: ["mov"] }
+      : { contentType: "video/mp4", extensions: ["mp4", "m4v"] };
+  if (startsWith(data, "\u001AE\u00DF\u00A3"))
+    return { contentType: "video/webm", extensions: ["webm"] };
+  if (startsWith(data, String.raw`{\rtf`))
+    return { contentType: "application/rtf", extensions: ["rtf"] };
+  // text: valid UTF-8 with no binary bytes, and nothing a browser would run or render as a page
+  let words: string;
+  try {
+    words = new TextDecoder("utf-8", { fatal: true }).decode(data);
+  } catch {
+    return { contentType: "", extensions: [], never: "an unknown binary file" };
+  }
+  if (words.includes("\u0000"))
+    return { contentType: "", extensions: [], never: "an unknown binary file" };
+  if (/^\s*<[!?a-z]/i.test(words) || /<script|javascript:/i.test(words))
+    return {
+      contentType: "",
+      extensions: [],
+      never: "a web page, script or markup",
+    };
+  const textType = MIME[extension];
+  return {
+    contentType: textType ?? MIME.txt!,
+    extensions: ["txt", "md", "csv"],
+  };
+};
+
+/** Content-Disposition for a download, with the name quoted and encoded. */
+const attachment = (name: string): string =>
+  `attachment; filename="${name.replaceAll(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+
 /** POST /api/assets. */
 const upload = async (request: Request): Promise<Response> => {
   const { assetSettings } = stewardData();
@@ -104,19 +240,27 @@ const upload = async (request: Request): Promise<Response> => {
   if (!(file instanceof File))
     return refusal(
       400,
-      'Missing file — attach a single image under the "file" field',
+      'Missing file — attach a single file under the "file" field',
     );
   if (file.size > capOf()) return refusal(400, tooLarge);
   const data = new Uint8Array(await file.arrayBuffer());
   // Core is what refuses empty and wrong-type files, so they come after the gateway's checks.
   if (assetSettings.fail) return refusal(503, "Failed to store image");
   if (data.length === 0) return refusal(400, "asset: empty upload");
-  const contentType = sniff(data);
-  if (!ALLOWED.includes(contentType))
+  const name = file.name.split(/[/\\]/).pop() ?? "";
+  const found = detect(data, name);
+  if (found.never)
     return refusal(
       400,
-      `asset: unsupported content type: "${contentType}" (allowed: ${ALLOWED.join(", ")})`,
+      `asset: files of this kind are not allowed (${found.never})`,
     );
+  const extension = extensionOf(name);
+  if (extension && !found.extensions.includes(extension))
+    return refusal(
+      400,
+      `asset: the contents of "${name}" do not match its name (found ${found.contentType})`,
+    );
+  const { contentType } = found;
 
   const data_ = stewardData();
   for (const id of bytes.keys()) if (!data_.assets[id]) bytes.delete(id);
@@ -124,7 +268,7 @@ const upload = async (request: Request): Promise<Response> => {
   const stored: StoredAsset = {
     contentType,
     createdBy: sessionOf(request)?.personId ?? "",
-    filename: file.name.split(/[/\\]/).pop() ?? "",
+    filename: name,
     id,
     sizeBytes: data.length,
   };
@@ -148,6 +292,9 @@ const serve = (id: string): Response => {
     headers: {
       "cache-control": "private, max-age=86400, immutable",
       "content-length": String(data.length),
+      ...(IMAGE_TYPES.has(stored.contentType)
+        ? {}
+        : { "content-disposition": attachment(stored.filename) }),
       "content-type": stored.contentType,
       "cross-origin-resource-policy": "same-origin",
       "x-content-type-options": "nosniff",
@@ -185,34 +332,34 @@ const limitSwitch: ProductControl = (body) => {
 export const assetActions: ({ run: ProductControl } & Action)[] = [
   {
     body: { mode: "fail" },
-    hint: "Image uploads answer 503 Failed to store image, as when the object store is down.",
+    hint: "Uploads answer 503 Failed to store image, as when the object store is down.",
     kind: "asset-upload",
     label: "Uploads fail",
     run: uploadSwitch,
-    section: "Image uploads",
+    section: "Uploads",
   },
   {
     body: { mode: "ok" },
-    hint: "Image uploads work again.",
+    hint: "Uploads work again.",
     kind: "asset-upload",
     label: "Uploads work",
     run: uploadSwitch,
-    section: "Image uploads",
+    section: "Uploads",
   },
   {
     body: { limit: "small" },
-    hint: "Images over 100 KB are refused as too large, so the error shows without a huge file.",
+    hint: "Files over 100 KB are refused as too large, so the error shows without a huge file.",
     kind: "asset-limit",
     label: "Size limit 100 KB",
     run: limitSwitch,
-    section: "Image uploads",
+    section: "Uploads",
   },
   {
     body: { limit: "real" },
-    hint: "The real limit: 10 MB. PNG, JPEG, GIF and WebP only, whatever the file says it is.",
+    hint: "The real limit: 10 MB. Images and ordinary attachments only, by what the bytes are, whatever the file says it is.",
     kind: "asset-limit",
     label: "Size limit 10 MB",
     run: limitSwitch,
-    section: "Image uploads",
+    section: "Uploads",
   },
 ];
