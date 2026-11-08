@@ -187,6 +187,12 @@ authors, site admins and compliance only. Appendices take no part in an approval
 comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
 `deleteAppendix`, `reorderAppendices`) still answer: what they save is published at once.
 
+### The build commit
+
+The mock reads the commit it started from (`git rev-parse --short HEAD`) once at start, shows it in
+the /_mock header beside the version, and answers it as JSON at `GET /_mock/version`
+(`{ name, version, commit }`) so a script can compare it with main.
+
 ### Co-editing inside an appendix
 
 `issueAppendixCollabToken` (whoever may edit the policy) mints a token for the appendix's own room,

@@ -10,6 +10,7 @@
 // A product adds its own in src/product/controls.ts.
 
 import { checkCredentials, issueSession } from "#core/auth.ts";
+import { buildCommit } from "#core/build.ts";
 import { json, readJson, refuse } from "#core/http.ts";
 import { maintenanceControls } from "#core/maintenance.ts";
 import { listPeople, peopleControls } from "#core/people.ts";
@@ -176,5 +177,9 @@ export const answerControls = (
   }
   if (path === "/_mock/people" && request.method === "GET")
     return json(listPeople());
+  if (path === "/_mock/version" && request.method === "GET") {
+    const { name, version } = settings();
+    return json({ commit: buildCommit(), name, version });
+  }
   return undefined;
 };
