@@ -4,6 +4,7 @@ fragment ReviewThreadFields on ReviewThread {
   quote
   occurrence
   resolved
+  approverUserId
   createdAt
   messages {
     id
@@ -11,5 +12,19 @@ fragment ReviewThreadFields on ReviewThread {
     authorName
     body
     createdAt
+  }
+  suggestion {
+    text
+    turn
+    rounds {
+      by
+      text
+      userId
+      createdAt
+    }
+    outcome
+    reason
+    closedBy
+    closedText
   }
 }

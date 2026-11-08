@@ -1,0 +1,5 @@
+mutation CounterReviewSuggestion($threadId: ID!, $text: String!) {
+  counterReviewSuggestion(threadId: $threadId, text: $text) {
+    ...ReviewThreadFields
+  }
+}

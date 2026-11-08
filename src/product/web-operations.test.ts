@@ -166,9 +166,19 @@ const cases: Record<string, Case> = {
       outcome: "SUBSTANTIATED",
     },
   },
+  CloseReviewSuggestion: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { outcome: "AGREED", threadId: "review-thread-0" },
+  },
   CompleteOnboarding: { as: READER, variables: { acceptTerms: true } },
   CompletionReport: { as: ADMIN, variables: { policyVersionId: "version-2" } },
   ContactBlocks: { as: AUTHOR, variables: { includeArchived: true } },
+  CounterReviewSuggestion: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { text: "Another way.", threadId: "review-thread-0" },
+  },
   CreateCategory: {
     as: ADMIN,
     variables: { name: "Legal", parentId: null, slug: "legal" },
@@ -303,6 +313,11 @@ const cases: Record<string, Case> = {
   },
   ListUserSessions: { as: ADMIN, variables: { userId: AUTHOR } },
   ManagedGroupMembers: { as: APPROVER, variables: { groupId: "group-2" } },
+  MarkVersionReviewed: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { policyVersionId: "version-404" },
+  },
   Me: { as: READER },
   MergeAccounts: {
     as: ADMIN,
@@ -768,6 +783,11 @@ const cases: Record<string, Case> = {
     variables: { fromRecordId: "1", toRecordId: "5" },
   },
   VerifyDomain: { as: ADMIN, variables: { domain: "partner.example.net" } },
+  VersionChangesSinceReview: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { policyVersionId: "version-404" },
+  },
   WebauthnRegisterBegin: { as: READER },
   // One step can't begin a ceremony first, so the session is one identity doesn't know.
   WebauthnRegisterFinish: {
@@ -830,7 +850,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 189);
+    assert.equal(webOperations.length, 193);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

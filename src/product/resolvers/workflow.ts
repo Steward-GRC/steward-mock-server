@@ -4,7 +4,8 @@
 // workflow or its home category's (steward-workflow doesn't look at ancestors), with a seat per
 // approver on each stage. The caller's pending seats on the current stage are their tasks. An
 // approval that meets the stage's quorum moves the run on, and the last stage's publishes the
-// version; a rejection ends the run, the other seats and the version; a seat decides once.
+// version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
+// and the version; a seat decides once.
 
 import type { StewardPerson } from "#product/data/people.ts";
 import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
@@ -27,6 +28,7 @@ import {
   record,
   refuse,
 } from "#product/resolvers/shared.ts";
+import { markReviewed } from "#product/review-snapshots.ts";
 
 const EMPTY_STATUS = {
   currentStageIdx: 0,
@@ -155,6 +157,27 @@ const reject = (run: Run) => {
   partsOf(run).version.status = "REJECTED";
 };
 
+/**
+ * A rejection is a vote against the stage's quorum. The stage is rejected, and with it the run, the
+ * version and the other seats, as soon as the approvals still possible (seats that have not voted
+ * plus those already given) can no longer reach the number it needs. A group counts the same way
+ * against its own required number. While the quorum can still be reached the run goes on and the
+ * other seats decide.
+ */
+const rejectIfQuorum = (run: Run) => {
+  const stage = run.stages[run.currentStageIdx];
+  if (!stage) return;
+  const single = stage.seats.filter((s) => !s.groupId);
+  const singlesRejected = single.filter((s) => s.state === "rejected").length;
+  const singlesEnd =
+    single.length > 0 &&
+    single.length - singlesRejected < required({ ...stage, seats: single });
+  const groupEnds = (stage.groups ?? []).some(
+    (g) => unitOf(stage, g).status === "REJECTED",
+  );
+  if (singlesEnd || groupEnds) reject(run);
+};
+
 const withdraw = (run: Run) => {
   closePending(run.stages);
   run.status = "APPROVAL_STATUS_WITHDRAWN";
@@ -195,8 +218,10 @@ export const workflowResolvers: Resolvers = {
         return true;
       }
       if (given.signal === "SIGNAL_TYPE_REQUEST_CHANGES") {
-        // steward-workflow records no seat for it; the stage stays pending.
-        const run = openRunFor(given.policyVersionId);
+        // sending comments back is an approver's act: the seat stays open and no status changes,
+        // and what they have been shown so far counts as reviewed
+        const { run } = pendingSeatOf(person, given.policyVersionId);
+        markReviewed(person.id, partsOf(run).version);
         record(
           "workflow.signal.request_changes",
           person,
@@ -208,6 +233,7 @@ export const workflowResolvers: Resolvers = {
         throw refuse("BAD_USER_INPUT", `${given.signal} isn't a decision.`);
       const { run, seat } = pendingSeatOf(person, given.policyVersionId);
       const approve = given.signal === "SIGNAL_TYPE_APPROVE";
+      markReviewed(person.id, partsOf(run).version);
       seat.state = approve ? "approved" : "rejected";
       seat.comment = given.comment;
       seat.decidedAt = now();
@@ -217,7 +243,7 @@ export const workflowResolvers: Resolvers = {
         versionSubject(partsOf(run).policy, partsOf(run).version.id),
       );
       if (approve) advance(run, person);
-      else reject(run);
+      else rejectIfQuorum(run);
       return true;
     },
     submitWorkflow: (

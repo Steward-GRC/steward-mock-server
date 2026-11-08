@@ -1,0 +1,5 @@
+mutation CloseReviewSuggestion($threadId: ID!, $outcome: SuggestionOutcome!, $reason: String) {
+  closeReviewSuggestion(threadId: $threadId, outcome: $outcome, reason: $reason) {
+    ...ReviewThreadFields
+  }
+}

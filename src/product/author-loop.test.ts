@@ -10,6 +10,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 import type { Signed } from "#product/test-client.ts";
 
+import { stewardData } from "#product/data.ts";
 import {
   EXPENSE_CLAIMS_NUMBER,
   TRAVEL_BOOKING_NUMBER,
@@ -320,26 +321,186 @@ describe("deciding an approval", () => {
     assert.equal(policy.currentVersionNo, 1);
   });
 
-  it("marks the run and the policy rejected on a rejection", async () => {
+  it("ends the run as soon as the approvals still possible cannot reach the quorum", async () => {
     const author = await as("user-bob");
     const approver = await as("user-charlie");
     const admin = await as("user-alice");
+    const task = {
+      policyVersionId: "version-4",
+      runId: "run-1",
+      taskId: "task-1",
+    };
+    // the Review stage is a majority of two seats, so it needs both: one reject makes that
+    // impossible, and the run ends with it (the other seat's task goes too)
+    ok(
+      await decide(
+        approver,
+        task,
+        "SIGNAL_TYPE_REJECT",
+        "The labels need examples.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_REJECTED",
+    );
+    const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
+    assert.equal(policy.currentVersionStatus, "REJECTED");
+    assert.equal(policy.currentPublishedVersionId, null);
+    assert.ok(
+      !(await tasksOf(admin)).some((t) => t.policyVersionId === "version-4"),
+    );
+  });
+
+  it("ends it on a reject after an approve when that leaves the quorum out of reach", async () => {
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
+    const first = { policyVersionId: "version-4", runId: "run-1" };
+    ok(
+      await decide(
+        approver,
+        { ...first, taskId: "task-1" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-2" },
+        "SIGNAL_TYPE_REJECT",
+        "No.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_REJECTED",
+    );
+  });
+
+  it("counts a rejection as a vote while the quorum can still be reached", async () => {
+    // a third seat on the Review stage: a majority of three is two approvals
+    const run = stewardData().runs.find((r) => r.id === "run-1")!;
+    run.stages[0]!.seats.push({
+      comment: null,
+      decidedAt: null,
+      groupId: null,
+      state: "pending",
+      taskId: "task-9",
+      userId: "user-dave",
+    });
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
+    const dave = await as("user-dave");
+    const first = { policyVersionId: "version-4", runId: "run-1" };
+    ok(
+      await decide(
+        approver,
+        { ...first, taskId: "task-1" },
+        "SIGNAL_TYPE_REJECT",
+        "Not sure.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_IN_REVIEW",
+    );
+    // two approvals are still possible, and the other seats keep their tasks
+    assert.ok(
+      (await tasksOf(admin)).some((t) => t.policyVersionId === "version-4"),
+    );
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-2" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    ok(
+      await decide(dave, { ...first, taskId: "task-9" }, "SIGNAL_TYPE_APPROVE"),
+    );
+    // the stage is met by the two approvals despite the reject, and the run moves on
+    assert.equal((await status(author, "version-4")).currentStageIdx, 1);
+  });
+
+  it("ends the run at once on a rejection when the stage's quorum is one", async () => {
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
+    const first = { policyVersionId: "version-4", runId: "run-1" };
+    ok(
+      await decide(
+        approver,
+        { ...first, taskId: "task-1" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-2" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    // the Final approval stage has one seat
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-3" },
+        "SIGNAL_TYPE_REJECT",
+        "Not yet.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_REJECTED",
+    );
+  });
+
+  it("makes a rejection final: the author's next save starts a new draft, the rejected version stays", async () => {
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
     ok(
       await decide(
         approver,
         { policyVersionId: "version-4", runId: "run-1", taskId: "task-1" },
         "SIGNAL_TYPE_REJECT",
-        "The labels need examples.",
+        "No.",
       ),
     );
-    const run = await status(author, "version-4");
-    assert.equal(run.status, "APPROVAL_STATUS_REJECTED");
-    const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
-    assert.equal(policy.currentVersionStatus, "REJECTED");
-    assert.equal(policy.currentPublishedVersionId, null);
-    // A rejection ends the other seats: nobody else has the task any more.
-    assert.ok(
-      !(await tasksOf(admin)).some((t) => t.policyVersionId === "version-4"),
+    const before = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
+    const saved = ok(
+      await call(base, author, "SaveDraft", {
+        contentJson: LEXICAL,
+        policyId: "policy-3",
+      }),
+    ).saveDraft as { id: string; status: string };
+    assert.notEqual(saved.id, "version-4");
+    assert.equal(saved.status, "DRAFT");
+    assert.equal(
+      stewardData().versions.find((v) => v.id === "version-4")?.status,
+      "REJECTED",
+    );
+    assert.ok(before);
+  });
+
+  it("returns a withdrawn submission to Draft", async () => {
+    const author = await as("user-bob");
+    const withdrawn = await decide(
+      author,
+      { policyVersionId: "version-4", runId: "run-1", taskId: "task-1" },
+      "SIGNAL_TYPE_WITHDRAW" as never,
+      "",
+    );
+    ok(withdrawn);
+    assert.equal(
+      stewardData().versions.find((v) => v.id === "version-4")?.status,
+      "DRAFT",
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_WITHDRAWN",
     );
   });
 

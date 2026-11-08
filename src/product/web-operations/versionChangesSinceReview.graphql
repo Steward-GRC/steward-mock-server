@@ -1,0 +1,8 @@
+query VersionChangesSinceReview($policyVersionId: ID!) {
+  versionChangesSinceReview(policyVersionId: $policyVersionId) {
+    sectionKey
+    sectionTitle
+    changeType
+    wordDiffHtml
+  }
+}
