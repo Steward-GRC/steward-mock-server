@@ -6,12 +6,14 @@
 
 import type { ProductData } from "#core/product.ts";
 import type { Person } from "#core/state.ts";
+import type { PolicyAppendix } from "#product/appendices.ts";
 import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
 import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
 import { mockState } from "#core/state.ts";
+import { migrateAppendices } from "#product/appendices.ts";
 import {
   type AuditRecord,
   auditTrail,
@@ -92,6 +94,8 @@ export interface StewardData extends ProductData {
   acknowledgements: Acknowledgement[];
   /** Whether Ask and the AI health answer from the simulation (the controls switch it). */
   aiSimulated: boolean;
+  /** The appendices of policies and procedures, each with its own version table. */
+  appendices: PolicyAppendix[];
   /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
   askedQuestions: string[];
   /** The editor images' metadata by id (src/product/assets.ts keeps the bytes). */
@@ -150,52 +154,57 @@ export interface StewardData extends ProductData {
   workflowDefs: Workflow[];
 }
 
-export const seed = (): StewardData => ({
-  acknowledgements: acknowledgements(),
-  aiSimulated: true,
-  askedQuestions: [],
-  assets: {},
-  assetSettings: { fail: false, limit: "real" },
-  audit: auditTrail(),
-  breakGlass: [],
-  categories: categories(),
-  collabStates: {},
-  contactBlocks: contactBlocks(),
-  definitions: definitions(),
-  emailServiceConfig: emailServiceConfig(),
-  groupMappings: groupMappings(),
-  idpTestOutcome: "pass",
-  links: links(),
-  magicLinks: {},
-  next: {},
-  notificationPrefs: notificationPrefs(),
-  organizations: organizations(),
-  passwordResets: [],
-  pastSessions: pastSessions(),
-  pdfJobs: {},
-  pendingFactors: { totp: [], webauthn: {} },
-  people: [...people(), ...duplicatePeople()],
-  platformGroups: platformGroups(),
-  policies: policies(),
-  policyViews: policyViews(),
-  references: references(),
-  reportCases: reportCases(),
-  reviewSnapshots: {},
-  reviewThreads: [],
-  runs: runs(),
-  settings: globalSettings(),
-  signInMethods: {
-    defaultLoginMethod: "local",
-    passkey: true,
-    passwordReset: true,
-    sso: true,
-  },
-  spCertificate: spCertificate(),
-  templates: templates(),
-  templateVersions: templateVersions(),
-  versions: versions(),
-  workflowDefs: workflowDefs(),
-});
+export const seed = (): StewardData => {
+  const allVersions = versions();
+  const appendices = migrateAppendices(allVersions);
+  return {
+    acknowledgements: acknowledgements(),
+    aiSimulated: true,
+    appendices,
+    askedQuestions: [],
+    assets: {},
+    assetSettings: { fail: false, limit: "real" },
+    audit: auditTrail(),
+    breakGlass: [],
+    categories: categories(),
+    collabStates: {},
+    contactBlocks: contactBlocks(),
+    definitions: definitions(),
+    emailServiceConfig: emailServiceConfig(),
+    groupMappings: groupMappings(),
+    idpTestOutcome: "pass",
+    links: links(),
+    magicLinks: {},
+    next: {},
+    notificationPrefs: notificationPrefs(),
+    organizations: organizations(),
+    passwordResets: [],
+    pastSessions: pastSessions(),
+    pdfJobs: {},
+    pendingFactors: { totp: [], webauthn: {} },
+    people: [...people(), ...duplicatePeople()],
+    platformGroups: platformGroups(),
+    policies: policies(),
+    policyViews: policyViews(),
+    references: references(),
+    reportCases: reportCases(),
+    reviewSnapshots: {},
+    reviewThreads: [],
+    runs: runs(),
+    settings: globalSettings(),
+    signInMethods: {
+      defaultLoginMethod: "local",
+      passkey: true,
+      passwordReset: true,
+      sso: true,
+    },
+    spCertificate: spCertificate(),
+    templates: templates(),
+    templateVersions: templateVersions(),
+    versions: allVersions,
+    workflowDefs: workflowDefs(),
+  };
+};
 
 /** The mock's state as Steward's data: the core holds it as its own minimal shape. */
 export const stewardData = (): StewardData => mockState.data as StewardData;

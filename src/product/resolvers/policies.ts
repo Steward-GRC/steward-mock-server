@@ -6,11 +6,7 @@
 // kind.
 
 import type { StewardPerson } from "#product/data/people.ts";
-import type {
-  Appendix,
-  Policy,
-  PolicyVersion,
-} from "#product/data/policies.ts";
+import type { Policy, PolicyVersion } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import {
@@ -22,6 +18,7 @@ import {
   readEffect,
   visible,
 } from "#product/access.ts";
+import { syncAppendices } from "#product/appendices.ts";
 import { accepts, refusesType } from "#product/category-types.ts";
 import { collabPath, collabToken } from "#product/collab.ts";
 import {
@@ -245,21 +242,6 @@ export const publishVersion = (
   policy.updatedAt = at;
 };
 
-const letterOf = (index: number) => String.fromCodePoint(65 + index);
-
-const reletter = (appendices: Appendix[]): Appendix[] =>
-  appendices.map((a, index) => ({
-    ...a,
-    letter: letterOf(index),
-    orderIndex: index,
-  }));
-
-const appendixHolder = (id: string) =>
-  found(
-    data().versions.find((v) => v.appendices.some((a) => a.id === id)),
-    "appendix",
-  );
-
 /** The gateway's scrambleText, for a section title an obfuscated read gets. */
 const SCRAMBLE = "xqzjvbkwflgncmdptrhsyuoaei";
 const scrambled = (value: string) =>
@@ -316,27 +298,6 @@ const usage = (
 
 export const policyResolvers: Resolvers = {
   Mutation: {
-    addAppendix: (
-      _root,
-      given: { contentJson: string; policyVersionId: string; title: string },
-      context: Context,
-    ) => {
-      caller(context);
-      const version = found(
-        versionById(given.policyVersionId),
-        "policy version",
-      );
-      const appendix: Appendix = {
-        contentJson: given.contentJson,
-        id: newId("appendix"),
-        letter: letterOf(version.appendices.length),
-        orderIndex: version.appendices.length,
-        policyVersionId: version.id,
-        title: given.title,
-      };
-      version.appendices.push(appendix);
-      return appendix;
-    },
     breakGlassReveal: (
       _root,
       given: { policyId: string; reason: string },
@@ -429,14 +390,6 @@ export const policyResolvers: Resolvers = {
       );
       return policyView(person, policy);
     },
-    deleteAppendix: (_root, given: { id: string }, context: Context) => {
-      caller(context);
-      const version = appendixHolder(given.id);
-      version.appendices = reletter(
-        version.appendices.filter((a) => a.id !== given.id),
-      );
-      return true;
-    },
     discardDraft: (_root, given: { policyId: string }, context: Context) => {
       const person = caller(context);
       const policy = editablePolicy(person, given.policyId);
@@ -479,30 +432,6 @@ export const policyResolvers: Resolvers = {
       record("policy.published", person, versionSubject(policy, draft.id));
       return draft;
     },
-    reorderAppendices: (
-      _root,
-      given: { orderedIds: string[]; policyVersionId: string },
-      context: Context,
-    ) => {
-      caller(context);
-      const version = found(
-        versionById(given.policyVersionId),
-        "policy version",
-      );
-      const byId = new Map(version.appendices.map((a) => [a.id, a]));
-      if (
-        given.orderedIds.length !== byId.size ||
-        given.orderedIds.some((id) => !byId.has(id))
-      )
-        throw refuse(
-          "BAD_USER_INPUT",
-          "Name every appendix of this version exactly once.",
-        );
-      version.appendices = reletter(
-        given.orderedIds.map((id) => byId.get(id) as Appendix),
-      );
-      return version.appendices;
-    },
     saveDraft: (
       _root,
       given: {
@@ -522,15 +451,8 @@ export const policyResolvers: Resolvers = {
       if (rejected) draft = undefined;
       if (!draft) {
         const draftId = newId("version");
-        // core's appendix copier: a new draft starts with copies of the appendices of the version
-        // it follows (the rejected draft it replaces, else the published version)
-        const basis = rejected ?? versionById(policy.currentPublishedVersionId);
         draft = {
-          appendices: (basis?.appendices ?? []).map((appendix) => ({
-            ...appendix,
-            id: newId("appendix"),
-            policyVersionId: draftId,
-          })),
+          appendices: [],
           contentJson: given.contentJson,
           createdAt: at,
           id: draftId,
@@ -542,6 +464,7 @@ export const policyResolvers: Resolvers = {
           versionNo: 0,
         };
         data().versions.push(draft);
+        syncAppendices(data().appendices, data().versions, policy.id);
         policy.currentDraftVersionId = draft.id;
       }
       draft.contentJson = given.contentJson;
@@ -586,20 +509,6 @@ export const policyResolvers: Resolvers = {
       policy.updatedAt = now();
       record("policy.template_changed", person, policySubject(policy));
       return policyView(person, policy);
-    },
-    updateAppendix: (
-      _root,
-      given: { contentJson: string; id: string; title: string },
-      context: Context,
-    ) => {
-      caller(context);
-      const version = appendixHolder(given.id);
-      const appendix = version.appendices.find(
-        (a) => a.id === given.id,
-      ) as Appendix;
-      appendix.title = given.title;
-      appendix.contentJson = given.contentJson;
-      return appendix;
     },
   },
   Query: {

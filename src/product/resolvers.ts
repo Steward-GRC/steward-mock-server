@@ -14,6 +14,7 @@ import { impersonationOf } from "#product/impersonation.ts";
 import { accountResolvers } from "#product/resolvers/accounts.ts";
 import { adminResolvers } from "#product/resolvers/admin.ts";
 import { aiResolvers } from "#product/resolvers/ai.ts";
+import { appendixResolvers } from "#product/resolvers/appendices.ts";
 import { caseResolvers } from "#product/resolvers/cases.ts";
 import { complianceResolvers } from "#product/resolvers/compliance.ts";
 import { factorResolvers } from "#product/resolvers/factors.ts";
@@ -74,6 +75,7 @@ const domains: Resolvers[] = [
   accountResolvers,
   adminResolvers,
   aiResolvers,
+  appendixResolvers,
   caseResolvers,
   complianceResolvers,
   factorResolvers,

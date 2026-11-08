@@ -165,10 +165,20 @@ One person in two tabs is one collaborator twice, not two collaborators.
 A new policy starts from the template asked for, else from its category's default template (the
 nearest category up the chain that sets one, or sets none). `setPolicyTemplate` changes it: with
 `none: true` the policy is freeform and, if the author has not written in the starting draft yet,
-the draft starts again blank; with a template its sections are put in the same way. A new draft of a
-published policy starts with copies of the published version's appendices (core's appendix copier),
-and a rejected draft's appendices carry into its replacement. A document with no text, spaces alone
+the draft starts again blank; with a template its sections are put in the same way. A document with no text, spaces alone
 not counting, can't be submitted for review (`submitWorkflow` answers a failed precondition).
+
+### Appendices
+
+An appendix belongs to a policy or procedure, never to one of its versions, and has a life of its
+own: `createPolicyAppendix` makes a draft, `saveAppendixDraft` autosaves into it, `publishAppendix`
+(authors and above) makes it the version readers see, and a later edit is a new draft beside the
+published row. `retireAppendix` keeps it (hidden from readers, restorable with `restoreAppendix`);
+only a site admin deletes one for good (`deleteAppendixForever`). Every version of a policy shows
+the latest published appendices as its `appendices`. `appendixDiff` (draft against published) is for
+authors, site admins and compliance only. Appendices take no part in an approval and nobody
+comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
+`deleteAppendix`, `reorderAppendices`) still answer: what they save is published at once.
 
 ### Suggested changes and the review
 
