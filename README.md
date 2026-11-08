@@ -169,6 +169,7 @@ the draft starts again blank; with a template its sections are put in the same w
 not counting, can't be submitted for review (`submitWorkflow` answers a failed precondition).
 
 ### Appendices
+
 An appendix belongs to a policy or procedure, never to one of its versions, and has a life of its
 own: `createPolicyAppendix` makes a draft, `saveAppendixDraft` autosaves into it, `publishAppendix`
 (authors and above) makes it the version readers see, and a later edit is a new draft beside the
