@@ -28,7 +28,7 @@ import { WebSocket } from "ws";
 import type { ProductSockets } from "#core/product.ts";
 
 import { sessionOfCookie } from "#core/auth.ts";
-import { draftOf, latestPublished } from "#product/appendices.ts";
+import { draftOf, latestPublished, noteEditor } from "#product/appendices.ts";
 import { stewardData } from "#product/data.ts";
 
 /** steward-collab's token audience (internal/ws TokenAudience). */
@@ -90,17 +90,21 @@ export const collabToken = (claims: {
   return `${header}.${payload}.${base64url(sign(`${header}.${payload}`))}`;
 };
 
-/** The draft a token names, or undefined for one this process didn't sign or that expired. */
-const draftOfToken = (token: string): string | undefined => {
+/** The draft and person a token names, or undefined for one this process didn't sign or that expired. */
+const claimsOfToken = (
+  token: string,
+): { draftId: string; userId: string } | undefined => {
   const [header = "", payload = "", signature = ""] = token.split(".");
   const given = Buffer.from(signature, "base64url");
   const wanted = sign(`${header}.${payload}`);
   if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) return;
   const claims = JSON.parse(
     Buffer.from(payload, "base64url").toString("utf8"),
-  ) as { aud?: string; did?: string; exp?: number };
+  ) as { aud?: string; did?: string; exp?: number; uid?: string };
   if (claims.aud !== AUDIENCE || (claims.exp ?? 0) * 1000 <= Date.now()) return;
-  return claims.did;
+  return claims.did === undefined
+    ? undefined
+    : { draftId: claims.did, userId: claims.uid ?? "" };
 };
 
 const refuse = (text: string, challenge = false) =>
@@ -194,6 +198,7 @@ export const APPENDIX_ROOM = "appendix:";
 /** An appendix's checkpoint: the content becomes its draft (made from what is published if none). */
 const keepAppendixCheckpoint = (
   appendixId: string,
+  userId: string,
   content: string,
   state: Uint8Array,
   socket: WebSocket,
@@ -207,19 +212,25 @@ const keepAppendixCheckpoint = (
   if (draft) {
     draft.contentJson = content;
     draft.updatedAt = at;
+    if (userId) {
+      draft.updatedBy = userId;
+      noteEditor(draft, userId);
+    }
   } else {
     const basis = latestPublished(appendix);
+    const starter = userId || (basis?.updatedBy ?? appendix.createdBy);
     appendix.versions.push({
       contentJson: content,
       createdAt: at,
-      createdBy: basis?.updatedBy ?? appendix.createdBy,
+      createdBy: starter,
+      editors: [starter],
       id: `${appendix.id}-v${String(appendix.versions.length + 1)}`,
       publishedAt: null,
       publishedBy: null,
       state: "DRAFT",
       title: basis?.title ?? "",
       updatedAt: at,
-      updatedBy: basis?.updatedBy ?? appendix.createdBy,
+      updatedBy: starter,
       versionNo: appendix.versions.length + 1,
     });
   }
@@ -230,6 +241,7 @@ const keepAppendixCheckpoint = (
 
 const keepCheckpoint = (
   draftId: string,
+  userId: string,
   frame: Uint8Array,
   socket: WebSocket,
 ) => {
@@ -248,6 +260,7 @@ const keepCheckpoint = (
   if (draftId.startsWith(APPENDIX_ROOM))
     return keepAppendixCheckpoint(
       draftId.slice(APPENDIX_ROOM.length),
+      userId,
       checkpoint.content,
       checkpoint.state,
       socket,
@@ -268,7 +281,7 @@ const keepCheckpoint = (
   socket.send(controlFrame({ type: "snapshot.accepted" }));
 };
 
-const join = (draftId: string, socket: WebSocket) => {
+const join = (draftId: string, userId: string, socket: WebSocket) => {
   const stored = stewardData().collabStates[draftId];
   const room = rooms.get(draftId) ?? {
     sockets: new Set(),
@@ -286,7 +299,7 @@ const join = (draftId: string, socket: WebSocket) => {
       ? Buffer.concat(data)
       : new Uint8Array(data);
     if (isBinary && frame[0] === MESSAGE_SNAPSHOT) {
-      keepCheckpoint(draftId, frame, socket);
+      keepCheckpoint(draftId, userId, frame, socket);
       return;
     }
     if (isBinary && frame[0] === MESSAGE_SYNC) {
@@ -321,13 +334,13 @@ export const collabSockets: ProductSockets = (request, path) => {
   )?.[1];
   const token = url.searchParams.get("token") || bearer;
   if (!token) return refuse("missing collab token", true);
-  let named: string | undefined;
+  let named: ReturnType<typeof claimsOfToken>;
   try {
-    named = draftOfToken(token);
+    named = claimsOfToken(token);
   } catch {
     named = undefined;
   }
   if (named === undefined) return refuse("invalid token", true);
-  if (named !== draftId) return refuse("token/path mismatch", true);
-  return (socket) => join(draftId, socket);
+  if (named.draftId !== draftId) return refuse("token/path mismatch", true);
+  return (socket) => join(draftId, named.userId, socket);
 };

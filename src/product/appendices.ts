@@ -15,6 +15,8 @@ export interface AppendixVersionRow {
   contentJson: string;
   createdAt: string;
   createdBy: string;
+  /** Everyone who ever saved or published this row, first to last, each once. */
+  editors: string[];
   id: string;
   publishedAt: null | string;
   publishedBy: null | string;
@@ -40,6 +42,35 @@ export interface PolicyAppendix {
 /** The letter of an appendix is its place among the live ones: A, B, C. */
 export const letterOf = (index: number): string =>
   String.fromCodePoint(65 + index);
+
+/** Records that a person saved or published a row; a person already listed keeps their place. */
+export const noteEditor = (row: AppendixVersionRow, userId: string): void => {
+  if (!row.editors.includes(userId)) row.editors.push(userId);
+};
+
+/** Everyone who ever saved or published an appendix, in the order they first did. */
+export const contributorIds = (appendix: PolicyAppendix): string[] => [
+  ...new Set(appendix.versions.flatMap((v) => v.editors)),
+];
+
+/**
+ * The title a new appendix gets when none is given: "Appendix " and the letter of its place,
+ * moving on to the next letter while another appendix of the policy (retired ones included) already
+ * has that title, so the titles of a policy's appendices never repeat.
+ */
+export const defaultTitle = (
+  all: readonly PolicyAppendix[],
+  policyId: string,
+): string => {
+  const taken = new Set(
+    all
+      .filter((a) => a.policyId === policyId)
+      .flatMap((a) => a.versions.map((v) => v.title.trim().toLowerCase())),
+  );
+  let index = liveAppendices(all, policyId).length;
+  while (taken.has(`appendix ${letterOf(index)}`.toLowerCase())) index += 1;
+  return `Appendix ${letterOf(index)}`;
+};
 
 /** An appendix's published rows, oldest first. */
 export const publishedRows = (appendix: PolicyAppendix): AppendixVersionRow[] =>
@@ -151,6 +182,7 @@ export const migrateAppendices = (
             contentJson: appendix.contentJson,
             createdAt: source.createdAt,
             createdBy: actor,
+            editors: [actor],
             id: `${appendix.id}-v1`,
             publishedAt: published ? at : null,
             publishedBy: published ? actor : null,

@@ -187,6 +187,18 @@ authors, site admins and compliance only. Appendices take no part in an approval
 comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
 `deleteAppendix`, `reorderAppendices`) still answer: what they save is published at once.
 
+A new appendix with a blank or missing title is called "Appendix A", "Appendix B" and so on: the
+letter of its place, moving on while another appendix of the policy (retired ones too) has that
+title. Renaming stays open. The seeded appendices already have titles that differ within a policy.
+
+`contributors` on an appendix, and on each of its versions, lists everyone who ever saved or
+published it (a co-editing checkpoint counts), in the order they first did, with their name and
+`active` (a disabled or removed person stays listed with `active: false`). It is empty for anyone
+who may not see the diff. `publishedVersions` lists the published rows latest first for the
+Published tab drop-down (a reader gets the latest only); `versions` stays oldest first.
+`appendixDiff(id, contentJson)` diffs the given text, not saved, against the published row, so the
+diff can follow what the author is typing.
+
 ### The build commit
 
 The mock reads the commit it started from (`git rev-parse --short HEAD`) once at start, shows it in
