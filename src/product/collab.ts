@@ -11,8 +11,10 @@
 //   an editor alone in a new room fills itself from the draft. A peer never has to answer, so one
 //   that stopped answering (a tab the browser holds in its back/forward cache) can't leave a
 //   joiner unsynced.
-// - collab's checkpoint frame (type 100), which goes to the server only. The mock doesn't save
-//   it: the editor's Save button writes the draft through saveDraft.
+// - collab's checkpoint frame (type 100), which goes to the server only. It is kept as steward-collab
+//   keeps it: the content JSON becomes the draft's saved content (an editable draft only), the Yjs
+//   state is kept to start the next room from, and the sender is answered with a control frame,
+//   snapshot.accepted or snapshot.rejected. It never reaches the peers.
 //
 // And a client joining a room with peers in it makes the relay ask them for their presence, so the
 // joiner sees who else is editing at once, as collab's stored presence lets it.
@@ -26,6 +28,7 @@ import { WebSocket } from "ws";
 import type { ProductSockets } from "#core/product.ts";
 
 import { sessionOfCookie } from "#core/auth.ts";
+import { stewardData } from "#product/data.ts";
 
 /** steward-collab's token audience (internal/ws TokenAudience). */
 const AUDIENCE = "steward.collab.ws";
@@ -40,6 +43,8 @@ const SYNC_STEP_1 = 0;
 const SYNC_STEP_2 = 1;
 const SYNC_UPDATE = 2;
 const MESSAGE_SNAPSHOT = 100;
+/** steward-collab's own server-to-client frame: a control message as JSON. */
+const MESSAGE_CONTROL = 101;
 /** y-websocket's query awareness: the client answers with every presence it knows. */
 const QUERY_AWARENESS = Buffer.from([3]);
 /** Sync step 2 with an empty update: nothing to add, and the client is synced. */
@@ -110,8 +115,116 @@ const refuse = (text: string, challenge = false) =>
 export const collabPeers = (draftId: string): number =>
   rooms.get(draftId)?.sockets.size ?? 0;
 
+/** Reads a varUint (lib0's encoding) at `at`: the value and where it ended. */
+const readVariableUint = (frame: Uint8Array, at: number) => {
+  let value = 0;
+  let shift = 0;
+  let next = at;
+  for (;;) {
+    const byte = frame[next++];
+    if (byte === undefined) return null;
+    value += (byte & 127) * 2 ** shift;
+    if (byte < 128) return { next, value };
+    shift += 7;
+  }
+};
+
+const writeVariableUint = (value: number): number[] => {
+  const bytes: number[] = [];
+  let rest = value;
+  while (rest > 127) {
+    bytes.push(128 | (rest % 128));
+    rest = Math.floor(rest / 128);
+  }
+  bytes.push(rest);
+  return bytes;
+};
+
+/** [varUint 100] [varUint8Array contentJSON] [varUint8Array yjsState], or undefined if malformed. */
+const decodeCheckpoint = (frame: Uint8Array) => {
+  const contentLength = readVariableUint(frame, 1);
+  if (!contentLength) return null;
+  const contentEnd = contentLength.next + contentLength.value;
+  if (contentEnd > frame.length) return null;
+  const stateLength = readVariableUint(frame, contentEnd);
+  if (!stateLength) return null;
+  const stateEnd = stateLength.next + stateLength.value;
+  if (stateEnd > frame.length) return null;
+  return {
+    content: Buffer.from(
+      frame.subarray(contentLength.next, contentEnd),
+    ).toString("utf8"),
+    state: Uint8Array.from(frame.subarray(stateLength.next, stateEnd)),
+  };
+};
+
+/** A control message to one client: [varUint 101] [varUint8Array JSON]. */
+const controlFrame = (message: Record<string, string>) => {
+  const json = Buffer.from(JSON.stringify(message), "utf8");
+  return Buffer.concat([
+    Buffer.from([MESSAGE_CONTROL, ...writeVariableUint(json.length)]),
+    json,
+  ]);
+};
+
+/** A document update frame carrying `state`: how a stored checkpoint starts a room. */
+const stateAsUpdate = (state: Uint8Array) =>
+  Uint8Array.from([
+    MESSAGE_SYNC,
+    SYNC_UPDATE,
+    ...writeVariableUint(state.length),
+    ...state,
+  ]);
+
+/** The draft versions a checkpoint may overwrite, as saveDraft may: a draft that is still the author's. */
+const EDITABLE = new Set(["DRAFT", "REJECTED", "WITHDRAWN"]);
+
+/**
+ * Keeps a checkpoint the way steward-collab does: the content becomes the draft's saved content,
+ * the Yjs state starts the next room, and the sender hears the result.
+ */
+const keepCheckpoint = (
+  draftId: string,
+  frame: Uint8Array,
+  socket: WebSocket,
+) => {
+  const reject = (reason: string, detail: string) =>
+    socket.send(controlFrame({ detail, reason, type: "snapshot.rejected" }));
+  const checkpoint = decodeCheckpoint(frame);
+  if (!checkpoint)
+    return reject("pre_check_failed", "The checkpoint was malformed.");
+  try {
+    const parsed: unknown = JSON.parse(checkpoint.content);
+    if (typeof parsed !== "object" || parsed === null)
+      throw new Error("not a document");
+  } catch {
+    return reject("pre_check_failed", "The content is not a JSON document.");
+  }
+  const version = stewardData().versions.find(
+    (candidate) => candidate.id === draftId,
+  );
+  if (!version || !EDITABLE.has(version.status)) {
+    return reject("server_rejected", "This draft can no longer be edited.");
+  }
+  version.contentJson = checkpoint.content;
+  // editing a rejected or withdrawn draft makes it a plain draft again, as saveDraft does
+  if (version.status === "REJECTED" || version.status === "WITHDRAWN")
+    version.status = "DRAFT";
+  stewardData().collabStates[draftId] = Buffer.from(checkpoint.state).toString(
+    "base64",
+  );
+  socket.send(controlFrame({ type: "snapshot.accepted" }));
+};
+
 const join = (draftId: string, socket: WebSocket) => {
-  const room = rooms.get(draftId) ?? { sockets: new Set(), updates: [] };
+  const stored = stewardData().collabStates[draftId];
+  const room = rooms.get(draftId) ?? {
+    sockets: new Set(),
+    // a room that emptied starts from its last checkpoint's state, not blank
+    updates: stored
+      ? [stateAsUpdate(Uint8Array.from(Buffer.from(stored, "base64")))]
+      : [],
+  };
   for (const peer of room.sockets)
     if (peer.readyState === WebSocket.OPEN) peer.send(QUERY_AWARENESS);
   room.sockets.add(socket);
@@ -120,7 +233,10 @@ const join = (draftId: string, socket: WebSocket) => {
     const frame = Array.isArray(data)
       ? Buffer.concat(data)
       : new Uint8Array(data);
-    if (isBinary && frame[0] === MESSAGE_SNAPSHOT) return;
+    if (isBinary && frame[0] === MESSAGE_SNAPSHOT) {
+      keepCheckpoint(draftId, frame, socket);
+      return;
+    }
     if (isBinary && frame[0] === MESSAGE_SYNC) {
       if (frame[1] === SYNC_STEP_1) {
         for (const update of room.updates) socket.send(update);

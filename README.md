@@ -123,8 +123,9 @@ the run on, the last one publishes the policy, and a rejection marks run and pol
 published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
 **Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. Every other AI call
 (generate, revise, review, the admin settings) answers as the gateway does while the ai service is down, on both settings.
-The co-editing relay passes edits between the browsers on a draft but doesn't keep the editor's
-checkpoints the way steward-collab does: the editor's Save button writes the draft.
+The co-editing relay passes edits between the browsers on a draft and keeps the editor's
+checkpoints the way steward-collab does: the content becomes the draft's saved content, the Yjs
+state starts the next room after everyone has left, and the sender is told it was kept.
 
 ### Settings
 
@@ -138,6 +139,26 @@ checkpoints the way steward-collab does: the editor's Save button writes the dra
 | `MOCK_FRESH_INSTALL`                          | `1` starts it as a new install, so clients walk first-run setup.                                                                        |
 | `MOCK_SERVER_VERSION`                         | The version the probes report.                                                                                                          |
 | `LOG_LEVEL`, `LOG_FORMAT`                     | `trace` to `error`; `console` or `json`.                                                                                                |
+
+### Two people on two machines
+
+To let someone else co-edit a draft with you against this mock, each person signs in as their own
+person (the dev login lists them) in their own browser, so each has their own session cookie. Open
+the mock and the web server to the network:
+
+1. Start the mock with `HOST=0.0.0.0` (the controls have no sign-in, so do this on a network you
+   trust).
+2. Point the web server at it with `GATEWAY_URL=http://<this machine>:5175/query`. The browser never
+   talks to the mock itself: it calls the web server's own `/query`, `/api/assets` and
+   `/collab/ws/<draft>`, which relay to the mock and carry the person's session cookie, so the
+   other machine only needs to reach the web server.
+3. If a web client is served from a different origin than the one it calls, list that origin in
+   `MOCK_CORS_ORIGINS`.
+4. Both people open the same draft. Each edit reaches the other at once; every few seconds each
+   side's autosave writes the draft, and the room's last checkpoint is what a person who joins
+   later starts from.
+
+One person in two tabs is one collaborator twice, not two collaborators.
 
 ## 🎛️ Controls
 

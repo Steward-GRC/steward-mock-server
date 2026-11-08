@@ -100,6 +100,8 @@ export interface StewardData extends ProductData {
   audit: AuditRecord[];
   breakGlass: BreakGlassGrant[];
   categories: Category[];
+  /** A draft's last co-editing checkpoint: its Yjs state (base64), which starts the next room. */
+  collabStates: Record<string, string>;
   contactBlocks: ContactBlock[];
   definitions: Definition[];
   emailServiceConfig: EmailServiceConfig;
@@ -154,6 +156,7 @@ export const seed = (): StewardData => ({
   audit: auditTrail(),
   breakGlass: [],
   categories: categories(),
+  collabStates: {},
   contactBlocks: contactBlocks(),
   definitions: definitions(),
   emailServiceConfig: emailServiceConfig(),

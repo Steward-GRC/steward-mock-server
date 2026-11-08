@@ -11,6 +11,7 @@ import { WebSocket } from "ws";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { collabPeers } from "#product/collab.ts";
+import { stewardData } from "#product/data.ts";
 import {
   type Signed,
   signIn,
@@ -254,5 +255,170 @@ describe("collab relay", () => {
     fresh.send(SYNC_STEP_1);
     assert.deepEqual(await answered, EMPTY_SYNC_STEP_2);
     await closed(fresh);
+  });
+});
+
+// What steward-collab does with a checkpoint (bug log 197): the content becomes the draft's saved
+// content, the Yjs state is kept to start the room from, and the sender is told it was kept.
+const variableUint = (value: number): number[] => {
+  const bytes: number[] = [];
+  let rest = value;
+  while (rest > 127) {
+    bytes.push(128 | (rest & 127));
+    rest = Math.floor(rest / 128);
+  }
+  bytes.push(rest);
+  return bytes;
+};
+
+/** [variableUint 100] [variableUint8Array contentJSON] [variableUint8Array yjsState]. */
+const checkpoint = (content: string, state: number[] = []) => {
+  const text = [...Buffer.from(content, "utf8")];
+  return Buffer.from([
+    100,
+    ...variableUint(text.length),
+    ...text,
+    ...variableUint(state.length),
+    ...state,
+  ]);
+};
+
+/** The control message in a server frame: [variableUint 101] [variableUint8Array JSON]. */
+const controlOf = (frame: Buffer) => {
+  assert.equal(frame[0], 101);
+  let length = 0;
+  let shift = 0;
+  let at = 1;
+  for (;;) {
+    const byte = frame[at++] as number;
+    length |= (byte & 127) << shift;
+    if (byte < 128) break;
+    shift += 7;
+  }
+  return JSON.parse(frame.subarray(at, at + length).toString("utf8")) as {
+    detail?: string;
+    reason?: string;
+    type: string;
+  };
+};
+
+const document = (words: string) =>
+  JSON.stringify({
+    root: {
+      children: [
+        {
+          children: [{ text: words, type: "text", version: 1 }],
+          type: "paragraph",
+          version: 1,
+        },
+      ],
+      type: "root",
+      version: 1,
+    },
+  });
+
+const contentOf = (versionId: string) =>
+  stewardData().versions.find((version) => version.id === versionId)
+    ?.contentJson;
+
+const claims = (token: string) =>
+  JSON.parse(
+    Buffer.from(token.split(".", 2)[1] as string, "base64url").toString("utf8"),
+  ) as {
+    uid: string;
+  };
+
+describe("collab checkpoints (bug log 197)", () => {
+  // version-6 is policy-5's withdrawn draft: editing it makes it a plain draft again.
+  it("saves the checkpoint as the draft's content and says it was kept", async () => {
+    const socket = await join("policy-5", "version-6");
+    const answer = nextMessage(socket);
+    socket.send(checkpoint(document("Written in the room")));
+    assert.deepEqual(controlOf(await answer), { type: "snapshot.accepted" });
+    assert.equal(contentOf("version-6"), document("Written in the room"));
+    assert.equal(
+      stewardData().versions.find((v) => v.id === "version-6")?.status,
+      "DRAFT",
+    );
+    await closed(socket);
+  });
+
+  it("refuses a checkpoint whose content is not JSON, and changes nothing", async () => {
+    const before = contentOf("version-6");
+    const socket = await join("policy-5", "version-6");
+    const answer = nextMessage(socket);
+    socket.send(checkpoint("not json at all"));
+    const control = controlOf(await answer);
+    assert.equal(control.type, "snapshot.rejected");
+    assert.equal(control.reason, "pre_check_failed");
+    assert.equal(contentOf("version-6"), before);
+    await closed(socket);
+  });
+
+  it("refuses a checkpoint for a version that is not an editable draft", async () => {
+    // version-3 is in review
+    const before = contentOf("version-3");
+    const socket = await join("policy-2", "version-3");
+    const answer = nextMessage(socket);
+    socket.send(checkpoint(document("Too late")));
+    const control = controlOf(await answer);
+    assert.equal(control.type, "snapshot.rejected");
+    assert.equal(control.reason, "server_rejected");
+    assert.equal(contentOf("version-3"), before);
+    await closed(socket);
+  });
+
+  it("starts the next room from the last checkpoint's Yjs state, after everyone left", async () => {
+    const first = await join("policy-5", "version-6");
+    const kept = nextMessage(first);
+    first.send(checkpoint(document("Kept"), [9, 8, 7]));
+    assert.equal(controlOf(await kept).type, "snapshot.accepted");
+    await closed(first);
+    await settle();
+    assert.equal(collabPeers("version-6"), 0);
+
+    const second = await join("policy-5", "version-6");
+    const heard = listen(second);
+    second.send(SYNC_STEP_1);
+    await settle();
+    // the state as a sync update, then the empty sync step 2 that marks the client synced
+    assert.deepEqual(heard, [
+      Buffer.from([0, 2, 3, 9, 8, 7]),
+      EMPTY_SYNC_STEP_2,
+    ]);
+    await closed(second);
+  });
+
+  it("forgets the checkpoint's state on Start fresh, with the rest of the data", async () => {
+    const socket = await join("policy-5", "version-6");
+    const kept = nextMessage(socket);
+    socket.send(checkpoint(document("Gone"), [1, 2, 3]));
+    assert.equal(controlOf(await kept).type, "snapshot.accepted");
+    await closed(socket);
+    await settle();
+    startFresh();
+    bob = await signIn(base, "bob");
+    const again = await join("policy-5", "version-6");
+    const heard = listen(again);
+    again.send(SYNC_STEP_1);
+    await settle();
+    assert.deepEqual(heard, [EMPTY_SYNC_STEP_2]);
+    await closed(again);
+  });
+
+  it("names each person by their own token, so two logins are two collaborators", async () => {
+    const first = claims(await tokenFor("policy-5", "version-6"));
+    const again = claims(await tokenFor("policy-5", "version-6"));
+    assert.equal(first.uid, again.uid);
+    const other = await signIn(base, "alice");
+    const answer = await call(base, other, "IssueCollabToken", {
+      draftId: "version-6",
+      policyId: "policy-5",
+    });
+    assert.equal(answer.refused, undefined);
+    const second = claims(
+      (answer.data.issueCollabToken as { token: string }).token,
+    );
+    assert.notEqual(second.uid, first.uid);
   });
 });
