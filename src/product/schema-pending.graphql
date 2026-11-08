@@ -208,3 +208,66 @@ type ReviewMessage {
   body: String!
   createdAt: DateTime!
 }
+
+# The appendix life cycle. An appendix belongs to a policy or procedure, not to one of its
+# versions, and has a life of its own: create -> draft, publish -> the version readers see, edit ->
+# a new draft beside it, retire (kept and restorable), and only a site admin deletes one for good.
+# Every version of a policy shows the latest published appendices. Appendices are not policy: they
+# take no part in an approval and nobody comments on them. Publishing is for authors; the diff of
+# a draft against the published row is for authors, site admins and compliance only.
+enum AppendixState {
+  DRAFT
+  PUBLISHED
+}
+
+# One row of an appendix's own version table (not a policy version).
+type AppendixVersion {
+  id: ID!
+  versionNo: Int!
+  state: AppendixState!
+  title: String!
+  contentJson: String!
+  createdAt: String!
+  createdBy: ID!
+  updatedAt: String!
+  updatedBy: ID!
+  publishedAt: String
+  publishedBy: ID
+}
+
+type PolicyAppendix {
+  id: ID!
+  policyId: ID!
+  # The place among the live appendices (A, B, C); null while retired.
+  letter: String
+  orderIndex: Int!
+  createdAt: String!
+  createdBy: ID!
+  retiredAt: String
+  retiredBy: ID
+  # The latest published row. Readers see only this.
+  published: AppendixVersion
+  # The author's work in progress; editors only.
+  draft: AppendixVersion
+  versions: [AppendixVersion!]!
+}
+
+extend type Query {
+  # Readers get the live appendices that have a published row; editors also the drafts, and the
+  # retired ones with includeRetired.
+  policyAppendices(policyId: ID!, includeRetired: Boolean): [PolicyAppendix!]!
+  policyAppendix(id: ID!): PolicyAppendix!
+  # The draft against what is published. Authors, site admins and compliance only.
+  appendixDiff(id: ID!): [SectionDiff!]!
+}
+
+extend type Mutation {
+  createPolicyAppendix(policyId: ID!, title: String!, contentJson: String!): PolicyAppendix!
+  saveAppendixDraft(id: ID!, title: String!, contentJson: String!): PolicyAppendix!
+  publishAppendix(id: ID!): PolicyAppendix!
+  retireAppendix(id: ID!): PolicyAppendix!
+  restoreAppendix(id: ID!): PolicyAppendix!
+  # Site admin only: removes the appendix and its history.
+  deleteAppendixForever(id: ID!): Boolean!
+  reorderPolicyAppendices(policyId: ID!, orderedIds: [ID!]!): [PolicyAppendix!]!
+}
