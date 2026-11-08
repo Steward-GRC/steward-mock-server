@@ -20,6 +20,7 @@
 import type { Choice, LegendSection, PersonField } from "#core/product.ts";
 import type { MaintenanceWindow } from "#core/state.ts";
 
+import { buildCommit } from "#core/build.ts";
 import { cookieOf, readJson, refuse } from "#core/http.ts";
 import { maintenance } from "#core/maintenance.ts";
 import { personFields } from "#core/people.ts";
@@ -114,7 +115,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
   font: 700 11px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
   background: repeating-linear-gradient(135deg, var(--hatch) 0 5px, var(--surface) 5px 10px);
 }
-.version { font: 400 13px/18px var(--font-mono); color: var(--muted); }
+.version, .commit { font: 400 13px/18px var(--font-mono); color: var(--muted); }
 .header__end { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .theme-toggle .icon--sun, :root[data-theme="dark"] .theme-toggle .icon--moon { display: none; }
 :root[data-theme="dark"] .theme-toggle .icon--sun { display: block; }
@@ -223,7 +224,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/22px 
 }
 @media (max-width: 599px) {
   .header { gap: 10px; padding: 0 12px; }
-  .version { display: none; }
+  .version, .commit { display: none; }
   .sidebar {
     position: fixed; inset: 0 auto 0 0; z-index: 50; width: min(86vw, 320px);
     box-shadow: var(--shadow-menu); transform: translateX(-105%); visibility: hidden;
@@ -630,6 +631,7 @@ const page = (saved: null | Theme) => {
     <a class="brand" href="/_mock" aria-label="${escape(name)} mock controls">${MARK}<span class="brand__name">${escape(name)}</span></a>
     <span class="badge badge--env">Mock</span>
     <span class="version">${escape(version)}</span>
+    <span class="commit" title="The commit this mock started from">${escape(buildCommit())}</span>
     <div class="header__end">
       <button class="icon-button theme-toggle" id="theme-toggle" type="button" aria-label="${toggleLabel(theme)}"><svg class="icon--sun" ${ICON}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="icon--moon" ${ICON}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
     </div>
