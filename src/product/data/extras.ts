@@ -7,6 +7,7 @@
 // None of these asks for an acknowledgement (ackTriggers NONE) so the seeded obligations that
 // the existing tests pin stay as they were.
 
+import type { PolicyAppendix } from "#product/appendices.ts";
 import type { Workflow } from "#product/data/library.ts";
 import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 
@@ -689,3 +690,61 @@ export const extraThreads = (): ReviewThread[] => [
     },
   },
 ];
+
+/**
+ * PRC-TRAVEL-000003 (policy-3) is in review and was never published, so it has no appendix from
+ * the version migration. It gets one published appendix of its own, "Appendix A" (a title no other
+ * appendix of the policy has), with a heading, bold words, a list and a table, so the approval
+ * screen's Upcoming version has a formatted appendix to show.
+ */
+export const travelAppendices = (): PolicyAppendix[] => {
+  const at = "2026-09-14T10:00:00Z";
+  return [
+    {
+      createdAt: at,
+      createdBy: "user-bob",
+      id: "appendix-8",
+      orderIndex: 0,
+      policyId: "policy-3",
+      retiredAt: null,
+      retiredBy: null,
+      versions: [
+        {
+          contentJson: appendixText(
+            "Appendix A",
+            rich(
+              ["Book through the ", 0],
+              ["approved travel portal", 1],
+              [" unless the fare is ", 0],
+              ["lower elsewhere", 2],
+              [" and you keep the proof.", 0],
+            ),
+            list(
+              "number",
+              "Check the fare class table below.",
+              "Book at least 14 days ahead where you can.",
+              "Keep the booking confirmation with your claim.",
+            ),
+            table(
+              ["Trip", "Class allowed"],
+              ["Under 4 hours", "Economy"],
+              ["4 to 8 hours", "Premium economy"],
+              ["Over 8 hours", "Business with approval"],
+            ),
+          ),
+          createdAt: at,
+          createdBy: "user-bob",
+          editors: ["user-bob"],
+          id: "appendix-8-v1",
+          publishedAt: at,
+          publishedBy: "user-bob",
+          state: "PUBLISHED",
+          title: "Appendix A",
+          updatedAt: at,
+          updatedBy: "user-bob",
+          versionNo: 1,
+        },
+      ],
+    },
+  ];
+};

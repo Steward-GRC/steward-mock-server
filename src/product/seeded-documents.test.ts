@@ -172,3 +172,39 @@ describe("reviews", () => {
     }
   });
 });
+
+const travel = () =>
+  stewardData().policies.find((p) => p.number === "PRC-TRAVEL-000003")!;
+
+describe("the Travel booking procedure's appendix", () => {
+  it("has one published appendix titled Appendix A, with formatted text", () => {
+    const appendices = stewardData().appendices.filter(
+      (a) => a.policyId === travel().id,
+    );
+    assert.equal(appendices.length, 1);
+    const row = appendices[0]!.versions.at(-1)!;
+    assert.equal(row.state, "PUBLISHED");
+    assert.equal(row.title, "Appendix A");
+    for (const kind of ['"type":"table"', '"type":"list"', '"format":1'])
+      assert.ok(row.contentJson.includes(kind), kind);
+  });
+
+  it("shows it on the version under approval, read as a reader would", () => {
+    const draft = stewardData().versions.find(
+      (v) => v.id === travel().currentDraftVersionId,
+    )!;
+    assert.deepEqual(
+      draft.appendices.map((a) => [a.letter, a.title]),
+      [["A", "Appendix A"]],
+    );
+  });
+
+  it("keeps every policy's appendix titles different from each other", () => {
+    for (const policy of stewardData().policies) {
+      const titles = stewardData()
+        .appendices.filter((a) => a.policyId === policy.id)
+        .flatMap((a) => a.versions.at(-1)?.title ?? []);
+      assert.equal(new Set(titles).size, titles.length, policy.number);
+    }
+  });
+});

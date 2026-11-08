@@ -13,7 +13,7 @@ import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
 import { mockState } from "#core/state.ts";
-import { migrateAppendices } from "#product/appendices.ts";
+import { migrateAppendices, syncAppendices } from "#product/appendices.ts";
 import {
   type AuditRecord,
   auditTrail,
@@ -39,6 +39,7 @@ import {
   extraThreads,
   extraVersions,
   extraWorkflows,
+  travelAppendices,
 } from "#product/data/extras.ts";
 import { seedAssets } from "#product/data/files.ts";
 import {
@@ -165,7 +166,8 @@ export interface StewardData extends ProductData {
 
 export const seed = (): StewardData => {
   const allVersions = [...versions(), ...extraVersions()];
-  const appendices = migrateAppendices(allVersions);
+  const appendices = [...migrateAppendices(allVersions), ...travelAppendices()];
+  syncAppendices(appendices, allVersions, "policy-3");
   return {
     acknowledgements: acknowledgements(),
     aiSimulated: true,
