@@ -4,6 +4,7 @@ fragment ReviewThreadFields on ReviewThread {
   quote
   occurrence
   resolved
+  approverUserId
   createdAt
   messages {
     id

@@ -4,7 +4,8 @@
 // workflow or its home category's (steward-workflow doesn't look at ancestors), with a seat per
 // approver on each stage. The caller's pending seats on the current stage are their tasks. An
 // approval that meets the stage's quorum moves the run on, and the last stage's publishes the
-// version; a rejection ends the run, the other seats and the version; a seat decides once.
+// version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
+// and the version; a seat decides once.
 
 import type { StewardPerson } from "#product/data/people.ts";
 import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
@@ -155,6 +156,28 @@ const reject = (run: Run) => {
   partsOf(run).version.status = "REJECTED";
 };
 
+/**
+ * A rejection is a vote against the stage's quorum, like an approval for it: the run ends only when
+ * the rejects reach the number of approvals the stage needs (its individual seats by the stage's
+ * quorum, a group by its own required count). Below that the run goes on and the other seats can
+ * still decide.
+ */
+const rejectIfQuorum = (run: Run) => {
+  const stage = run.stages[run.currentStageIdx];
+  if (!stage) return;
+  const single = stage.seats.filter((s) => !s.groupId);
+  const singlesRejected = single.filter((s) => s.state === "rejected").length;
+  const singlesEnd =
+    single.length > 0 &&
+    singlesRejected >= required({ ...stage, seats: single });
+  const groupEnds = (stage.groups ?? []).some(
+    (g) =>
+      stage.seats.filter((s) => s.groupId === g.id && s.state === "rejected")
+        .length >= g.required,
+  );
+  if (singlesEnd || groupEnds) reject(run);
+};
+
 const withdraw = (run: Run) => {
   closePending(run.stages);
   run.status = "APPROVAL_STATUS_WITHDRAWN";
@@ -217,7 +240,7 @@ export const workflowResolvers: Resolvers = {
         versionSubject(partsOf(run).policy, partsOf(run).version.id),
       );
       if (approve) advance(run, person);
-      else reject(run);
+      else rejectIfQuorum(run);
       return true;
     },
     submitWorkflow: (

@@ -38,6 +38,8 @@ export interface ReviewSuggestion {
   turn: SuggestionSide;
 }
 export interface ReviewThread {
+  /** The approver the thread is with; the policy's authors see it too. */
+  approverUserId: string;
   createdAt: string;
   id: string;
   messages: ReviewMessage[];
@@ -138,18 +140,47 @@ const present = (person: StewardPerson, thread: ReviewThread) => {
   };
 };
 
-/** Which side the caller acts on: an author of the policy, or otherwise a reviewer. */
-const sideOf = (
-  person: StewardPerson,
-  thread: ReviewThread,
-): SuggestionSide => {
-  const version = versionOf(thread.policyVersionId);
-  const policy = found(
+const policyOfVersion = (versionId: string) => {
+  const version = versionOf(versionId);
+  return found(
     data().policies.find((p) => p.id === version.policyId),
     "policy",
   );
-  return canEdit(person, policy) ? "AUTHOR" : "REVIEWER";
 };
+
+/** Whoever may edit the policy sees every thread; an approver only their own. */
+const seesThread = (person: StewardPerson, thread: ReviewThread): boolean =>
+  isAuthor(person, thread.policyVersionId) ||
+  thread.approverUserId === person.id;
+
+/** Whoever acts on a thread: the author, or the approver it is with. Anyone else is refused. */
+const takesPartIn = (person: StewardPerson, thread: ReviewThread) => {
+  participant(person, thread.policyVersionId);
+  if (
+    !isAuthor(person, thread.policyVersionId) &&
+    thread.approverUserId !== person.id
+  )
+    throw forbidden();
+};
+
+/** An approver with a seat on the version's run. */
+const hasSeat = (userId: string, versionId: string): boolean =>
+  data().runs.some(
+    (run) =>
+      run.policyVersionId === versionId &&
+      run.stages.some((stage) => stage.seats.some((s) => s.userId === userId)),
+  );
+
+/**
+ * The author side: whoever may edit the policy and holds no seat on the version's run. Someone who
+ * is both (a site admin on the approvers) acts as an approver on that version.
+ */
+const isAuthor = (person: StewardPerson, versionId: string): boolean =>
+  canEdit(person, policyOfVersion(versionId)) && !hasSeat(person.id, versionId);
+
+/** Which side the caller acts on: an author of the policy, or otherwise a reviewer. */
+const sideOf = (person: StewardPerson, thread: ReviewThread): SuggestionSide =>
+  isAuthor(person, thread.policyVersionId) ? "AUTHOR" : "REVIEWER";
 
 const other = (side: SuggestionSide): SuggestionSide =>
   side === "AUTHOR" ? "REVIEWER" : "AUTHOR";
@@ -191,6 +222,7 @@ export const reviewThreadResolvers: Resolvers = {
         policyVersionId: string;
         quote: string;
         suggestedText?: null | string;
+        toUserId?: null | string;
       },
       context: Context,
     ) => {
@@ -200,7 +232,13 @@ export const reviewThreadResolvers: Resolvers = {
         throw refuse("BAD_USER_INPUT", "Select some text to comment on.");
       if (given.occurrence < 1)
         throw refuse("BAD_USER_INPUT", "occurrence counts from 1.");
+      // an approver's thread is with that approver; the author names the one approver it is for
+      const author = isAuthor(person, given.policyVersionId);
+      const approverUserId = author ? (given.toUserId ?? "") : person.id;
+      if (author && !hasSeat(approverUserId, given.policyVersionId))
+        throw refuse("BAD_USER_INPUT", "Choose the approver this is for.");
       const thread: ReviewThread = {
+        approverUserId,
         createdAt: now(),
         id: newId("review-thread"),
         messages: [message(person, given.body)],
@@ -238,7 +276,7 @@ export const reviewThreadResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const thread = threadOf(given.threadId);
-      participant(person, thread.policyVersionId);
+      takesPartIn(person, thread);
       const suggestion = openSuggestion(person, thread, false);
       const side = sideOf(person, thread);
       const mine = suggestion.turn === side;
@@ -271,7 +309,7 @@ export const reviewThreadResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const thread = threadOf(given.threadId);
-      participant(person, thread.policyVersionId);
+      takesPartIn(person, thread);
       const suggestion = openSuggestion(person, thread, true);
       const text = given.text.trim();
       if (!text) throw refuse("BAD_USER_INPUT", "A counter can't be empty.");
@@ -293,7 +331,7 @@ export const reviewThreadResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const thread = threadOf(given.threadId);
-      participant(person, thread.policyVersionId);
+      takesPartIn(person, thread);
       if (thread.messages[0]?.authorUserId !== person.id) throw forbidden();
       data().reviewThreads = data().reviewThreads.filter(
         (t) => t.id !== thread.id,
@@ -307,7 +345,7 @@ export const reviewThreadResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const thread = threadOf(given.threadId);
-      participant(person, thread.policyVersionId);
+      takesPartIn(person, thread);
       thread.messages.push(message(person, given.body));
       return present(person, thread);
     },
@@ -318,7 +356,7 @@ export const reviewThreadResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const thread = threadOf(given.threadId);
-      participant(person, thread.policyVersionId);
+      takesPartIn(person, thread);
       thread.resolved = given.resolved;
       return present(person, thread);
     },
@@ -333,7 +371,9 @@ export const reviewThreadResolvers: Resolvers = {
       readable(person, given.policyVersionId);
       return data()
         .reviewThreads.filter(
-          (t) => t.policyVersionId === given.policyVersionId,
+          (t) =>
+            t.policyVersionId === given.policyVersionId &&
+            seesThread(person, t),
         )
         .map((t) => present(person, t));
     },

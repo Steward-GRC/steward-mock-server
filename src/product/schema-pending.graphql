@@ -112,7 +112,8 @@ type TextSpan {
 # feedback. Anchors are the quoted text plus which match of it (counting from 1), so a client can
 # place the highlight again in the stored document.
 extend type Query {
-  # Every thread on a version the caller may read. An obfuscated reader gets no message bodies.
+  # The threads on a version the caller may read: an approver gets only their own, the authors
+  # and site admins all of them. An obfuscated reader gets no message bodies.
   reviewThreads(policyVersionId: ID!): [ReviewThread!]!
 }
 
@@ -121,7 +122,9 @@ extend type Mutation {
   # admins only.
   # suggestedText proposes replacement text for the quote; it opens a suggestion on the other
   # side's turn. Text equal to the quote is a plain comment.
-  addReviewThread(policyVersionId: ID!, quote: String!, occurrence: Int!, body: String!, suggestedText: String): ReviewThread!
+  # toUserId is for the author: the one approver the thread is with. An approver's own thread is
+  # with that approver and the author.
+  addReviewThread(policyVersionId: ID!, quote: String!, occurrence: Int!, body: String!, suggestedText: String, toUserId: ID): ReviewThread!
   # The side whose turn it is answers with different text; the turn passes to the other side.
   counterReviewSuggestion(threadId: ID!, text: String!): ReviewThread!
   # Ends the suggestion with an outcome and resolves the thread. The text of an accepted change is
@@ -144,6 +147,8 @@ type ReviewThread {
   occurrence: Int!
   resolved: Boolean!
   createdAt: DateTime!
+  # The approver the thread is with. Only that approver and the policy's authors see it.
+  approverUserId: ID!
   messages: [ReviewMessage!]!
   # Present when someone proposed replacement text for the quote.
   suggestion: ReviewSuggestion

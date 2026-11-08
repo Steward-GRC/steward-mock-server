@@ -145,3 +145,87 @@ describe("inline review threads", () => {
     assert.deepEqual(left.data.reviewThreads, []);
   });
 });
+
+describe("whose thread it is", () => {
+  // Charlie and Alice both hold a seat on version-4's review stage; Bob is the author.
+  it("is with the approver who started it, and the author sees it with who wrote it", async () => {
+    const thread = await start();
+    assert.equal(
+      (thread as { approverUserId: string } & Thread).approverUserId,
+      "user-charlie",
+    );
+    const asAuthor = await as("user-bob", "ReviewThreads", {
+      policyVersionId: VERSION,
+    });
+    const seen = asAuthor.data.reviewThreads as Thread[];
+    assert.deepEqual(
+      seen.map((t) => t.id),
+      [thread.id],
+    );
+    assert.equal(seen[0]?.messages[0]?.authorUserId, "user-charlie");
+    assert.ok(seen[0]?.messages[0]?.authorName);
+  });
+
+  it("is not shown to another approver on the same step", async () => {
+    await start();
+    const other = await as("user-alice", "ReviewThreads", {
+      policyVersionId: VERSION,
+    });
+    assert.deepEqual(other.data.reviewThreads, []);
+    const own = await as("user-charlie", "ReviewThreads", {
+      policyVersionId: VERSION,
+    });
+    assert.equal((own.data.reviewThreads as Thread[]).length, 1);
+  });
+
+  it("cannot be answered, resolved or deleted by another approver", async () => {
+    const thread = await start();
+    for (const [operation, variables] of [
+      ["ReplyReviewThread", { body: "Me too.", threadId: thread.id }],
+      ["SetReviewThreadResolved", { resolved: true, threadId: thread.id }],
+      ["DeleteReviewThread", { threadId: thread.id }],
+    ] as const) {
+      const refused = await as("user-alice", operation, variables);
+      assert.notEqual(refused.refused, undefined, operation);
+    }
+  });
+
+  it("lets the author write to one approver, who alone sees it", async () => {
+    const answer = await as("user-bob", "AddReviewThread", {
+      body: "Can you check this wording?",
+      occurrence: 1,
+      policyVersionId: VERSION,
+      quote: "seven years",
+      toUserId: "user-charlie",
+    });
+    assert.equal(answer.refused, undefined, JSON.stringify(answer));
+    const thread = answer.data.addReviewThread as {
+      approverUserId: string;
+    } & Thread;
+    assert.equal(thread.approverUserId, "user-charlie");
+    const charlie = await as("user-charlie", "ReviewThreads", {
+      policyVersionId: VERSION,
+    });
+    assert.equal((charlie.data.reviewThreads as Thread[]).length, 1);
+    const alice = await as("user-alice", "ReviewThreads", {
+      policyVersionId: VERSION,
+    });
+    assert.deepEqual(alice.data.reviewThreads, []);
+  });
+
+  it("makes the author say which approver, and only one who has a seat", async () => {
+    const base = {
+      body: "Check?",
+      occurrence: 1,
+      policyVersionId: VERSION,
+      quote: "seven years",
+    };
+    const none = await as("user-bob", "AddReviewThread", base);
+    assert.equal(none.refused, "InvalidArgument");
+    const stranger = await as("user-bob", "AddReviewThread", {
+      ...base,
+      toUserId: "user-erin",
+    });
+    assert.equal(stranger.refused, "InvalidArgument");
+  });
+});

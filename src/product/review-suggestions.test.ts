@@ -86,6 +86,7 @@ describe("starting a suggestion", () => {
       policyVersionId: VERSION,
       quote: "seven years",
       suggestedText: "five years",
+      toUserId: "user-charlie",
     });
     assert.equal(
       (answer.data.addReviewThread as Thread).suggestion?.turn,

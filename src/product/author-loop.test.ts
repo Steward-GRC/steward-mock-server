@@ -320,26 +320,89 @@ describe("deciding an approval", () => {
     assert.equal(policy.currentVersionNo, 1);
   });
 
-  it("marks the run and the policy rejected on a rejection", async () => {
+  it("counts a rejection as a vote: the run ends only when the rejects reach the stage's quorum", async () => {
     const author = await as("user-bob");
     const approver = await as("user-charlie");
     const admin = await as("user-alice");
+    const task = {
+      policyVersionId: "version-4",
+      runId: "run-1",
+      taskId: "task-1",
+    };
+    // the Review stage is a majority of two seats: one reject is a vote, not the end
     ok(
       await decide(
         approver,
-        { policyVersionId: "version-4", runId: "run-1", taskId: "task-1" },
+        task,
         "SIGNAL_TYPE_REJECT",
         "The labels need examples.",
       ),
     );
-    const run = await status(author, "version-4");
-    assert.equal(run.status, "APPROVAL_STATUS_REJECTED");
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_IN_REVIEW",
+    );
+    assert.equal(
+      (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy
+        .currentVersionStatus,
+      "IN_REVIEW",
+    );
+    // the other seat still has its task
+    assert.ok(
+      (await tasksOf(admin)).some((t) => t.policyVersionId === "version-4"),
+    );
+    // the second reject reaches the quorum, and that ends the run
+    ok(
+      await decide(
+        admin,
+        { ...task, taskId: "task-2" },
+        "SIGNAL_TYPE_REJECT",
+        "Agreed, not ready.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_REJECTED",
+    );
     const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
     assert.equal(policy.currentVersionStatus, "REJECTED");
     assert.equal(policy.currentPublishedVersionId, null);
-    // A rejection ends the other seats: nobody else has the task any more.
     assert.ok(
       !(await tasksOf(admin)).some((t) => t.policyVersionId === "version-4"),
+    );
+  });
+
+  it("ends the run at once on a rejection when the stage's quorum is one", async () => {
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const admin = await as("user-alice");
+    const first = { policyVersionId: "version-4", runId: "run-1" };
+    ok(
+      await decide(
+        approver,
+        { ...first, taskId: "task-1" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-2" },
+        "SIGNAL_TYPE_APPROVE",
+      ),
+    );
+    // the Final approval stage has one seat
+    ok(
+      await decide(
+        admin,
+        { ...first, taskId: "task-3" },
+        "SIGNAL_TYPE_REJECT",
+        "Not yet.",
+      ),
+    );
+    assert.equal(
+      (await status(author, "version-4")).status,
+      "APPROVAL_STATUS_REJECTED",
     );
   });
 
