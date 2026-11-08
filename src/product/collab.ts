@@ -176,8 +176,12 @@ const stateAsUpdate = (state: Uint8Array) =>
     ...state,
   ]);
 
-/** The draft versions a checkpoint may overwrite, as saveDraft may: a draft that is still the author's. */
-const EDITABLE = new Set(["DRAFT", "REJECTED", "WITHDRAWN"]);
+/**
+ * The draft versions a checkpoint may overwrite, as saveDraft may: a draft that is still the
+ * author's, and one in review, which the author keeps editing while the approvers review it. A
+ * rejected version is final.
+ */
+const EDITABLE = new Set(["DRAFT", "IN_REVIEW", "WITHDRAWN"]);
 
 /**
  * Keeps a checkpoint the way steward-collab does: the content becomes the draft's saved content,
@@ -207,9 +211,8 @@ const keepCheckpoint = (
     return reject("server_rejected", "This draft can no longer be edited.");
   }
   version.contentJson = checkpoint.content;
-  // editing a rejected or withdrawn draft makes it a plain draft again, as saveDraft does
-  if (version.status === "REJECTED" || version.status === "WITHDRAWN")
-    version.status = "DRAFT";
+  // editing a withdrawn draft makes it a plain draft again, as saveDraft does
+  if (version.status === "WITHDRAWN") version.status = "DRAFT";
   stewardData().collabStates[draftId] = Buffer.from(checkpoint.state).toString(
     "base64",
   );

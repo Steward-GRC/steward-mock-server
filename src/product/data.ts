@@ -9,6 +9,7 @@ import type { Person } from "#core/state.ts";
 import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
 import type { ReviewThread } from "#product/resolvers/review-threads.ts";
+import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
 import { mockState } from "#core/state.ts";
 import {
@@ -134,6 +135,8 @@ export interface StewardData extends ProductData {
   policyViews: PolicyView[];
   references: Reference[];
   reportCases: ReportCase[];
+  /** The text each approver last reviewed, by version and then by approver. */
+  reviewSnapshots: Record<string, Record<string, ReviewSnapshot>>;
   /** Inline review comment threads on policy versions (ahead of the gateway; see the pending schema). */
   reviewThreads: ReviewThread[];
   runs: Run[];
@@ -177,6 +180,7 @@ export const seed = (): StewardData => ({
   policyViews: policyViews(),
   references: references(),
   reportCases: reportCases(),
+  reviewSnapshots: {},
   reviewThreads: [],
   runs: runs(),
   settings: globalSettings(),

@@ -498,6 +498,10 @@ export const policyResolvers: Resolvers = {
       const policy = editablePolicy(person, given.policyId);
       const at = now();
       let draft = versionById(policy.currentDraftVersionId);
+      // A rejection is final: the rejected version stays as it was and the next save starts a new
+      // draft, which needs a full new submission. Its template carries over unless one is given.
+      const rejected = draft?.status === "REJECTED" ? draft : undefined;
+      if (rejected) draft = undefined;
       if (!draft) {
         draft = {
           appendices: [],
@@ -507,7 +511,8 @@ export const policyResolvers: Resolvers = {
           policyId: policy.id,
           publishedAt: null,
           status: "DRAFT",
-          templateVersionId: given.templateVersionId ?? "",
+          templateVersionId:
+            given.templateVersionId ?? rejected?.templateVersionId ?? "",
           versionNo: 0,
         };
         data().versions.push(draft);
@@ -516,9 +521,8 @@ export const policyResolvers: Resolvers = {
       draft.contentJson = given.contentJson;
       if (given.templateVersionId !== undefined)
         draft.templateVersionId = given.templateVersionId ?? "";
-      // Editing a rejected or withdrawn draft makes it a plain draft again.
-      if (draft.status === "REJECTED" || draft.status === "WITHDRAWN")
-        draft.status = "DRAFT";
+      // Editing a withdrawn draft makes it a plain draft again; one in review stays in review.
+      if (draft.status === "WITHDRAWN") draft.status = "DRAFT";
       policy.updatedAt = at;
       record("policy.draft_saved", person, versionSubject(policy, draft.id));
       return draft;

@@ -355,16 +355,29 @@ describe("collab checkpoints (bug log 197)", () => {
     await closed(socket);
   });
 
-  it("refuses a checkpoint for a version that is not an editable draft", async () => {
-    // version-3 is in review
-    const before = contentOf("version-3");
+  it("keeps a checkpoint for a version in review: the author edits while approvers review", async () => {
     const socket = await join("policy-2", "version-3");
+    const answer = nextMessage(socket);
+    socket.send(checkpoint(document("Edited in review")));
+    assert.deepEqual(controlOf(await answer), { type: "snapshot.accepted" });
+    assert.equal(contentOf("version-3"), document("Edited in review"));
+    assert.equal(
+      stewardData().versions.find((v) => v.id === "version-3")?.status,
+      "IN_REVIEW",
+    );
+    await closed(socket);
+  });
+
+  it("refuses a checkpoint for a rejected version: a rejection is final", async () => {
+    // version-8 is policy-7's rejected version
+    const before = contentOf("version-8");
+    const socket = await join("policy-7", "version-8");
     const answer = nextMessage(socket);
     socket.send(checkpoint(document("Too late")));
     const control = controlOf(await answer);
     assert.equal(control.type, "snapshot.rejected");
     assert.equal(control.reason, "server_rejected");
-    assert.equal(contentOf("version-3"), before);
+    assert.equal(contentOf("version-8"), before);
     await closed(socket);
   });
 

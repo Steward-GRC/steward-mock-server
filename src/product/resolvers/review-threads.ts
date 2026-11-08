@@ -20,6 +20,7 @@ import {
   personOf,
   refuse,
 } from "#product/resolvers/shared.ts";
+import { changesSinceReview, markReviewed } from "#product/review-snapshots.ts";
 
 export interface ReviewMessage {
   authorUserId: string;
@@ -212,6 +213,12 @@ const message = (person: StewardPerson, body: string): ReviewMessage => {
   };
 };
 
+/** An approver acting on the version has reviewed it as it is now. */
+const reviewedBy = (person: StewardPerson, versionId: string) => {
+  if (hasSeat(person.id, versionId))
+    markReviewed(person.id, versionOf(versionId));
+};
+
 export const reviewThreadResolvers: Resolvers = {
   Mutation: {
     addReviewThread: (
@@ -263,6 +270,7 @@ export const reviewThreadResolvers: Resolvers = {
         };
       }
       data().reviewThreads.push(thread);
+      reviewedBy(person, thread.policyVersionId);
       return present(person, thread);
     },
     closeReviewSuggestion: (
@@ -300,6 +308,7 @@ export const reviewThreadResolvers: Resolvers = {
       suggestion.closedBy = person.id;
       suggestion.closedText = suggestion.text;
       thread.resolved = true;
+      reviewedBy(person, thread.policyVersionId);
       return present(person, thread);
     },
     counterReviewSuggestion: (
@@ -322,6 +331,7 @@ export const reviewThreadResolvers: Resolvers = {
       });
       suggestion.text = text;
       suggestion.turn = other(side);
+      reviewedBy(person, thread.policyVersionId);
       return present(person, thread);
     },
     deleteReviewThread: (
@@ -338,6 +348,17 @@ export const reviewThreadResolvers: Resolvers = {
       );
       return true;
     },
+    markVersionReviewed: (
+      _root,
+      given: { policyVersionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      readable(person, given.policyVersionId);
+      if (!hasSeat(person.id, given.policyVersionId)) throw forbidden();
+      markReviewed(person.id, versionOf(given.policyVersionId));
+      return true;
+    },
     replyReviewThread: (
       _root,
       given: { body: string; threadId: string },
@@ -347,6 +368,7 @@ export const reviewThreadResolvers: Resolvers = {
       const thread = threadOf(given.threadId);
       takesPartIn(person, thread);
       thread.messages.push(message(person, given.body));
+      reviewedBy(person, thread.policyVersionId);
       return present(person, thread);
     },
     setReviewThreadResolved: (
@@ -358,6 +380,7 @@ export const reviewThreadResolvers: Resolvers = {
       const thread = threadOf(given.threadId);
       takesPartIn(person, thread);
       thread.resolved = given.resolved;
+      reviewedBy(person, thread.policyVersionId);
       return present(person, thread);
     },
   },
@@ -376,6 +399,16 @@ export const reviewThreadResolvers: Resolvers = {
             seesThread(person, t),
         )
         .map((t) => present(person, t));
+    },
+    versionChangesSinceReview: (
+      _root,
+      given: { policyVersionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const version = readable(person, given.policyVersionId);
+      if (!hasSeat(person.id, version.id)) throw forbidden();
+      return changesSinceReview(person.id, version);
     },
   },
 };

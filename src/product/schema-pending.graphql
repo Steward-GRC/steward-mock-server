@@ -117,7 +117,15 @@ extend type Query {
   reviewThreads(policyVersionId: ID!): [ReviewThread!]!
 }
 
+extend type Query {
+  # What changed in each section of the version since the caller, an approver on its run, last
+  # reviewed it: when they last commented, replied, voted, sent comments or marked it reviewed.
+  versionChangesSinceReview(policyVersionId: ID!): [SectionDiff!]!
+}
+
 extend type Mutation {
+  # The caller, an approver on the version's run, has reviewed the version as it is now.
+  markVersionReviewed(policyVersionId: ID!): Boolean!
   # Starts a thread with its first message. Approvers on the version's run, its authors and site
   # admins only.
   # suggestedText proposes replacement text for the quote; it opens a suggestion on the other
