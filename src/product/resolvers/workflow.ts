@@ -12,6 +12,7 @@ import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canEdit } from "#product/access.ts";
+import { hasContent } from "#product/content.ts";
 import {
   cancelRuns,
   publishVersion,
@@ -264,6 +265,12 @@ export const workflowResolvers: Resolvers = {
         throw refuse(
           "FAILED_PRECONDITION",
           "Only the policy's current draft can go for review.",
+        );
+      // a document with no text can never go for review
+      if (!hasContent(version.contentJson))
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "A document with no content can't be submitted.",
         );
       const home = data().categories.find(
         (c) => c.id === policy.homeCategoryId,

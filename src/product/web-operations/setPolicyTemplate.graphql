@@ -1,0 +1,5 @@
+mutation SetPolicyTemplate($policyId: ID!, $templateId: ID, $none: Boolean!) {
+  setPolicyTemplate(policyId: $policyId, templateId: $templateId, none: $none) {
+    ...AuthoringPolicyFields
+  }
+}
