@@ -279,3 +279,30 @@ extend type Mutation {
   deleteAppendixForever(id: ID!): Boolean!
   reorderPolicyAppendices(policyId: ID!, orderedIds: [ID!]!): [PolicyAppendix!]!
 }
+
+# A veto approver: a workflow can opt in (off by default) to marking approvers on a stage, as users
+# or as the members of a group seat, whose single reject ends the version as rejected even inside a
+# quorum and below its threshold. Proposed in steward-workflow#26.
+extend type WorkflowDef {
+  vetoEnabled: Boolean!
+}
+
+extend type WorkflowStageDef {
+  vetoApproverIds: [ID!]!
+  vetoGroupIds: [ID!]!
+}
+
+extend input WorkflowStageInput {
+  vetoApproverIds: [ID!]
+  vetoGroupIds: [ID!]
+}
+
+extend type StageAssignee {
+  # The seat holds a veto on its stage.
+  veto: Boolean!
+}
+
+extend type Mutation {
+  # Template admins and above.
+  setWorkflowVetoEnabled(id: ID!, enabled: Boolean!): WorkflowDef!
+}
