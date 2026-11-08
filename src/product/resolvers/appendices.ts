@@ -15,11 +15,15 @@ import { canEdit, obfuscated, readEffect, visible } from "#product/access.ts";
 import {
   appendicesOf,
   type AppendixVersionRow,
+  contributorIds,
+  defaultTitle,
   draftOf,
   latestPublished,
   letterFor,
   liveAppendices,
+  noteEditor,
   type PolicyAppendix,
+  publishedRows,
   renumber,
   syncAppendices,
 } from "#product/appendices.ts";
@@ -33,6 +37,7 @@ import {
   newId,
   notFound,
   now,
+  personOf,
   refuse,
 } from "#product/resolvers/shared.ts";
 import { diffVersions, parseContent } from "#product/sections.ts";
@@ -73,16 +78,36 @@ const editable = (person: StewardPerson, id: string) => {
 const mayRead = (person: StewardPerson, policy: Policy): boolean =>
   canEdit(person, policy) || isSiteAdmin(person);
 
+/** Who sees the diff and the contributors: authors, site admins and compliance. */
+const mayDiff = (person: StewardPerson, policy: Policy): boolean =>
+  mayRead(person, policy) || person.roles.includes("compliance-admin");
+
+/** People by id, as contributors: a disabled or removed person still shows, with a name. */
+const contributorsOf = (ids: readonly string[]) =>
+  ids.map((id) => {
+    const found = personOf(id);
+    return {
+      active: found ? !found.disabled && !found.deletedAt : false,
+      name: found?.name ?? id,
+      userId: id,
+    };
+  });
+
 /** An appendix as the person may read it: readers get no draft and no history. */
 const view = (person: StewardPerson, appendix: PolicyAppendix) => {
   const policy = policyOf(appendix.policyId);
   const editor = mayRead(person, policy);
+  const who = mayDiff(person, policy);
   const published = latestPublished(appendix) ?? null;
   const show = (row: AppendixVersionRow | null | undefined) => {
     if (!row) return null;
+    const shown = {
+      ...row,
+      contributors: who ? contributorsOf(row.editors) : [],
+    };
     return readEffect(person, policy) === "obfuscate"
-      ? { ...row, contentJson: obfuscated(row.contentJson) }
-      : row;
+      ? { ...shown, contentJson: obfuscated(row.contentJson) }
+      : shown;
   };
   const readerRows = published ? [show(published)] : [];
   const versionsShown = editor
@@ -90,9 +115,15 @@ const view = (person: StewardPerson, appendix: PolicyAppendix) => {
     : readerRows;
   return {
     ...appendix,
+    contributors: who ? contributorsOf(contributorIds(appendix)) : [],
     draft: editor ? show(draftOf(appendix)) : null,
     letter: letterFor(data().appendices, appendix),
     published: show(published),
+    publishedVersions: editor
+      ? publishedRows(appendix)
+          .toReversed()
+          .map((v) => show(v))
+      : readerRows,
     versions: versionsShown,
   };
 };
@@ -163,6 +194,7 @@ const createPublished = (
         contentJson,
         createdAt: at,
         createdBy: person.id,
+        editors: [person.id],
         id: "",
         publishedAt: at,
         publishedBy: person.id,
@@ -191,20 +223,24 @@ export const appendixResolvers: Resolvers = {
       const version = versionPolicy(given.policyVersionId);
       const policy = editablePolicy(person, version.policyId);
       return legacyShape(
-        createPublished(person, policy, given.title, given.contentJson),
+        createPublished(
+          person,
+          policy,
+          given.title.trim() || defaultTitle(data().appendices, policy.id),
+          given.contentJson,
+        ),
         version.id,
       );
     },
     createPolicyAppendix: (
       _root,
-      given: { contentJson: string; policyId: string; title: string },
+      given: { contentJson: string; policyId: string; title?: null | string },
       context: Context,
     ) => {
       const person = caller(context);
       const policy = editablePolicy(person, given.policyId);
-      if (given.title.trim() === "")
-        throw refuse("BAD_USER_INPUT", "An appendix needs a title.");
       const all = data().appendices;
+      const title = given.title?.trim() || defaultTitle(all, policy.id);
       const at = now();
       const appendix: PolicyAppendix = {
         createdAt: at,
@@ -220,11 +256,12 @@ export const appendixResolvers: Resolvers = {
         contentJson: given.contentJson,
         createdAt: at,
         createdBy: person.id,
+        editors: [person.id],
         id: `${appendix.id}-v1`,
         publishedAt: null,
         publishedBy: null,
         state: "DRAFT",
-        title: given.title,
+        title,
         updatedAt: at,
         updatedBy: person.id,
         versionNo: 1,
@@ -292,6 +329,7 @@ export const appendixResolvers: Resolvers = {
       draft.publishedBy = person.id;
       draft.updatedAt = at;
       draft.updatedBy = person.id;
+      noteEditor(draft, person.id);
       touch(policyOf(appendix.policyId));
       return view(person, appendix);
     },
@@ -377,11 +415,13 @@ export const appendixResolvers: Resolvers = {
         draft.contentJson = given.contentJson;
         draft.updatedAt = at;
         draft.updatedBy = person.id;
+        noteEditor(draft, person.id);
       } else {
         appendix.versions.push({
           contentJson: given.contentJson,
           createdAt: at,
           createdBy: person.id,
+          editors: [person.id],
           id: `${appendix.id}-v${String(appendix.versions.length + 1)}`,
           publishedAt: null,
           publishedBy: null,
@@ -407,6 +447,7 @@ export const appendixResolvers: Resolvers = {
         contentJson: given.contentJson,
         createdAt: at,
         createdBy: person.id,
+        editors: [person.id],
         id: `${appendix.id}-v${String(appendix.versions.length + 1)}`,
         publishedAt: at,
         publishedBy: person.id,
@@ -427,20 +468,22 @@ export const appendixResolvers: Resolvers = {
     },
   },
   Query: {
-    appendixDiff: (_root, given: { id: string }, context: Context) => {
+    appendixDiff: (
+      _root,
+      given: { contentJson?: null | string; id: string },
+      context: Context,
+    ) => {
       const person = caller(context);
       const appendix = appendixById(given.id);
       const policy = readablePolicy(person, appendix.policyId);
-      if (
-        !canEdit(person, policy) &&
-        !isSiteAdmin(person) &&
-        !person.roles.includes("compliance-admin")
-      )
-        throw forbidden();
+      if (!mayDiff(person, policy)) throw forbidden();
       const draft = draftOf(appendix);
       const published = latestPublished(appendix);
       const from = sectionsOf(published?.contentJson ?? "");
-      const to = sectionsOf(draft?.contentJson ?? published?.contentJson ?? "");
+      // Text that is not saved yet (what the author is typing) stands in for the stored draft.
+      const to = sectionsOf(
+        given.contentJson ?? draft?.contentJson ?? published?.contentJson ?? "",
+      );
       const keys = [...new Set([...to.keys(), ...from.keys()])];
       return (
         diffVersions(

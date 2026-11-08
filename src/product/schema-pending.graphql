@@ -228,8 +228,18 @@ enum AppendixState {
   PUBLISHED
 }
 
+# Someone who saved or published an appendix. Former staff stay listed, with active false.
+type AppendixContributor {
+  userId: ID!
+  name: String!
+  active: Boolean!
+}
+
 # One row of an appendix's own version table (not a policy version).
 type AppendixVersion {
+  # Everyone who saved or published this row. Authors, site admins and compliance only; empty
+  # for anyone else.
+  contributors: [AppendixContributor!]!
   id: ID!
   versionNo: Int!
   state: AppendixState!
@@ -258,6 +268,11 @@ type PolicyAppendix {
   # The author's work in progress; editors only.
   draft: AppendixVersion
   versions: [AppendixVersion!]!
+  # The published rows, latest first, for the Published tab drop-down. Readers get the latest only.
+  publishedVersions: [AppendixVersion!]!
+  # Everyone who ever saved or published the appendix, active or not, in the order they first did.
+  # Authors, site admins and compliance only; empty for anyone else.
+  contributors: [AppendixContributor!]!
 }
 
 extend type Query {
@@ -265,12 +280,16 @@ extend type Query {
   # retired ones with includeRetired.
   policyAppendices(policyId: ID!, includeRetired: Boolean): [PolicyAppendix!]!
   policyAppendix(id: ID!): PolicyAppendix!
-  # The draft against what is published. Authors, site admins and compliance only.
-  appendixDiff(id: ID!): [SectionDiff!]!
+  # The draft against what is published. Authors, site admins and compliance only. With
+  # contentJson the given text (not saved) is diffed instead of the stored draft, so the diff can
+  # follow what the author is typing.
+  appendixDiff(id: ID!, contentJson: String): [SectionDiff!]!
 }
 
 extend type Mutation {
-  createPolicyAppendix(policyId: ID!, title: String!, contentJson: String!): PolicyAppendix!
+  # A blank or missing title becomes "Appendix A", "Appendix B", ...: the next name no other
+  # appendix of the policy uses.
+  createPolicyAppendix(policyId: ID!, title: String, contentJson: String!): PolicyAppendix!
   saveAppendixDraft(id: ID!, title: String!, contentJson: String!): PolicyAppendix!
   publishAppendix(id: ID!): PolicyAppendix!
   retireAppendix(id: ID!): PolicyAppendix!
