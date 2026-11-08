@@ -107,6 +107,8 @@ export const extraWorkflows = (): Workflow[] => [
         quorum: "all",
         rejectOnSlaBreach: false,
         slaDays: 7,
+        vetoApproverIds: [],
+        vetoGroupIds: [],
       },
       {
         approvers: ["user-charlie", "user-alice", "user-dave"],
@@ -118,9 +120,12 @@ export const extraWorkflows = (): Workflow[] => [
         quorum: "majority",
         rejectOnSlaBreach: false,
         slaDays: null,
+        vetoApproverIds: [],
+        vetoGroupIds: [],
       },
     ],
     version: 1,
+    vetoEnabled: false,
   },
 ];
 
