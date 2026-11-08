@@ -195,6 +195,34 @@ const templateFor = (categoryId: string, templateId?: null | string) => {
   return null;
 };
 
+/**
+ * The template the category chain locks authors to, if any: the nearest category that names a
+ * default (or none) provides it, and it binds only when that category is locked.
+ */
+const lockedTemplate = (categoryId: string): null | string => {
+  for (const category of chainOf(categoryId)) {
+    if (category.defaultTemplateNone) return null;
+    if (category.defaultTemplateId)
+      return category.defaultTemplateLocked ? category.defaultTemplateId : null;
+  }
+  return null;
+};
+
+/** Refuses a template other than the one the category locks authors to (FAILED_PRECONDITION). */
+const requireLockedTemplate = (
+  categoryId: string,
+  templateId: null | string | undefined,
+): void => {
+  const locked = lockedTemplate(categoryId);
+  if (locked && templateId !== locked) {
+    const name = data().templates.find((t) => t.id === locked)?.name ?? locked;
+    throw refuse(
+      "FAILED_PRECONDITION",
+      `This category requires the ${name} template.`,
+    );
+  }
+};
+
 const latestPublished = (templateId: null | string) =>
   templateId
     ? data()
@@ -343,6 +371,7 @@ export const policyResolvers: Resolvers = {
         throw refuse("BAD_USER_INPUT", "A policy needs a title.");
       const documentType = given.documentType ?? "POLICY";
       if (!accepts(home, documentType)) throw refusesType(home, documentType);
+      if (given.templateId) requireLockedTemplate(home.id, given.templateId);
       const templateId = templateFor(given.homeCategoryId, given.templateId);
       const templateVersion = latestPublished(templateId);
       if (given.templateId && !templateVersion) throw notFound("template");
@@ -483,6 +512,10 @@ export const policyResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const policy = editablePolicy(person, given.policyId);
+      requireLockedTemplate(
+        policy.homeCategoryId,
+        given.none ? null : given.templateId,
+      );
       const template = given.none
         ? undefined
         : latestPublished(given.templateId ?? null);
