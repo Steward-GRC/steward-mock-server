@@ -94,6 +94,8 @@ export interface RunStage {
   /** The rule for the stage's individual seats (those with no `groupId`). */
   quorum: string;
   seats: Seat[];
+  /** Seat holders whose single reject ends the run (the workflow opted in to vetoes). */
+  vetoUserIds?: string[];
 }
 
 /** One approver's seat on a stage of a run. */

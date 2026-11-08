@@ -7,6 +7,7 @@
 // version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
 // and the version; a seat decides once.
 
+import type { WorkflowStage } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
 import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
 
@@ -152,6 +153,16 @@ const advance = (run: Run, person: StewardPerson) => {
   record("policy.status_set", person, versionSubject(policy, version.id));
 };
 
+/** The users who hold a veto on a stage: those named, and the members of the group seats named. */
+const vetoHolders = (stage: WorkflowStage): string[] => [
+  ...new Set([
+    ...stage.vetoApproverIds,
+    ...stage.groupUnits
+      .filter((g) => stage.vetoGroupIds.includes(g.groupId))
+      .flatMap((g) => g.memberUserIds),
+  ]),
+];
+
 const reject = (run: Run) => {
   closePending(run.stages);
   run.status = "APPROVAL_STATUS_REJECTED";
@@ -244,6 +255,10 @@ export const workflowResolvers: Resolvers = {
         versionSubject(partsOf(run).policy, partsOf(run).version.id),
       );
       if (approve) advance(run, person);
+      else if (
+        run.stages[run.currentStageIdx]?.vetoUserIds?.includes(person.id)
+      )
+        reject(run);
       else rejectIfQuorum(run);
       return true;
     },
@@ -306,6 +321,7 @@ export const workflowResolvers: Resolvers = {
             taskId: newId("task"),
             userId,
           })),
+          vetoUserIds: workflow.vetoEnabled ? vetoHolders(stage) : [],
         })),
         status: IN_REVIEW,
         submittedAt: now(),
@@ -372,6 +388,7 @@ export const workflowResolvers: Resolvers = {
             name: personOf(s.userId)?.name ?? null,
             state: s.state,
             userId: s.userId,
+            veto: stage.vetoUserIds?.includes(s.userId) ?? false,
           })),
         ),
         stageNames: run.stages.map((stage) => stage.name),

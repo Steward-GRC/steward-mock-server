@@ -163,6 +163,8 @@ interface StageInput {
   quorum: string;
   rejectOnSlaBreach?: boolean | null;
   slaDays?: null | number;
+  vetoApproverIds?: null | string[];
+  vetoGroupIds?: null | string[];
 }
 
 const stagesOf = (input: StageInput[]): WorkflowStage[] =>
@@ -182,6 +184,8 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] =>
     quorum: s.quorum,
     rejectOnSlaBreach: s.rejectOnSlaBreach ?? false,
     slaDays: s.slaDays ?? null,
+    vetoApproverIds: [...(s.vetoApproverIds ?? [])],
+    vetoGroupIds: [...(s.vetoGroupIds ?? [])],
   }));
 
 const workflowFor = (id: string) =>
@@ -462,6 +466,7 @@ export const libraryResolvers: Resolvers = {
         name: given.name,
         stages: stagesOf(given.stages),
         version: 1,
+        vetoEnabled: false,
       };
       data().workflowDefs.push(workflow);
       record(
@@ -759,6 +764,21 @@ export const libraryResolvers: Resolvers = {
         librarySubject("reference", reference.id, reference.label),
       );
       return withReferenceUse(reference);
+    },
+    setWorkflowVetoEnabled: (
+      _root,
+      given: { enabled: boolean; id: string },
+      context: Context,
+    ) => {
+      const admin = templateAdmin(context);
+      const workflow = workflowFor(given.id);
+      workflow.vetoEnabled = given.enabled;
+      record(
+        "workflow_def.updated",
+        admin,
+        librarySubject("workflow_def", workflow.id, workflow.name),
+      );
+      return workflow;
     },
     updateContactBlock: (
       _root,

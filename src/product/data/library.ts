@@ -129,6 +129,8 @@ export interface Workflow {
   name: string;
   stages: WorkflowStage[];
   version: number;
+  /** Opted in: a veto approver's single reject ends the version. Off by default. */
+  vetoEnabled: boolean;
 }
 
 export interface WorkflowStage {
@@ -146,6 +148,10 @@ export interface WorkflowStage {
   quorum: string;
   rejectOnSlaBreach: boolean;
   slaDays: null | number;
+  /** Users who hold a veto on this stage. */
+  vetoApproverIds: string[];
+  /** Group seats (by the unit's groupId) whose members hold a veto on this stage. */
+  vetoGroupIds: string[];
 }
 
 const category = (
@@ -397,6 +403,8 @@ const stage = (
   quorum: "one",
   rejectOnSlaBreach: false,
   slaDays: null,
+  vetoApproverIds: [],
+  vetoGroupIds: [],
   ...given,
 });
 
@@ -414,6 +422,7 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
+    vetoEnabled: false,
   },
   {
     archived: false,
@@ -437,6 +446,7 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
+    vetoEnabled: false,
   },
   {
     archived: false,
@@ -451,6 +461,7 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 2,
+    vetoEnabled: false,
   },
 ];
 
