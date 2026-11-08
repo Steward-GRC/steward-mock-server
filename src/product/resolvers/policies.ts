@@ -22,6 +22,14 @@ import { syncAppendices } from "#product/appendices.ts";
 import { accepts, refusesType } from "#product/category-types.ts";
 import { collabPath, collabToken } from "#product/collab.ts";
 import {
+  byTitle,
+  carryOver,
+  currentVersionId,
+  emptyLinks,
+  usedByPolicies,
+  type VersionLinks,
+} from "#product/links.ts";
+import {
   caller,
   data,
   forbidden,
@@ -311,18 +319,15 @@ export const readable = (person: StewardPerson, id: string): PolicyVersion => {
   return shown;
 };
 
-const linksOf = (policyId: string) =>
-  data().links[policyId] ?? {
-    contactBlockIds: [],
-    definitionIds: [],
-    referenceIds: [],
-    relatedPolicyIds: [],
-  };
+/** The links a policy shows when no version is named: its published version's, else its draft's. */
+const linksOf = (policyId: string): VersionLinks => {
+  const policy = policyById(policyId);
+  const versionId = policy ? currentVersionId(policy) : null;
+  return (versionId ? data().links[versionId] : undefined) ?? emptyLinks();
+};
 
-const usage = (
-  field: "contactBlockIds" | "definitionIds" | "referenceIds",
-  id: string,
-) => Object.values(data().links).filter((l) => l[field].includes(id)).length;
+const usage = (pick: (links: VersionLinks) => string[], id: string) =>
+  usedByPolicies(data().links, data().policies, pick, id);
 
 export const policyResolvers: Resolvers = {
   Mutation: {
@@ -493,6 +498,12 @@ export const policyResolvers: Resolvers = {
           versionNo: 0,
         };
         data().versions.push(draft);
+        // the links come along: from the rejected version after a rejection, else the published one
+        carryOver(
+          data().links,
+          rejected ?? versionById(policy.currentPublishedVersionId),
+          draft,
+        );
         syncAppendices(data().appendices, data().versions, policy.id);
         policy.currentDraftVersionId = draft.id;
       }
@@ -611,10 +622,13 @@ export const policyResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      const ids = linksOf(given.policyId).contactBlockIds;
-      return data()
-        .contactBlocks.filter((b) => ids.includes(b.id))
-        .map((b) => ({ ...b, usedByCount: usage("contactBlockIds", b.id) }));
+      // in the order the author gave, not the library's
+      return linksOf(given.policyId).contactBlockIds.flatMap((id) => {
+        const block = data().contactBlocks.find((b) => b.id === id);
+        return block
+          ? [{ ...block, usedByCount: usage((l) => l.contactBlockIds, id) }]
+          : [];
+      });
     },
     policyDefinitionEntries: (
       _root,
@@ -622,10 +636,15 @@ export const policyResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      const ids = linksOf(given.policyId).definitionIds;
-      return data()
-        .definitions.filter((d) => ids.includes(d.id))
-        .map((d) => ({ ...d, usedByCount: usage("definitionIds", d.id) }));
+      // alphabetical by title
+      return linksOf(given.policyId)
+        .definitionIds.flatMap((id) => {
+          const entry = data().definitions.find((d) => d.id === id);
+          return entry
+            ? [{ ...entry, usedByCount: usage((l) => l.definitionIds, id) }]
+            : [];
+        })
+        .toSorted((a, b) => byTitle(a.term, b.term));
     },
     policyReferences: (
       _root,
@@ -633,10 +652,12 @@ export const policyResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      const ids = linksOf(given.policyId).referenceIds;
-      return data()
-        .references.filter((r) => ids.includes(r.id))
-        .map((r) => ({ ...r, usedByCount: usage("referenceIds", r.id) }));
+      return linksOf(given.policyId).referenceIds.flatMap((id) => {
+        const entry = data().references.find((r) => r.id === id);
+        return entry
+          ? [{ ...entry, usedByCount: usage((l) => l.referenceIds, id) }]
+          : [];
+      });
     },
     policyVersion: (_root, given: { id: string }, context: Context) =>
       readable(caller(context), given.id),
@@ -651,7 +672,7 @@ export const policyResolvers: Resolvers = {
     },
     relatedPolicies: (_root, given: { policyId: string }, context: Context) => {
       const person = caller(context);
-      return linksOf(given.policyId).relatedPolicyIds.flatMap((id) => {
+      return linksOf(given.policyId).related.flatMap(({ policyId: id }) => {
         const related = policyById(id);
         return related && visible(person, related)
           ? [

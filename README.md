@@ -199,6 +199,26 @@ Published tab drop-down (a reader gets the latest only); `versions` stays oldest
 `appendixDiff(id, contentJson)` diffs the given text, not saved, against the published row, so the
 diff can follow what the author is typing.
 
+### Definitions, related items, references and contacts
+
+The library items are not versioned. What a policy or procedure links to is stored WITH the policy
+version (`policyVersionLinks`), so the links are approved with it, stay as approved once it is
+published, and are copied into a new draft (from the rejected version after a rejection, otherwise
+from the published one). `setVersionDefinitions`, `setVersionRelated`, `setVersionReferences` and
+`setVersionContacts` replace one kind of link and only work while the version is a draft, in review
+or withdrawn (otherwise FAILED_PRECONDITION); linking never creates a draft.
+
+- Definitions are unique by title across the whole library (case and surrounding spaces ignored;
+  a duplicate is ALREADY_EXISTS) and listed alphabetically.
+- Related items name another policy and a relationship type from the fixed list
+  (`relationshipTypes`: is related to / is related by, supersedes / is superseded by, depends on / is
+  required by, implements / is implemented by, references / is referenced by). The other policy
+  reads the link under the inverse type, from the linking policy's published version.
+- References and contacts keep the order the author gave.
+- The older per-policy queries (`relatedPolicies`, `policyReferences`, `policyContactBlocks`,
+  `policyDefinitionEntries`) answer the policy's published version, else its draft. `usedByCount`
+  counts policies, once each, whose published version or open draft links the item.
+
 ### The build commit
 
 The mock reads the commit it started from (`git rev-parse --short HEAD`) once at start, shows it in

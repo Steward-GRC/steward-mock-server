@@ -30,6 +30,7 @@ import type { ProductSockets } from "#core/product.ts";
 import { sessionOfCookie } from "#core/auth.ts";
 import { draftOf, latestPublished, noteEditor } from "#product/appendices.ts";
 import { stewardData } from "#product/data.ts";
+import { EDITABLE } from "#product/links.ts";
 
 /** steward-collab's token audience (internal/ws TokenAudience). */
 const AUDIENCE = "steward.collab.ws";
@@ -180,13 +181,6 @@ const stateAsUpdate = (state: Uint8Array) =>
     ...writeVariableUint(state.length),
     ...state,
   ]);
-
-/**
- * The draft versions a checkpoint may overwrite, as saveDraft may: a draft that is still the
- * author's, and one in review, which the author keeps editing while the approvers review it. A
- * rejected version is final.
- */
-const EDITABLE = new Set(["DRAFT", "IN_REVIEW", "WITHDRAWN"]);
 
 /**
  * Keeps a checkpoint the way steward-collab does: the content becomes the draft's saved content,

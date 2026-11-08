@@ -14,11 +14,11 @@ import type {
   WorkflowStage,
 } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
-import type { PolicyLinks } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
 import { documentCounts, stranded } from "#product/category-types.ts";
+import { byTitle, usedByPolicies, type VersionLinks } from "#product/links.ts";
 import {
   caller,
   data,
@@ -195,8 +195,8 @@ const workflowFor = (id: string) =>
   );
 
 /** How many policies link to a library entry. */
-const usedBy = (pick: (links: PolicyLinks) => string[], id: string) =>
-  Object.values(data().links).filter((l) => pick(l).includes(id)).length;
+const usedBy = (pick: (links: VersionLinks) => string[], id: string) =>
+  usedByPolicies(data().links, data().policies, pick, id);
 
 const withContactUse = (block: ContactBlock) => ({
   ...block,
@@ -210,6 +210,27 @@ const withDefinitionUse = (definition: Definition) => ({
   ...definition,
   usedByCount: usedBy((l) => l.definitionIds, definition.id),
 });
+
+/**
+ * A definition is identified by its title, so the title is unique across the whole library (the
+ * categories only scope who may attach it), ignoring case and surrounding spaces. Returns the
+ * trimmed title, or refuses an empty or a taken one.
+ */
+const uniqueTerm = (given: string, except?: string): string => {
+  const term = given.trim();
+  if (term === "")
+    throw refuse("BAD_USER_INPUT", "A definition needs a title.");
+  const taken = data().definitions.some(
+    (d) =>
+      d.id !== except && d.term.trim().toLowerCase() === term.toLowerCase(),
+  );
+  if (taken)
+    throw refuse(
+      "ALREADY_EXISTS",
+      `A definition titled "${term}" already exists.`,
+    );
+  return term;
+};
 
 // steward-core audits no contact block change, so the contact block mutations write no entry.
 const contactFor = (id: string) =>
@@ -364,11 +385,13 @@ export const libraryResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       categoryFor(given.input.categoryId);
+      const term = uniqueTerm(given.input.term);
       const definition: Definition = {
         ...given.input,
         archived: false,
         createdByUserId: person.id,
         id: newId("definition"),
+        term,
       };
       data().definitions.push(definition);
       record(
@@ -801,7 +824,8 @@ export const libraryResolvers: Resolvers = {
       const definition = definitionFor(given.id);
       const person = editorOf(context, definition);
       categoryFor(given.input.categoryId);
-      Object.assign(definition, given.input);
+      const term = uniqueTerm(given.input.term, definition.id);
+      Object.assign(definition, given.input, { term });
       record(
         "definition.updated",
         person,
@@ -915,6 +939,7 @@ export const libraryResolvers: Resolvers = {
           (d) => !given.categoryId || d.categoryId === given.categoryId,
         )
         .filter((d) => given.includeArchived || !d.archived)
+        .toSorted((a, b) => byTitle(a.term, b.term))
         .map((d) => withDefinitionUse(d));
     },
     latestTemplateVersion: (

@@ -60,7 +60,6 @@ import {
   links,
   policies,
   type Policy,
-  type PolicyLinks,
   type PolicyVersion,
   type PolicyView,
   policyViews,
@@ -68,6 +67,7 @@ import {
   runs,
   versions,
 } from "#product/data/policies.ts";
+import { migrateLinks, type VersionLinks } from "#product/links.ts";
 
 export type { Announcement, GlobalSettings } from "#product/data/admin.ts";
 
@@ -113,7 +113,8 @@ export interface StewardData extends ProductData {
   groupMappings: GroupMapping[];
   /** Whether the next IdP test passes or fails (the controls set it). */
   idpTestOutcome: "fail" | "pass";
-  links: Record<string, PolicyLinks>;
+  /** What each policy version links to in the libraries, by version id. */
+  links: Record<string, VersionLinks>;
   /** steward-delivery's magic links, by token. */
   magicLinks: Record<string, MagicLink>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
@@ -173,7 +174,7 @@ export const seed = (): StewardData => {
     emailServiceConfig: emailServiceConfig(),
     groupMappings: groupMappings(),
     idpTestOutcome: "pass",
-    links: links(),
+    links: migrateLinks(links(), policies()),
     magicLinks: {},
     next: {},
     notificationPrefs: notificationPrefs(),
