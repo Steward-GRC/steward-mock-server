@@ -187,6 +187,13 @@ authors, site admins and compliance only. Appendices take no part in an approval
 comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
 `deleteAppendix`, `reorderAppendices`) still answer: what they save is published at once.
 
+### Co-editing inside an appendix
+
+`issueAppendixCollabToken` (whoever may edit the policy) mints a token for the appendix's own room,
+`/collab/ws/appendix:<id>`, away from the policy's draft. A checkpoint from that room becomes the
+appendix's draft content (a draft is started from the published row if there is none) and leaves
+what readers see alone until the appendix is published; a retired appendix has no room.
+
 ### Suggested changes and the review
 
 A review thread can carry a suggestion: replacement text for the quoted words (`addReviewThread` with

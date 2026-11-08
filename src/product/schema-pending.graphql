@@ -306,3 +306,15 @@ extend type Mutation {
   # Template admins and above.
   setWorkflowVetoEnabled(id: ID!, enabled: Boolean!): WorkflowDef!
 }
+
+# Live co-editing inside an appendix: its own room and token, away from the policy's draft. Whoever
+# may edit the policy may join; a checkpoint becomes the appendix's draft.
+type AppendixCollabToken {
+  token: String!
+  wsUrl: String!
+  expiresAt: String!
+}
+
+extend type Mutation {
+  issueAppendixCollabToken(appendixId: ID!): AppendixCollabToken!
+}
