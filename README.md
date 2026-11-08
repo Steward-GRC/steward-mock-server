@@ -160,6 +160,43 @@ the mock and the web server to the network:
 
 One person in two tabs is one collaborator twice, not two collaborators.
 
+### Suggested changes and the review
+
+A review thread can carry a suggestion: replacement text for the quoted words (`addReviewThread` with
+`suggestedText`). The two sides take turns: `counterReviewSuggestion` answers with different text and
+passes the turn, and `closeReviewSuggestion` ends it with an outcome and resolves the thread.
+
+| Outcome      | Who and when                                                |
+| ------------ | ----------------------------------------------------------- |
+| `CHANGED`    | the author, on the author's turn: the text is taken         |
+| `REMOVED`    | the author, on the author's turn: the note is dropped       |
+| `AGREED`     | the approver, on the approver's turn: a counter is accepted |
+| `NOT_AGREED` | the side whose turn it is, with a reason                    |
+| `WITHDRAWN`  | the side that proposed first, while it is not their turn    |
+
+The author is whoever may edit the policy and holds no seat on the version's run; anyone with a seat
+acts as an approver. Each thread is with ONE approver: an approver's own thread is with that approver
+and the author, and the author names the approver (`toUserId`) when writing first. An approver sees
+only their own threads and cannot reply to, resolve, delete or answer anyone else's; the author sees
+every thread and who wrote what. The mock keeps the rounds and the outcome and never changes the saved
+document: the client applies an accepted text and saves the draft. Readers whose view is obfuscated get
+no proposed text. The tests in `review-suggestions.test.ts` and `review-threads.test.ts` are the
+reference for the Go services.
+
+An approval and a rejection are votes against the stage's quorum. The stage is rejected as soon as the
+approvals still possible (seats that have not voted plus those already given) can no longer reach the
+number it needs, as well as when the rejects reach it: with two seats and a majority, one approve and
+one reject is a rejection. A group counts the same way against its own required number. A rejection is
+final: the rejected version stays as it was, and the author's next save starts a new draft that needs a
+full new submission. Withdrawing a submission in review returns it to Draft.
+
+While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
+are accepted) and its status stays In review. Each approver is shown what changed since the text they
+last reviewed: `versionChangesSinceReview` returns the section diff, and the snapshot moves forward
+when that approver comments, replies, votes, sends comments (`SIGNAL_TYPE_REQUEST_CHANGES`: the seat
+stays open and no status changes) or calls `markVersionReviewed`. The author has no such view, and
+someone with no seat on the run is refused.
+
 ## 🎛️ Controls
 
 `POST /_mock/controls` with a JSON body takes a `kind`; `GET /_mock/controls` returns what's going
