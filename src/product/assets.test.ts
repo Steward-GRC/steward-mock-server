@@ -100,18 +100,14 @@ describe("POST /api/assets", () => {
     }
   });
 
-  it("refuses a file that isn't an allowed image, whatever it claims to be", async () => {
+  it("refuses a file whose bytes don't match its name, whatever it claims to be", async () => {
     const text = await upload(
       new TextEncoder().encode("just some words"),
       "notes.png",
       "image/png",
     );
     assert.equal(text.status, 400);
-    assert.match(String(text.body.error), /unsupported content type/);
-    assert.match(
-      String(text.body.error),
-      /image\/gif, image\/jpeg, image\/png, image\/webp/,
-    );
+    assert.match(String(text.body.error), /do not match/);
     const svg = await upload(
       new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'),
       "a.svg",
@@ -222,5 +218,159 @@ describe("the /_mock upload switches", () => {
     };
     assert.ok(html.actions.some((a) => a.kind === "asset-upload"));
     assert.ok(html.actions.some((a) => a.kind === "asset-limit"));
+  });
+});
+
+// Ordinary attachments for the File card (steward-core#36 proposes the list; this is the demo's).
+const PDF = bytesOf("%PDF-1.4\n%\u00E2\u00E3\u00CF\u00D3\n1 0 obj");
+const OLE = bytesOf(
+  "\u00D0\u00CF\u0011\u00E0\u00A1\u00B1\u001A\u00E1\u0000\u0000",
+);
+const zipWith = (...names: string[]) =>
+  bytesOf(`PK\u0003\u0004${names.join("\u0000PK\u0001\u0002")}`);
+const DOCX = zipWith("[Content_Types].xml", "word/document.xml");
+const XLSX = zipWith("[Content_Types].xml", "xl/workbook.xml");
+const PPTX = zipWith("[Content_Types].xml", "ppt/presentation.xml");
+const MP4 = bytesOf("\u0000\u0000\u0000\u0018ftypmp42\u0000\u0000\u0000\u0000");
+const MOV = bytesOf("\u0000\u0000\u0000\u0014ftypqt  \u0000\u0000\u0000\u0000");
+const WEBM = bytesOf("\u001AE\u00DF\u00A3\u0001\u0000");
+const text = (words: string) => new TextEncoder().encode(words);
+
+describe("POST /api/assets with attachment files", () => {
+  const accepted: [string, Uint8Array, string, string][] = [
+    ["report.pdf", PDF, "application/pdf", "application/pdf"],
+    ["letter.doc", OLE, "application/msword", "application/msword"],
+    ["sheet.xls", OLE, "application/vnd.ms-excel", "application/vnd.ms-excel"],
+    [
+      "deck.ppt",
+      OLE,
+      "application/vnd.ms-powerpoint",
+      "application/vnd.ms-powerpoint",
+    ],
+    [
+      "letter.docx",
+      DOCX,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/octet-stream",
+    ],
+    [
+      "sheet.xlsx",
+      XLSX,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/octet-stream",
+    ],
+    [
+      "deck.pptx",
+      PPTX,
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/octet-stream",
+    ],
+    ["clip.mp4", MP4, "video/mp4", "video/mp4"],
+    ["clip.mov", MOV, "video/quicktime", "video/quicktime"],
+    ["clip.webm", WEBM, "video/webm", "video/webm"],
+    [
+      "notes.txt",
+      text("Visitors sign in.\n"),
+      "text/plain; charset=utf-8",
+      "text/plain",
+    ],
+    [
+      "notes.md",
+      text("# Title\n\n- one\n"),
+      "text/markdown; charset=utf-8",
+      "text/markdown",
+    ],
+    ["rows.csv", text("a,b\n1,2\n"), "text/csv; charset=utf-8", "text/csv"],
+  ];
+
+  for (const [name, data, stored, declared] of accepted) {
+    it(`keeps ${name} and serves it back as a download`, async () => {
+      const sent = await upload(data, name, declared);
+      assert.equal(sent.status, 200, JSON.stringify(sent.body));
+      assert.equal(sent.body.contentType, stored);
+      assert.equal(sent.body.filename, name);
+      const got = await fetch(`${base}${String(sent.body.url)}`, {
+        headers: headersFor(erin),
+      });
+      assert.equal(got.status, 200);
+      assert.equal(got.headers.get("content-type"), stored);
+      assert.match(
+        String(got.headers.get("content-disposition")),
+        new RegExp(
+          `^attachment; filename="${name.replace(".", String.raw`\.`)}"`,
+        ),
+      );
+      assert.equal(got.headers.get("x-content-type-options"), "nosniff");
+      assert.deepEqual(new Uint8Array(await got.arrayBuffer()), data);
+    });
+  }
+
+  it("keeps serving an image inline", async () => {
+    const sent = await upload(PNG);
+    const got = await fetch(`${base}${String(sent.body.url)}`, {
+      headers: headersFor(erin),
+    });
+    assert.equal(got.headers.get("content-disposition"), null);
+  });
+
+  it("takes the kind from the bytes, and refuses a name that says something else", async () => {
+    const asPdf = await upload(DOCX, "letter.pdf", "application/pdf");
+    assert.equal(asPdf.status, 400);
+    assert.match(String(asPdf.body.error), /do not match/);
+    const asTxt = await upload(PDF, "notes.txt", "text/plain");
+    assert.equal(asTxt.status, 400);
+    const asDocx = await upload(OLE, "letter.docx", "application/octet-stream");
+    assert.equal(asDocx.status, 400);
+  });
+
+  it("refuses never-allowed kinds, even renamed", async () => {
+    const refused: [string, Uint8Array][] = [
+      ["page.html", text("<!DOCTYPE html><html><body>hi</body></html>")],
+      ["notes.txt", text("<html><script>alert(1)</script></html>")],
+      ["report.pdf", text("<html><body>not a pdf</body></html>")],
+      ["image.svg", text('<svg xmlns="http://www.w3.org/2000/svg"/>')],
+      ["data.xml", text('<?xml version="1.0"?><a/>')],
+      ["run.sh", text("#!/bin/sh\necho hi\n")],
+      ["notes.txt", text("#!/bin/sh\necho hi\n")],
+      ["setup.exe", bytesOf("MZ\u0090\u0000\u0003\u0000")],
+      ["report.pdf", bytesOf("MZ\u0090\u0000\u0003\u0000")],
+      ["tool.bin", bytesOf("\u007FELF\u0002\u0001\u0001")],
+      [
+        "macro.docm",
+        zipWith(
+          "[Content_Types].xml",
+          "word/document.xml",
+          "word/vbaProject.bin",
+        ),
+      ],
+      [
+        "letter.docx",
+        zipWith(
+          "[Content_Types].xml",
+          "word/document.xml",
+          "word/vbaProject.bin",
+        ),
+      ],
+      ["bundle.zip", bytesOf("PK\u0003\u0004data.txt")],
+    ];
+    for (const [name, data] of refused) {
+      const answer = await upload(data, name, "application/octet-stream");
+      assert.equal(answer.status, 400, `${name} should be refused`);
+    }
+  });
+
+  it("applies the same size cap to files, and the Uploads fail switch", async () => {
+    await control(base, { kind: "asset-limit", limit: "small" });
+    const big = await upload(
+      Uint8Array.from([...PDF, ...new Uint8Array(101 << 10)]),
+      "big.pdf",
+      "application/pdf",
+    );
+    assert.equal(big.status, 400);
+    assert.match(String(big.body.error), /too large/);
+    await control(base, { kind: "asset-limit", limit: "real" });
+    await control(base, { kind: "asset-upload", mode: "fail" });
+    const failed = await upload(PDF, "r.pdf", "application/pdf");
+    assert.equal(failed.status, 503);
   });
 });
