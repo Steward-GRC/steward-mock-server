@@ -160,6 +160,16 @@ the mock and the web server to the network:
 
 One person in two tabs is one collaborator twice, not two collaborators.
 
+### Starting a policy
+
+A new policy starts from the template asked for, else from its category's default template (the
+nearest category up the chain that sets one, or sets none). `setPolicyTemplate` changes it: with
+`none: true` the policy is freeform and, if the author has not written in the starting draft yet,
+the draft starts again blank; with a template its sections are put in the same way. A new draft of a
+published policy starts with copies of the published version's appendices (core's appendix copier),
+and a rejected draft's appendices carry into its replacement. A document with no text, spaces alone
+not counting, can't be submitted for review (`submitWorkflow` answers a failed precondition).
+
 ### Suggested changes and the review
 
 A review thread can carry a suggestion: replacement text for the quoted words (`addReviewThread` with

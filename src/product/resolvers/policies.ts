@@ -170,6 +170,24 @@ const scaffold = (titles: string[]): string =>
     },
   });
 
+/**
+ * What a draft holds while the author has not written in it: the scaffold of the template version
+ * it is pinned to. Undefined when that template version is not known.
+ */
+const startingContent = (draft: PolicyVersion): string | undefined => {
+  if (draft.templateVersionId === "") return scaffold([]);
+  const pinned = data().templateVersions.find(
+    (t) => t.id === draft.templateVersionId,
+  );
+  return pinned
+    ? scaffold(
+        pinned.sections
+          .toSorted((a, b) => a.order - b.order)
+          .map((s) => s.title),
+      )
+    : undefined;
+};
+
 /** The template a new policy starts from: the one asked for, else the category chain's. */
 const templateFor = (categoryId: string, templateId?: null | string) => {
   if (templateId) return templateId;
@@ -503,11 +521,19 @@ export const policyResolvers: Resolvers = {
       const rejected = draft?.status === "REJECTED" ? draft : undefined;
       if (rejected) draft = undefined;
       if (!draft) {
+        const draftId = newId("version");
+        // core's appendix copier: a new draft starts with copies of the appendices of the version
+        // it follows (the rejected draft it replaces, else the published version)
+        const basis = rejected ?? versionById(policy.currentPublishedVersionId);
         draft = {
-          appendices: [],
+          appendices: (basis?.appendices ?? []).map((appendix) => ({
+            ...appendix,
+            id: newId("appendix"),
+            policyVersionId: draftId,
+          })),
           contentJson: given.contentJson,
           createdAt: at,
-          id: newId("version"),
+          id: draftId,
           policyId: policy.id,
           publishedAt: null,
           status: "DRAFT",
@@ -526,6 +552,40 @@ export const policyResolvers: Resolvers = {
       policy.updatedAt = at;
       record("policy.draft_saved", person, versionSubject(policy, draft.id));
       return draft;
+    },
+    setPolicyTemplate: (
+      _root,
+      given: { none: boolean; policyId: string; templateId?: null | string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const policy = editablePolicy(person, given.policyId);
+      const template = given.none
+        ? undefined
+        : latestPublished(given.templateId ?? null);
+      if (!given.none && given.templateId && !template)
+        throw notFound("template");
+      // the draft the policy started with, if the author has not written in it yet, starts again
+      // from the new choice: freeform is blank, a template brings its sections
+      const draft = versionById(policy.currentDraftVersionId);
+      const started = draft ? startingContent(draft) : undefined;
+      policy.templateId = given.none ? null : (given.templateId ?? null);
+      policy.templateNone = given.none;
+      const effective = given.none
+        ? undefined
+        : (template ??
+          latestPublished(templateFor(policy.homeCategoryId, null)));
+      if (draft && started !== undefined && draft.contentJson === started) {
+        draft.contentJson = scaffold(
+          (effective?.sections ?? [])
+            .toSorted((a, b) => a.order - b.order)
+            .map((s) => s.title),
+        );
+        draft.templateVersionId = effective?.id ?? "";
+      }
+      policy.updatedAt = now();
+      record("policy.template_changed", person, policySubject(policy));
+      return policyView(person, policy);
     },
     updateAppendix: (
       _root,

@@ -595,6 +595,11 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { ownerUserId: APPROVER, policyId: "policy-1" },
   },
+  SetPolicyTemplate: {
+    as: AUTHOR,
+    refused: "NotFound",
+    variables: { none: true, policyId: "policy-404" },
+  },
   SetReferenceArchived: {
     as: ADMIN,
     variables: { archived: false, id: "reference-3" },
@@ -850,7 +855,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 193);
+    assert.equal(webOperations.length, 194);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());
