@@ -318,6 +318,7 @@ export const libraryResolvers: Resolvers = {
         approverRule: [],
         authorRule: [],
         defaultTemplateId: null,
+        defaultTemplateLocked: false,
         defaultTemplateNone: false,
         defaultWorkflowId: null,
         documentTypes: "BOTH",
@@ -648,6 +649,8 @@ export const libraryResolvers: Resolvers = {
       category.defaultTemplateId = category.defaultTemplateNone
         ? null
         : (given.defaultTemplateId ?? null);
+      // a lock needs a template to hold to
+      if (!category.defaultTemplateId) category.defaultTemplateLocked = false;
       if (given.defaultWorkflowId !== undefined)
         category.defaultWorkflowId = given.defaultWorkflowId;
       record("category.defaults_set", admin, categorySubject(category));
@@ -699,6 +702,22 @@ export const libraryResolvers: Resolvers = {
         category.ackEveryoneSet = true;
       }
       record("category.governance_updated", admin, categorySubject(category));
+      return category;
+    },
+    setCategoryTemplateLock: (
+      _root,
+      given: { id: string; locked: boolean },
+      context: Context,
+    ) => {
+      const admin = siteAdmin(context);
+      const category = categoryFor(given.id);
+      if (given.locked && !category.defaultTemplateId)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "Choose a default template for this category before locking it.",
+        );
+      category.defaultTemplateLocked = given.locked;
+      record("category.defaults_set", admin, categorySubject(category));
       return category;
     },
     setContactBlockArchived: (

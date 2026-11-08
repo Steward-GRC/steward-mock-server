@@ -14,6 +14,8 @@ export interface Category {
   /** steward-core's stored number code; a category without one derives it from its slug. */
   code?: string;
   defaultTemplateId: null | string;
+  /** Authors must use the default template: freeform and any other are refused. */
+  defaultTemplateLocked: boolean;
   defaultTemplateNone: boolean;
   defaultWorkflowId: null | string;
   documentTypes: CategoryDocumentTypes;
@@ -155,6 +157,7 @@ const category = (
   approverRule: [],
   authorRule: [],
   defaultTemplateId: null,
+  defaultTemplateLocked: false,
   defaultTemplateNone: false,
   defaultWorkflowId: null,
   documentTypes: "BOTH",

@@ -168,6 +168,13 @@ nearest category up the chain that sets one, or sets none). `setPolicyTemplate` 
 the draft starts again blank; with a template its sections are put in the same way. A document with no text, spaces alone
 not counting, can't be submitted for review (`submitWorkflow` answers a failed precondition).
 
+### Locking a category's template
+
+`setCategoryTemplateLock` (site admin) locks the template a category names: a policy created under
+it, or under a category that inherits that template, must use it. `createPolicy` with another
+template and `setPolicyTemplate` to freeform or another template answer a failed precondition. A
+category with no default template can't be locked, and clearing its default lifts the lock.
+
 ### Appendices
 
 An appendix belongs to a policy or procedure, never to one of its versions, and has a life of its
