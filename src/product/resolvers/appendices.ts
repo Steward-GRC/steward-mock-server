@@ -23,6 +23,7 @@ import {
   renumber,
   syncAppendices,
 } from "#product/appendices.ts";
+import { APPENDIX_ROOM, collabPath, collabToken } from "#product/collab.ts";
 import {
   caller,
   data,
@@ -250,6 +251,31 @@ export const appendixResolvers: Resolvers = {
       renumber(all, appendix.policyId);
       syncAppendices(all, data().versions, appendix.policyId);
       return true;
+    },
+    issueAppendixCollabToken: (
+      _root,
+      given: { appendixId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const appendix = editable(person, given.appendixId);
+      if (appendix.retiredAt !== null)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "A retired appendix can't be edited; restore it first.",
+        );
+      const room = `${APPENDIX_ROOM}${appendix.id}`;
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      return {
+        expiresAt: expiresAt.toISOString(),
+        token: collabToken({
+          draftId: room,
+          expiresAt,
+          policyId: appendix.policyId,
+          userId: person.id,
+        }),
+        wsUrl: collabPath(room),
+      };
     },
     publishAppendix: (_root, given: { id: string }, context: Context) => {
       const person = caller(context);

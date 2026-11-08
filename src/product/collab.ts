@@ -28,6 +28,7 @@ import { WebSocket } from "ws";
 import type { ProductSockets } from "#core/product.ts";
 
 import { sessionOfCookie } from "#core/auth.ts";
+import { draftOf, latestPublished } from "#product/appendices.ts";
 import { stewardData } from "#product/data.ts";
 
 /** steward-collab's token audience (internal/ws TokenAudience). */
@@ -187,6 +188,46 @@ const EDITABLE = new Set(["DRAFT", "IN_REVIEW", "WITHDRAWN"]);
  * Keeps a checkpoint the way steward-collab does: the content becomes the draft's saved content,
  * the Yjs state starts the next room, and the sender hears the result.
  */
+/** A room named `appendix:<id>` is an appendix's, not a policy draft's. */
+export const APPENDIX_ROOM = "appendix:";
+
+/** An appendix's checkpoint: the content becomes its draft (made from what is published if none). */
+const keepAppendixCheckpoint = (
+  appendixId: string,
+  content: string,
+  state: Uint8Array,
+  socket: WebSocket,
+  reject: (reason: string, detail: string) => void,
+) => {
+  const appendix = stewardData().appendices.find((a) => a.id === appendixId);
+  if (!appendix || appendix.retiredAt !== null)
+    return reject("server_rejected", "This appendix can no longer be edited.");
+  const at = new Date().toISOString();
+  const draft = draftOf(appendix);
+  if (draft) {
+    draft.contentJson = content;
+    draft.updatedAt = at;
+  } else {
+    const basis = latestPublished(appendix);
+    appendix.versions.push({
+      contentJson: content,
+      createdAt: at,
+      createdBy: basis?.updatedBy ?? appendix.createdBy,
+      id: `${appendix.id}-v${String(appendix.versions.length + 1)}`,
+      publishedAt: null,
+      publishedBy: null,
+      state: "DRAFT",
+      title: basis?.title ?? "",
+      updatedAt: at,
+      updatedBy: basis?.updatedBy ?? appendix.createdBy,
+      versionNo: appendix.versions.length + 1,
+    });
+  }
+  stewardData().collabStates[`${APPENDIX_ROOM}${appendixId}`] =
+    Buffer.from(state).toString("base64");
+  socket.send(controlFrame({ type: "snapshot.accepted" }));
+};
+
 const keepCheckpoint = (
   draftId: string,
   frame: Uint8Array,
@@ -204,6 +245,14 @@ const keepCheckpoint = (
   } catch {
     return reject("pre_check_failed", "The content is not a JSON document.");
   }
+  if (draftId.startsWith(APPENDIX_ROOM))
+    return keepAppendixCheckpoint(
+      draftId.slice(APPENDIX_ROOM.length),
+      checkpoint.content,
+      checkpoint.state,
+      socket,
+      reject,
+    );
   const version = stewardData().versions.find(
     (candidate) => candidate.id === draftId,
   );
