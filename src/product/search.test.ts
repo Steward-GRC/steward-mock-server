@@ -147,7 +147,10 @@ describe("searchPolicies", () => {
   it("finds a policy by its title and number, with no snippet when the text doesn't match", async () => {
     const reader = await signIn(base, "erin");
     const byTitle = await search(reader, { query: "procedure" });
-    assert.deepEqual(titles(byTitle), ["Lost Device Procedure"]);
+    assert.deepEqual(titles(byTitle), [
+      "Lost Device Procedure",
+      "Month-end Close Procedure",
+    ]);
     assert.equal(byTitle.hits[0]?.snippet, null);
     const byNumber = await search(reader, { query: EXPENSE_CLAIMS_NUMBER });
     assert.deepEqual(titles(byNumber), ["Expense Claims Policy"]);
@@ -246,13 +249,14 @@ describe("searchPolicies", () => {
       titles(await search(reader, { documentType: "POLICY", query: "the" })),
       [
         "Desk Booking Policy",
+        "Procurement Policy",
         "Expense Claims Policy",
         "Visitor Sign-in Policy",
       ],
     );
     assert.deepEqual(
       titles(await search(reader, { documentType: "PROCEDURE", query: "the" })),
-      ["Lost Device Procedure"],
+      ["Month-end Close Procedure", "Lost Device Procedure"],
     );
   });
 

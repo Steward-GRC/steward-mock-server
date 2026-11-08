@@ -13,7 +13,7 @@ import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
 import { mockState } from "#core/state.ts";
-import { migrateAppendices } from "#product/appendices.ts";
+import { migrateAppendices, syncAppendices } from "#product/appendices.ts";
 import {
   type AuditRecord,
   auditTrail,
@@ -33,6 +33,15 @@ import {
   spCertificate,
 } from "#product/data/admin.ts";
 import { type ReportCase, reportCases } from "#product/data/cases.ts";
+import {
+  extraPolicies,
+  extraRuns,
+  extraThreads,
+  extraVersions,
+  extraWorkflows,
+  travelAppendices,
+} from "#product/data/extras.ts";
+import { seedAssets } from "#product/data/files.ts";
 import {
   categories,
   type Category,
@@ -156,14 +165,15 @@ export interface StewardData extends ProductData {
 }
 
 export const seed = (): StewardData => {
-  const allVersions = versions();
-  const appendices = migrateAppendices(allVersions);
+  const allVersions = [...versions(), ...extraVersions()];
+  const appendices = [...migrateAppendices(allVersions), ...travelAppendices()];
+  syncAppendices(appendices, allVersions, "policy-3");
   return {
     acknowledgements: acknowledgements(),
     aiSimulated: true,
     appendices,
     askedQuestions: [],
-    assets: {},
+    assets: seedAssets(),
     assetSettings: { fail: false, limit: "real" },
     audit: auditTrail(),
     breakGlass: [],
@@ -185,13 +195,13 @@ export const seed = (): StewardData => {
     pendingFactors: { totp: [], webauthn: {} },
     people: [...people(), ...duplicatePeople()],
     platformGroups: platformGroups(),
-    policies: policies(),
+    policies: [...policies(), ...extraPolicies()],
     policyViews: policyViews(),
     references: references(),
     reportCases: reportCases(),
     reviewSnapshots: {},
-    reviewThreads: [],
-    runs: runs(),
+    reviewThreads: extraThreads(),
+    runs: [...runs(), ...extraRuns()],
     settings: globalSettings(),
     signInMethods: {
       defaultLoginMethod: "local",
@@ -203,7 +213,7 @@ export const seed = (): StewardData => {
     templates: templates(),
     templateVersions: templateVersions(),
     versions: allVersions,
-    workflowDefs: workflowDefs(),
+    workflowDefs: [...workflowDefs(), ...extraWorkflows()],
   };
 };
 
