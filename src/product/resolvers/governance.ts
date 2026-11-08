@@ -137,9 +137,10 @@ export const governanceResolvers: Resolvers = {
           `delete policy: PolicyStore.DeletePolicy ${policy.id}: policy has a published version and cannot be deleted`,
         );
       const subject = policySubject(policy);
+      for (const v of data().versions)
+        if (v.policyId === policy.id) delete data().links[v.id];
       data().policies = data().policies.filter((p) => p.id !== policy.id);
       data().versions = data().versions.filter((v) => v.policyId !== policy.id);
-      delete data().links[policy.id];
       record("policy.deleted", person, subject);
       return true;
     },
