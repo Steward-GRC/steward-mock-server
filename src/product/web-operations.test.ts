@@ -166,9 +166,19 @@ const cases: Record<string, Case> = {
       outcome: "SUBSTANTIATED",
     },
   },
+  CloseReviewSuggestion: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { outcome: "AGREED", threadId: "review-thread-0" },
+  },
   CompleteOnboarding: { as: READER, variables: { acceptTerms: true } },
   CompletionReport: { as: ADMIN, variables: { policyVersionId: "version-2" } },
   ContactBlocks: { as: AUTHOR, variables: { includeArchived: true } },
+  CounterReviewSuggestion: {
+    as: APPROVER,
+    refused: "NotFound",
+    variables: { text: "Another way.", threadId: "review-thread-0" },
+  },
   CreateCategory: {
     as: ADMIN,
     variables: { name: "Legal", parentId: null, slug: "legal" },
@@ -830,7 +840,7 @@ const assertAnswered = (name: string, expected: Case, errors?: Errors) => {
 
 describe("steward-web's operations", () => {
   it("are all here and each has a case", () => {
-    assert.equal(webOperations.length, 189);
+    assert.equal(webOperations.length, 191);
     const names = webOperations.toSorted();
     const covered = [...Object.keys(cases), ...Object.keys(SUBSCRIPTIONS)];
     assert.deepEqual(names, covered.toSorted());

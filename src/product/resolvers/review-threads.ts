@@ -28,6 +28,15 @@ export interface ReviewMessage {
   id: string;
 }
 
+export interface ReviewSuggestion {
+  closedBy: null | string;
+  closedText: null | string;
+  outcome: null | SuggestionOutcome;
+  reason: null | string;
+  rounds: SuggestionRound[];
+  text: string;
+  turn: SuggestionSide;
+}
 export interface ReviewThread {
   createdAt: string;
   id: string;
@@ -36,7 +45,24 @@ export interface ReviewThread {
   policyVersionId: string;
   quote: string;
   resolved: boolean;
+  suggestion?: null | ReviewSuggestion;
 }
+
+export type SuggestionOutcome =
+  | "AGREED"
+  | "CHANGED"
+  | "NOT_AGREED"
+  | "REMOVED"
+  | "WITHDRAWN";
+
+export interface SuggestionRound {
+  by: SuggestionSide;
+  createdAt: string;
+  text: string;
+  userId: string;
+}
+
+export type SuggestionSide = "AUTHOR" | "REVIEWER";
 
 const versionOf = (id: string): PolicyVersion =>
   found(
@@ -82,6 +108,19 @@ const threadOf = (id: string): ReviewThread =>
     "review thread",
   );
 
+/** Like a message body, proposed text is not shown to a reader whose view is obfuscated. */
+const hideSuggestion = (
+  suggestion: null | ReviewSuggestion | undefined,
+): null | ReviewSuggestion =>
+  suggestion
+    ? {
+        ...suggestion,
+        closedText: null,
+        rounds: suggestion.rounds.map((round) => ({ ...round, text: "" })),
+        text: "",
+      }
+    : null;
+
 const present = (person: StewardPerson, thread: ReviewThread) => {
   const version = versionOf(thread.policyVersionId);
   const policy = data().policies.find((p) => p.id === version.policyId);
@@ -93,7 +132,42 @@ const present = (person: StewardPerson, thread: ReviewThread) => {
       authorName: personOf(m.authorUserId)?.name ?? null,
       body: hidden ? "" : m.body,
     })),
+    suggestion: hidden
+      ? hideSuggestion(thread.suggestion)
+      : (thread.suggestion ?? null),
   };
+};
+
+/** Which side the caller acts on: an author of the policy, or otherwise a reviewer. */
+const sideOf = (
+  person: StewardPerson,
+  thread: ReviewThread,
+): SuggestionSide => {
+  const version = versionOf(thread.policyVersionId);
+  const policy = found(
+    data().policies.find((p) => p.id === version.policyId),
+    "policy",
+  );
+  return canEdit(person, policy) ? "AUTHOR" : "REVIEWER";
+};
+
+const other = (side: SuggestionSide): SuggestionSide =>
+  side === "AUTHOR" ? "REVIEWER" : "AUTHOR";
+
+/** A suggestion that is still open, on the caller's turn when `onTurn`. */
+const openSuggestion = (
+  person: StewardPerson,
+  thread: ReviewThread,
+  onTurn: boolean,
+): ReviewSuggestion => {
+  const suggestion = thread.suggestion;
+  if (!suggestion)
+    throw refuse("FAILED_PRECONDITION", "That thread has no suggestion.");
+  if (suggestion.outcome)
+    throw refuse("FAILED_PRECONDITION", "That suggestion has ended.");
+  if (onTurn && suggestion.turn !== sideOf(person, thread))
+    throw refuse("FAILED_PRECONDITION", "It is not your turn to answer.");
+  return suggestion;
 };
 
 const message = (person: StewardPerson, body: string): ReviewMessage => {
@@ -116,6 +190,7 @@ export const reviewThreadResolvers: Resolvers = {
         occurrence: number;
         policyVersionId: string;
         quote: string;
+        suggestedText?: null | string;
       },
       context: Context,
     ) => {
@@ -134,7 +209,81 @@ export const reviewThreadResolvers: Resolvers = {
         quote: given.quote,
         resolved: false,
       };
+      const proposed = given.suggestedText?.trim();
+      if (proposed && proposed !== given.quote.trim()) {
+        const side = sideOf(person, thread);
+        thread.suggestion = {
+          closedBy: null,
+          closedText: null,
+          outcome: null,
+          reason: null,
+          rounds: [
+            { by: side, createdAt: now(), text: proposed, userId: person.id },
+          ],
+          text: proposed,
+          turn: other(side),
+        };
+      }
       data().reviewThreads.push(thread);
+      return present(person, thread);
+    },
+    closeReviewSuggestion: (
+      _root,
+      given: {
+        outcome: SuggestionOutcome;
+        reason?: null | string;
+        threadId: string;
+      },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const thread = threadOf(given.threadId);
+      participant(person, thread.policyVersionId);
+      const suggestion = openSuggestion(person, thread, false);
+      const side = sideOf(person, thread);
+      const mine = suggestion.turn === side;
+      const reason = given.reason?.trim() ?? "";
+      const allowed: Record<SuggestionOutcome, boolean> = {
+        AGREED: mine && side === "REVIEWER",
+        CHANGED: mine && side === "AUTHOR",
+        NOT_AGREED: mine,
+        REMOVED: mine && side === "AUTHOR",
+        WITHDRAWN: !mine && suggestion.rounds[0]?.by === side,
+      };
+      if (!allowed[given.outcome])
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "That outcome is not yours to choose now.",
+        );
+      if (given.outcome === "NOT_AGREED" && !reason)
+        throw refuse("BAD_USER_INPUT", "Say why it is not agreed.");
+      suggestion.outcome = given.outcome;
+      suggestion.reason = reason || null;
+      suggestion.closedBy = person.id;
+      suggestion.closedText = suggestion.text;
+      thread.resolved = true;
+      return present(person, thread);
+    },
+    counterReviewSuggestion: (
+      _root,
+      given: { text: string; threadId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const thread = threadOf(given.threadId);
+      participant(person, thread.policyVersionId);
+      const suggestion = openSuggestion(person, thread, true);
+      const text = given.text.trim();
+      if (!text) throw refuse("BAD_USER_INPUT", "A counter can't be empty.");
+      const side = sideOf(person, thread);
+      suggestion.rounds.push({
+        by: side,
+        createdAt: now(),
+        text,
+        userId: person.id,
+      });
+      suggestion.text = text;
+      suggestion.turn = other(side);
       return present(person, thread);
     },
     deleteReviewThread: (

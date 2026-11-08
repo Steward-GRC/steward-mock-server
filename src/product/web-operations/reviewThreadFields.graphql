@@ -12,4 +12,18 @@ fragment ReviewThreadFields on ReviewThread {
     body
     createdAt
   }
+  suggestion {
+    text
+    turn
+    rounds {
+      by
+      text
+      userId
+      createdAt
+    }
+    outcome
+    reason
+    closedBy
+    closedText
+  }
 }

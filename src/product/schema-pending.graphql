@@ -119,7 +119,14 @@ extend type Query {
 extend type Mutation {
   # Starts a thread with its first message. Approvers on the version's run, its authors and site
   # admins only.
-  addReviewThread(policyVersionId: ID!, quote: String!, occurrence: Int!, body: String!): ReviewThread!
+  # suggestedText proposes replacement text for the quote; it opens a suggestion on the other
+  # side's turn. Text equal to the quote is a plain comment.
+  addReviewThread(policyVersionId: ID!, quote: String!, occurrence: Int!, body: String!, suggestedText: String): ReviewThread!
+  # The side whose turn it is answers with different text; the turn passes to the other side.
+  counterReviewSuggestion(threadId: ID!, text: String!): ReviewThread!
+  # Ends the suggestion with an outcome and resolves the thread. The text of an accepted change is
+  # applied to the document by the client, which saves it.
+  closeReviewSuggestion(threadId: ID!, outcome: SuggestionOutcome!, reason: String): ReviewThread!
   # Appends a message to a thread.
   replyReviewThread(threadId: ID!, body: String!): ReviewThread!
   # Resolves a thread, or reopens it with resolved: false.
@@ -138,6 +145,47 @@ type ReviewThread {
   resolved: Boolean!
   createdAt: DateTime!
   messages: [ReviewMessage!]!
+  # Present when someone proposed replacement text for the quote.
+  suggestion: ReviewSuggestion
+}
+
+# Who is acting on a suggestion: the policy's authors, or a reviewer on its run.
+enum SuggestionSide {
+  AUTHOR
+  REVIEWER
+}
+
+enum SuggestionOutcome {
+  # The author took the text. Closes on the author's turn.
+  CHANGED
+  # The reviewer accepted the author's counter. Closes on the reviewer's turn.
+  AGREED
+  # The author dropped the note without changing the text. Closes on the author's turn.
+  REMOVED
+  # The side that proposed first took it back, while it was not their turn.
+  WITHDRAWN
+  # The side whose turn it was ended it, with a reason.
+  NOT_AGREED
+}
+
+type ReviewSuggestion {
+  # The text now proposed.
+  text: String!
+  # Whose turn it is to answer.
+  turn: SuggestionSide!
+  rounds: [SuggestionRound!]!
+  # Set once it has ended.
+  outcome: SuggestionOutcome
+  reason: String
+  closedBy: ID
+  closedText: String
+}
+
+type SuggestionRound {
+  by: SuggestionSide!
+  text: String!
+  userId: ID!
+  createdAt: DateTime!
 }
 
 type ReviewMessage {
