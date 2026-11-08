@@ -116,7 +116,7 @@ export const EXPENSE_CLAIMS_NUMBER = "POL-EXPENSES-000002";
 /** steward-core's rendered number for the seeded Travel Booking Procedure, the draft in review. */
 export const TRAVEL_BOOKING_NUMBER = "PRC-TRAVEL-000003";
 
-const text = (value: string) => ({
+export const text = (value: string) => ({
   detail: 0,
   format: 0,
   mode: "normal",
@@ -126,7 +126,7 @@ const text = (value: string) => ({
   version: 1,
 });
 
-const block = (type: string, value: string, extra: object = {}) => ({
+export const block = (type: string, value: string, extra: object = {}) => ({
   children: value ? [text(value)] : [],
   direction: null,
   format: "",
@@ -137,15 +137,15 @@ const block = (type: string, value: string, extra: object = {}) => ({
 });
 
 /** One top-level block of a document: a heading, a paragraph or a table. */
-type Block = ReturnType<typeof block>;
+export type Block = ReturnType<typeof block>;
 
-const h1 = (value: string) => block("heading", value, { tag: "h1" });
-const h2 = (value: string) => block("heading", value, { tag: "h2" });
-const p = (value: string) =>
+export const h1 = (value: string) => block("heading", value, { tag: "h1" });
+export const h2 = (value: string) => block("heading", value, { tag: "h2" });
+export const p = (value: string) =>
   block("paragraph", value, { textFormat: 0, textStyle: "" });
 
 /** A table whose first row is its header. */
-const table = (...rows: string[][]) => ({
+export const table = (...rows: string[][]) => ({
   children: rows.map((cells, index) => ({
     children: cells.map((cell) => ({
       children: [p(cell)],
@@ -164,7 +164,9 @@ const table = (...rows: string[][]) => ({
  * A version's content as the editor writes it and steward-core reads it: a Lexical document,
  * whose top-level headings name its sections (src/product/sections.ts derives their keys).
  */
-const document = (...children: (Block | ReturnType<typeof table>)[]): string =>
+export const document = (
+  ...children: (Block | ReturnType<typeof table>)[]
+): string =>
   JSON.stringify({
     root: {
       children,
@@ -177,7 +179,7 @@ const document = (...children: (Block | ReturnType<typeof table>)[]): string =>
   });
 
 /** A section per heading, each with its paragraphs. */
-const lexical = (...entries: [string, ...string[]][]): string =>
+export const lexical = (...entries: [string, ...string[]][]): string =>
   document(
     ...entries.flatMap(([heading, ...paragraphs]) => [
       h1(heading),
@@ -195,7 +197,7 @@ const EXPENSES_SCOPE: [string, string] = [
   "Everyone who travels or buys for the organisation.",
 ];
 
-const policy = (
+export const policy = (
   given: Partial<Policy> &
     Pick<
       Policy,
@@ -329,7 +331,7 @@ export const policies = (): Policy[] => [
   }),
 ];
 
-const version = (
+export const version = (
   given: Partial<PolicyVersion> &
     Pick<PolicyVersion, "contentJson" | "createdAt" | "id" | "policyId">,
 ): PolicyVersion => ({
@@ -595,7 +597,7 @@ export const links = (): Record<string, PolicyLinks> => ({
   },
 });
 
-const seat = (
+export const seat = (
   taskId: string,
   userId: string,
   decided?: { at: string; comment: string; state: string },

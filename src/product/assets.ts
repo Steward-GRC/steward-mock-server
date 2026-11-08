@@ -54,6 +54,11 @@ export interface StoredAsset {
 /** The bytes, by asset id. Metadata is in the seeded data, so a reset forgets both. */
 const bytes = new Map<string, Uint8Array>();
 
+/** Keeps the bytes of a seeded file; the metadata is in the seeded data (data/files.ts). */
+export const keepBytes = (id: string, data: Uint8Array): void => {
+  bytes.set(id, data);
+};
+
 const capOf = (): number =>
   stewardData().assetSettings.limit === "small"
     ? SMALL_ASSET_BYTES

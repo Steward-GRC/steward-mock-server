@@ -34,6 +34,14 @@ import {
 } from "#product/data/admin.ts";
 import { type ReportCase, reportCases } from "#product/data/cases.ts";
 import {
+  extraPolicies,
+  extraRuns,
+  extraThreads,
+  extraVersions,
+  extraWorkflows,
+} from "#product/data/extras.ts";
+import { seedAssets } from "#product/data/files.ts";
+import {
   categories,
   type Category,
   type ContactBlock,
@@ -156,14 +164,14 @@ export interface StewardData extends ProductData {
 }
 
 export const seed = (): StewardData => {
-  const allVersions = versions();
+  const allVersions = [...versions(), ...extraVersions()];
   const appendices = migrateAppendices(allVersions);
   return {
     acknowledgements: acknowledgements(),
     aiSimulated: true,
     appendices,
     askedQuestions: [],
-    assets: {},
+    assets: seedAssets(),
     assetSettings: { fail: false, limit: "real" },
     audit: auditTrail(),
     breakGlass: [],
@@ -185,13 +193,13 @@ export const seed = (): StewardData => {
     pendingFactors: { totp: [], webauthn: {} },
     people: [...people(), ...duplicatePeople()],
     platformGroups: platformGroups(),
-    policies: policies(),
+    policies: [...policies(), ...extraPolicies()],
     policyViews: policyViews(),
     references: references(),
     reportCases: reportCases(),
     reviewSnapshots: {},
-    reviewThreads: [],
-    runs: runs(),
+    reviewThreads: extraThreads(),
+    runs: [...runs(), ...extraRuns()],
     settings: globalSettings(),
     signInMethods: {
       defaultLoginMethod: "local",
@@ -203,7 +211,7 @@ export const seed = (): StewardData => {
     templates: templates(),
     templateVersions: templateVersions(),
     versions: allVersions,
-    workflowDefs: workflowDefs(),
+    workflowDefs: [...workflowDefs(), ...extraWorkflows()],
   };
 };
 
