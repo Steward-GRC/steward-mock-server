@@ -416,7 +416,11 @@ export const appendixResolvers: Resolvers = {
         draft.updatedAt = at;
         draft.updatedBy = person.id;
         noteEditor(draft, person.id);
-      } else {
+      } else if (
+        // Only a title or content change makes a draft (bug log 246).
+        latestPublished(appendix)?.title !== given.title ||
+        latestPublished(appendix)?.contentJson !== given.contentJson
+      ) {
         appendix.versions.push({
           contentJson: given.contentJson,
           createdAt: at,

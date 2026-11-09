@@ -370,6 +370,33 @@ describe("order", () => {
   });
 });
 
+describe("an unchanged appendix makes no draft (bug log 246)", () => {
+  it("ignores a save of the published title and content", async () => {
+    const [first] = await listed("bob");
+    const { published } = first as Row;
+    const answer = await ask(await as("bob"), SAVE, {
+      contentJson: published?.contentJson,
+      id: (first as Row).id,
+      title: published?.title,
+    });
+    assert.equal(answer.code, undefined, answer.message);
+    assert.equal((await listed("bob"))[0]?.draft, null);
+  });
+
+  it("makes no draft on a reorder, a retire or a restore", async () => {
+    const rows = await withThree();
+    const author = await as("bob");
+    await ask(author, REORDER, {
+      orderedIds: rows.map((r) => r.id).toReversed(),
+      policyId: POLICY,
+    });
+    await ask(author, RETIRE, { id: (rows[0] as Row).id });
+    await ask(author, RESTORE, { id: (rows[0] as Row).id });
+    for (const row of await listed("bob"))
+      assert.equal(row.draft, null, `${row.id} has a draft`);
+  });
+});
+
 const draftChange = async () => {
   const [first] = await listed("bob");
   await ask(await as("bob"), SAVE, {

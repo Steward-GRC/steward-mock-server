@@ -219,6 +219,20 @@ describe("an appendix checkpoint", () => {
     socket.close();
   });
 
+  it("makes no draft when the checkpoint is what is already published (bug log 246)", async () => {
+    const appendix = stewardData().appendices.find((a) => a.id === APPENDIX)!;
+    const published = appendix.versions.find((v) => v.state === "PUBLISHED")!;
+    const { socket } = await join("bob");
+    const answer = nextMessage(socket);
+    socket.send(checkpoint(published.contentJson));
+    assert.equal(controlOf(await answer).type, "snapshot.accepted");
+    assert.equal(
+      appendix.versions.filter((v) => v.state === "DRAFT").length,
+      0,
+    );
+    socket.close();
+  });
+
   it("is refused when the content is not a JSON document", async () => {
     const { socket } = await join("bob");
     const answer = nextMessage(socket);
