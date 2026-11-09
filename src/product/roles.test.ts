@@ -237,6 +237,7 @@ describe("Steward AI", () => {
   });
 
   it("answers a job as the gateway does when the ai service is down", async () => {
+    await control(base, { kind: "ai-simulation", on: false });
     const author = await as("user-bob");
     const answer = await call(base, author, "SubmitDraftGeneration", {
       input: {
