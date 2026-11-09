@@ -210,7 +210,8 @@ const keepAppendixCheckpoint = (
       draft.updatedBy = userId;
       noteEditor(draft, userId);
     }
-  } else {
+  } else if (latestPublished(appendix)?.contentJson !== content) {
+    // Only a change makes a draft: the room reporting the published text again is not one.
     const basis = latestPublished(appendix);
     const starter = userId || (basis?.updatedBy ?? appendix.createdBy);
     appendix.versions.push({
