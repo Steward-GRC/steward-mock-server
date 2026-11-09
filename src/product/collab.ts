@@ -29,8 +29,10 @@ import type { ProductSockets } from "#core/product.ts";
 
 import { sessionOfCookie } from "#core/auth.ts";
 import { draftOf, latestPublished, noteEditor } from "#product/appendices.ts";
+import { bindIdentity } from "#product/awareness.ts";
 import { stewardData } from "#product/data.ts";
 import { EDITABLE } from "#product/links.ts";
+import { personOf } from "#product/resolvers/shared.ts";
 
 /** steward-collab's token audience (internal/ws TokenAudience). */
 const AUDIENCE = "steward.collab.ws";
@@ -306,9 +308,16 @@ const join = (draftId: string, userId: string, socket: WebSocket) => {
       if (frame[1] === SYNC_STEP_2 || frame[1] === SYNC_UPDATE)
         room.updates.push(Uint8Array.from(frame));
     }
+    // collab writes who the person is into their presence; the browser's own claim doesn't count
+    const relayed = isBinary
+      ? bindIdentity(frame, {
+          name: personOf(userId)?.name ?? userId,
+          uid: userId,
+        })
+      : data;
     for (const peer of room.sockets)
       if (peer !== socket && peer.readyState === WebSocket.OPEN)
-        peer.send(data, { binary: isBinary });
+        peer.send(relayed, { binary: isBinary });
   });
   socket.on("close", () => {
     room.sockets.delete(socket);

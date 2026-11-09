@@ -233,6 +233,33 @@ describe("an appendix checkpoint", () => {
     socket.close();
   });
 
+  it("tells the room who a person is by name, whatever their browser sent (bug log 250)", async () => {
+    const bob = await join("bob");
+    const alice = await join("alice");
+    const state = Buffer.from(
+      JSON.stringify({ activity: "typing", user: { name: "Owl" } }),
+      "utf8",
+    );
+    const body = [1, 7, 3, state.length, ...state];
+    const heard = new Promise<Buffer>((resolve) =>
+      alice.socket.on("message", (data) => {
+        const frame = Buffer.from(data as Buffer);
+        if (frame[0] === 1) resolve(frame);
+      }),
+    );
+    bob.socket.send(Buffer.from([1, body.length, ...body]));
+    const frame = await heard;
+    const json = JSON.parse(frame.subarray(6).toString("utf8")) as {
+      activity: string;
+      user: { name: string; uid: string };
+    };
+    assert.equal(json.user.name, "Bob Author");
+    assert.equal(json.user.uid, "user-bob");
+    assert.equal(json.activity, "typing");
+    bob.socket.close();
+    alice.socket.close();
+  });
+
   it("is refused when the content is not a JSON document", async () => {
     const { socket } = await join("bob");
     const answer = nextMessage(socket);
