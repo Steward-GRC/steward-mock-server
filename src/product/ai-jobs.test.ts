@@ -13,11 +13,12 @@ import type { RunningMockServer } from "#core/server.ts";
 import { setJobDuration } from "#product/resolvers/ai-jobs.ts";
 import {
   control,
+  openSocket,
   type Signed,
   startForTests,
   startFresh,
 } from "#product/test-client.ts";
-import { call, signInAs } from "#product/web-client.ts";
+import { call, documentOf, signInAs } from "#product/web-client.ts";
 
 let base = "";
 let server: RunningMockServer;
@@ -98,6 +99,30 @@ describe("a review job on the mock", () => {
       (await call(base, erin, "AiJob", { jobId })).refused,
       "NotFound",
     );
+  });
+});
+
+describe("the aiJobResult subscription on the mock", () => {
+  it("sends the job's end, with the ref to fetch the result by", async () => {
+    setJobDuration(50);
+    const { jobId } = (await review(bob)).data.submitPolicyReview as {
+      jobId: string;
+    };
+    const ws = await openSocket(base, "graphql-transport-ws");
+    ws.send({ payload: { authToken: bob.token }, type: "connection_init" });
+    await ws.next("connection_ack");
+    ws.send({
+      id: "1",
+      payload: { query: documentOf("AiJobResult"), variables: { jobId } },
+      type: "subscribe",
+    });
+    const end = await ws.next("next");
+    ws.socket.close();
+    const result = (
+      end.payload as { data: { aiJobResult: Record<string, string> } }
+    ).data.aiJobResult;
+    assert.equal(result.phase, "AI_JOB_PHASE_SUCCEEDED");
+    assert.equal(result.resultRef, `mock-ai-result:${jobId}`);
   });
 });
 
