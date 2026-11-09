@@ -217,5 +217,40 @@ export const seed = (): StewardData => {
   };
 };
 
+/**
+ * Which data a reset returns to: the sample data, or the demo start state. The demo can be chosen
+ * when the mock boots (MOCK_START=demo) or from the controls page.
+ */
+export const startState: { value: "demo" | "sample" } = {
+  value: process.env.MOCK_START === "demo" ? "demo" : "sample",
+};
+
+/**
+ * The demo start state: a brand-new install. The basic setup stays (the people, the category
+ * tree, the templates and their versions, the workflows, the groups, the organisations, the
+ * settings) and every document and what hangs off one is gone: policies, versions, appendices,
+ * approval runs, acknowledgements, views, the audit trail, report cases, review threads,
+ * links, and the contacts, definitions and references libraries. The merge-accounts duplicates
+ * are sample data and are left out, and no person keeps an access override for a document.
+ */
+export const demoSeed = (): StewardData => ({
+  ...seed(),
+  acknowledgements: [],
+  appendices: [],
+  audit: [],
+  contactBlocks: [],
+  definitions: [],
+  links: {},
+  pastSessions: [],
+  people: people().map((person) => ({ ...person, policyOverrides: [] })),
+  policies: [],
+  policyViews: [],
+  references: [],
+  reportCases: [],
+  reviewThreads: [],
+  runs: [],
+  versions: [],
+});
+
 /** The mock's state as Steward's data: the core holds it as its own minimal shape. */
 export const stewardData = (): StewardData => mockState.data as StewardData;
