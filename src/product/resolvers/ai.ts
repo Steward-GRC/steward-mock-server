@@ -1,9 +1,11 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Steward AI isn't part of the mock. Ask is simulated (resolvers/ask.ts) while the simulation is
-// on, which it is by default: aiHealth says available, searchAndAnswer answers from what the
-// caller may read and topPolicyQuestions lists the questions asked. Everything else, and Ask with
-// the simulation off, answers the way steward-gateway does when the ai service is unreachable.
+// Steward AI isn't part of the mock. Ask (resolvers/ask.ts) and the async jobs (resolvers/ai-jobs.ts:
+// draft, review, revision and enrichment) are simulated while the simulation is on, which it is by
+// default: aiHealth says available, searchAndAnswer answers from what the caller may read,
+// topPolicyQuestions lists the questions asked, and a submitted job runs and returns a made-up
+// result. Everything else, and all of it with the simulation off, answers the way steward-gateway
+// does when the ai service is unreachable.
 // aiHealth says so; the reads that swallow an ai error (topPolicyQuestions,
 // relatedPolicySuggestions, policyVersionSummary) answer empty; everything else checks the caller as
 // the gateway does, then fails as a transport fault, which the gateway presents as INTERNAL with
@@ -11,6 +13,13 @@
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
+import {
+  jobContent,
+  jobEnd,
+  type JobOperation,
+  jobStatus,
+  submitJob,
+} from "#product/resolvers/ai-jobs.ts";
 import { simulatedAnswer, topQuestions } from "#product/resolvers/ask.ts";
 import {
   caller,
@@ -52,6 +61,27 @@ const submitDown = (
   throw unreachable();
 };
 
+/** A job submission: simulated while the simulation is on, and checked the same way either way. */
+const submitting =
+  (operation: JobOperation) =>
+  (
+    root: unknown,
+    given: { input: { categoryId?: null | string } },
+    context: Context,
+  ) => {
+    if (!data().aiSimulated) return submitDown(root, given, context);
+    const person = caller(context);
+    const categoryId = given.input.categoryId;
+    if (categoryId && !canAuthorIn(person, categoryId)) throw forbidden();
+    return submitJob(operation, given.input, context);
+  };
+
+/** A read of a job: simulated while the simulation is on. */
+const reading =
+  <Given, Result>(read: (given: Given, context: Context) => Result) =>
+  (root: unknown, given: Given, context: Context): Result =>
+    data().aiSimulated ? read(given, context) : down(root, given, context);
+
 export const aiResolvers: Resolvers = {
   Mutation: {
     acceptAIDataNotice: adminDown,
@@ -60,10 +90,10 @@ export const aiResolvers: Resolvers = {
     setAIProviderCredential: adminDown,
     setAIRetrievalConfig: adminDown,
     setUserAiQueryLimit: adminDown,
-    submitDraftGeneration: submitDown,
-    submitEnrichmentSuggestions: submitDown,
-    submitPolicyReview: submitDown,
-    submitPolicyRevision: submitDown,
+    submitDraftGeneration: submitting("DRAFT"),
+    submitEnrichmentSuggestions: submitting("SUGGEST_ENRICHMENTS"),
+    submitPolicyReview: submitting("REVIEW"),
+    submitPolicyRevision: submitting("REVISE"),
     testAIProvider: adminDown,
   },
   Query: {
@@ -73,8 +103,12 @@ export const aiResolvers: Resolvers = {
       data().aiSimulated
         ? { available: true, reason: null }
         : { available: false, reason: "ai_service_unavailable" },
-    aiJob: down,
-    aiJobResultContent: down,
+    aiJob: reading((given: { jobId: string }, context) =>
+      jobStatus(given.jobId, context),
+    ),
+    aiJobResultContent: reading((given: { resultRef: string }, context) =>
+      jobContent(given.resultRef, context),
+    ),
     aiRetrievalConfig: adminDown,
     authoringAssist: down,
     policyVersionSummary: (_root, _given, context: Context) => {
@@ -99,7 +133,11 @@ export const aiResolvers: Resolvers = {
     },
   },
   Subscription: {
-    // No job can have been submitted, so the stream fails as the job lookup does.
-    aiJobResult: { subscribe: down },
+    aiJobResult: {
+      subscribe: (root, given: { jobId: string }, context: Context) =>
+        data().aiSimulated
+          ? jobEnd(given.jobId, context)
+          : down(root, given, context),
+    },
   },
 };

@@ -38,7 +38,7 @@ const AUTHOR = "user-bob";
 const APPROVER = "user-charlie";
 const OFFICER = "user-dave";
 const READER = "user-erin";
-/** The AI service isn't part of the mock: the gateway answers its calls as when it's down. */
+/** The AI settings aren't part of the mock: the gateway answers them as when the ai service is down. */
 const AI_DOWN = "INTERNAL";
 
 const SECTION = { blocks: [], key: "purpose", order: 0, title: "Purpose" };
@@ -104,11 +104,12 @@ const cases: Record<string, Case> = {
   // AI isn't mocked: the settings answer as the gateway does with the ai service down.
   AiConfig: { as: ADMIN, refused: AI_DOWN },
   AiHealth: { as: READER },
-  AiJob: { as: AUTHOR, refused: AI_DOWN, variables: { jobId: "ai-job-1" } },
+  // a job that was never submitted is not found (the submits are covered in ai-jobs.test.ts)
+  AiJob: { as: AUTHOR, refused: "NotFound", variables: { jobId: "ai-job-0" } },
   AiJobResultContent: {
     as: AUTHOR,
-    refused: AI_DOWN,
-    variables: { resultRef: "ai-job-1" },
+    refused: "NotFound",
+    variables: { resultRef: "mock-ai-result:ai-job-0" },
   },
   ArchiveWorkflowDef: { as: ADMIN, variables: { id: "workflow-3" } },
   AssignCase: {
@@ -647,7 +648,6 @@ const cases: Record<string, Case> = {
   StopImpersonation: { as: ADMIN },
   SubmitDraftGeneration: {
     as: AUTHOR,
-    refused: AI_DOWN,
     variables: {
       input: {
         brief: "How staff book travel.",
@@ -657,7 +657,6 @@ const cases: Record<string, Case> = {
   },
   SubmitPolicyReview: {
     as: AUTHOR,
-    refused: AI_DOWN,
     variables: {
       input: {
         policyId: "policy-2",
@@ -670,7 +669,6 @@ const cases: Record<string, Case> = {
   },
   SubmitPolicyRevision: {
     as: AUTHOR,
-    refused: AI_DOWN,
     variables: {
       input: {
         instruction: "Shorten the booking window to one week.",
@@ -813,8 +811,8 @@ const cases: Record<string, Case> = {
 const SUBSCRIPTIONS: Record<string, Case> = {
   AiJobResult: {
     as: AUTHOR,
-    refused: AI_DOWN,
-    variables: { jobId: "ai-job-1" },
+    refused: "NotFound",
+    variables: { jobId: "ai-job-0" },
   },
   // liveEvents needs the audit log's read permission; a reader is refused at subscribe time.
   LiveEvents: { as: READER, refused: "PermissionDenied", variables: {} },

@@ -121,8 +121,11 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
 published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
-**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. Every other AI call
-(generate, revise, review, the admin settings) answers as the gateway does while the ai service is down, on both settings.
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The AI jobs are
+simulated too (generate a draft, review, revise, enrichment suggestions): a submit returns a job id, the job runs for about
+2.5 seconds (`MOCK_AI_JOB_MS` changes it), `aiJob` and the `aiJobResult` subscription report it, and `aiJobResultContent` returns a
+made-up result marked as simulated: sections, review findings, a change set. With the simulation off they fail as the gateway does while the ai
+service is down. The admin AI settings answer that way on both settings.
 The co-editing relay passes edits between the browsers on a draft and keeps the editor's
 checkpoints the way steward-collab does: the content becomes the draft's saved content, the Yjs
 state starts the next room after everyone has left, and the sender is told it was kept.
