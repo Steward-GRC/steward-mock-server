@@ -221,10 +221,12 @@ export const seed = (): StewardData => {
  * Which data a reset returns to: the sample data, or the demo start state. The demo can be chosen
  * when the mock boots (MOCK_START=demo) or from the controls page.
  */
-export type StartState = "demo" | "install" | "sample";
+export type StartState = "demo" | "docs" | "install" | "sample";
+
+const START_STATES = new Set<unknown>(["demo", "docs", "install"]);
 
 export const parseStartState = (value: unknown): StartState =>
-  value === "demo" || value === "install" ? value : "sample";
+  START_STATES.has(value) ? (value as StartState) : "sample";
 
 /**
  * "install" is a brand-new install (installSeed): no people, so first-run setup makes the first

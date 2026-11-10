@@ -37,7 +37,7 @@ export const SEEDED_FILE_IDS = {
 } as const;
 
 /** A paragraph with some words in bold, italic or both. */
-const rich = (...parts: [string, number?][]): Block =>
+export const rich = (...parts: [string, number?][]): Block =>
   block("paragraph", "", {
     children: parts.map(([value, format]) => ({
       ...text(value),
@@ -54,7 +54,7 @@ const item = (value: string, order: number) =>
   });
 
 /** A bulleted or numbered list. */
-const list = (kind: "bullet" | "number", ...items: string[]): Block =>
+export const list = (kind: "bullet" | "number", ...items: string[]): Block =>
   block("list", "", {
     children: items.map((value, index) => item(value, index + 1)),
     listType: kind,
@@ -62,7 +62,7 @@ const list = (kind: "bullet" | "number", ...items: string[]): Block =>
     tag: kind === "bullet" ? "ul" : "ol",
   });
 
-const fileCard = (
+export const fileCard = (
   id: string,
   name: string,
   size: number,
@@ -76,7 +76,7 @@ const fileCard = (
     src: `/api/assets/${id}`,
   });
 
-const imageCard = (id: string, alt: string): Block =>
+export const imageCard = (id: string, alt: string): Block =>
   block("image", "", {
     alt,
     caption: "",
@@ -85,7 +85,7 @@ const imageCard = (id: string, alt: string): Block =>
     width: 1,
   });
 
-const appendixText = (
+export const appendixText = (
   title: string,
   ...body: (Block | ReturnType<typeof table>)[]
 ): string => document(h1(title), ...body);
