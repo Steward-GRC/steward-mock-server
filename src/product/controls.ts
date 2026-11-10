@@ -183,6 +183,14 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
     section: "Start over",
   },
   {
+    body: { state: "docs" },
+    hint: "A data set designed for the user guide's screenshots: Example Organisation, the eight people, thirteen documents in the states the guide shows. Fixed ids and numbers. Reset and Start fresh return here. Everyone is signed out.",
+    kind: "start-state",
+    label: "Docs start state",
+    run: startStateControl,
+    section: "Start over",
+  },
+  {
     body: { state: "install" },
     hint: "A brand-new install: the basic setup and nobody to sign in as. First-run setup (the token is MOCK_SETUP_TOKEN, mock-setup-token by default) makes the first admin. Reset and Start fresh return to setup.",
     kind: "start-state",

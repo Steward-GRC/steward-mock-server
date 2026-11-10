@@ -49,7 +49,7 @@ export interface RaciRule {
   subjectRef: string;
 }
 
-const raci = (
+export const raci = (
   subjectKind: RaciRule["subjectKind"],
   subjectReference: string,
   [read, ack, approve, author]: RaciGrant[],
@@ -154,7 +154,7 @@ export interface WorkflowStage {
   vetoGroupIds: string[];
 }
 
-const category = (
+export const category = (
   given: Partial<Category> & Pick<Category, "id" | "name" | "slug">,
 ): Category => ({
   ackEveryone: false,
@@ -343,7 +343,7 @@ export const templates = (): Template[] => [
   },
 ];
 
-const section = (
+export const section = (
   key: string,
   title: string,
   order: number,
@@ -393,7 +393,7 @@ export const templateVersions = (): TemplateVersion[] => [
   },
 ];
 
-const stage = (
+export const stage = (
   given: Partial<WorkflowStage> &
     Pick<WorkflowStage, "approvers" | "id" | "name">,
 ): WorkflowStage => ({
