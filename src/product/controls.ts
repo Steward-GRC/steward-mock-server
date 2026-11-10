@@ -8,7 +8,12 @@ import type { Action, ProductControl } from "#core/controls.ts";
 import { refuse } from "#core/http.ts";
 import { mockState, startFresh } from "#core/state.ts";
 import { assetActions } from "#product/assets.ts";
-import { type SignInMethods, startState, stewardData } from "#product/data.ts";
+import {
+  parseStartState,
+  type SignInMethods,
+  startState,
+  stewardData,
+} from "#product/data.ts";
 import { asSteward, type StewardPerson } from "#product/data/people.ts";
 import { expireTestLinks } from "#product/sso.ts";
 
@@ -102,7 +107,7 @@ const needsOnboarding: ProductControl = (body) => {
  * fresh return to, and a fresh start on it with everyone signed out.
  */
 const startStateControl: ProductControl = (body) => {
-  startState.value = body.state === "demo" ? "demo" : "sample";
+  startState.value = parseStartState(body.state);
   startFresh(false);
   return { startState: startState.value };
 };
@@ -174,6 +179,14 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
     hint: "A brand-new install: the people, categories, templates, workflows and groups, and no documents. Reset and Start fresh return here. Everyone is signed out.",
     kind: "start-state",
     label: "Demo start state",
+    run: startStateControl,
+    section: "Start over",
+  },
+  {
+    body: { state: "install" },
+    hint: "A brand-new install: the basic setup and nobody to sign in as. First-run setup (the token is MOCK_SETUP_TOKEN, mock-setup-token by default) makes the first admin. Reset and Start fresh return to setup.",
+    kind: "start-state",
+    label: "New install start state",
     run: startStateControl,
     section: "Start over",
   },

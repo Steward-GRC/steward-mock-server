@@ -114,7 +114,9 @@ const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
     startFresh(body.firstRun === true);
   },
   reset: () => {
-    resetData();
+    // Everyone stays signed in, unless the start state is an install: its people are gone.
+    if (product().startsAsInstall?.()) startFresh(true);
+    else resetData();
   },
   /**
    * A finished sign-in in one step, for tests, the page and a client's dev quick login: the

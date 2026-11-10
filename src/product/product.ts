@@ -10,7 +10,7 @@ import type { Product } from "#core/product.ts";
 
 import { collabSockets } from "#product/collab.ts";
 import { productActions, productSummary } from "#product/controls.ts";
-import { demoSeed, seed, startState } from "#product/data.ts";
+import { demoSeed, installSeed, seed, startState } from "#product/data.ts";
 import "#product/groups.ts";
 import { stewardMaintenance } from "#product/maintenance.ts";
 import { resolvers } from "#product/resolvers.ts";
@@ -22,6 +22,7 @@ const read = (file: string) =>
 
 export const steward: Product = {
   actions: productActions,
+  installSeed,
   /** What the roles and groups on the Users card grant (src/product/users-card.ts). */
   legend: legend(),
   /** The gateway's maintenance gate (src/product/maintenance.ts). */
@@ -71,5 +72,6 @@ export const steward: Product = {
     versionHeader: "Steward-Version",
   },
   sockets: collabSockets,
+  startsAsInstall: () => startState.value === "install",
   summary: productSummary,
 };

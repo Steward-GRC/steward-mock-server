@@ -75,6 +75,33 @@ zones). Section keys are core's: a slug of each top-level heading (`booking-a-de
 for a repeated heading, and `body` for text before the first one. `diffVersions` answers one entry
 per section of the pinned template, keyed and word-diffed as core does.
 
+### A new install
+
+`MOCK_START=install` (or the controls page's "New install start state", or `MOCK_FRESH_INSTALL=1`) boots what
+a real gateway has after its first boot: the basic setup (the category tree, templates and their
+versions, workflows, groups, organisations and settings) and empty libraries, with no documents
+and nobody to sign in as. `GET /setup/state` says `needsSetup: true`, so steward-web's admin app
+opens first-run setup at `/admin/setup`.
+
+The setup screens ask for the administrator's name, username, email and password (twice) and the
+setup token (`mock-setup-token`, or `MOCK_SETUP_TOKEN`), then offer single sign-on now or later
+(organisation, domain, identity provider and its settings). `POST /setup/bootstrap` makes the
+first administrator, a site admin and the root admin, and signs nobody in, as the gateway does:
+the screens then go to sign-in, where the new administrator signs in with those credentials and
+can make the first policy.
+
+The three start states, from most to least data:
+
+| State              | People                      | Documents | First-run setup |
+| ------------------ | --------------------------- | --------- | --------------- |
+| `sample` (default) | the eight named, and extras | yes       | no              |
+| `demo`             | the eight named             | none      | no              |
+| `install`          | nobody                      | none      | yes             |
+
+Reset and Start fresh return to the chosen state. For `install` they also sign everyone out and
+bring first-run setup back, since the first administrator is gone. "Start as a new install" on
+the controls page does the same once from any state, and leaves the chosen state alone.
+
 ### Who to sign in as
 
 | Username  | Role                              | What they see                                                                                                                                                                                          |
@@ -132,17 +159,18 @@ state starts the next room after everyone has left, and the sender is told it wa
 
 ### Settings
 
-| Variable                                      | What it does                                                                                                                                                                      |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                                                                  |
-| `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network.                                           |
-| `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                                                            |
-| `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                                                           |
-| `MOCK_SESSION_COOKIE`                         | The session cookie's name, when a client reads the real gateway's name.                                                                                                           |
-| `MOCK_FRESH_INSTALL`                          | `1` starts it as a new install, so clients walk first-run setup.                                                                                                                  |
-| `MOCK_START`                                  | `demo` starts on the demo start state: a brand-new install with the people, category tree, templates, workflows and groups, and no documents. Reset and Start fresh return to it. |
-| `MOCK_SERVER_VERSION`                         | The version the probes report.                                                                                                                                                    |
-| `LOG_LEVEL`, `LOG_FORMAT`                     | `trace` to `error`; `console` or `json`.                                                                                                                                          |
+| Variable                                      | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network.                                                                                                                                                                                                                                                                                                                                              |
+| `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                                                                                                                                                                                                                                                                                                                                                               |
+| `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                                                                                                                                                                                                                                                                                                                                                              |
+| `MOCK_SESSION_COOKIE`                         | The session cookie's name, when a client reads the real gateway's name.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `MOCK_FRESH_INSTALL`                          | `1` is the same as `MOCK_START=install`: a new install, so clients walk first-run setup.                                                                                                                                                                                                                                                                                                                                                                                             |
+| `MOCK_START`                                  | `sample` (the default): the sample data, with its documents and eight named people. `demo`: the people, category tree, templates, workflows and groups, and no documents. `install`: a brand-new install, the basic setup (categories, templates, workflows, groups, empty libraries) and nobody to sign in as; first-run setup makes the first admin. Reset and Start fresh return to the chosen state; for `install` that means back to first-run setup, with everyone signed out. |
+| `MOCK_SETUP_TOKEN`                            | The setup token first-run setup asks for (the gateway's `SETUP_TOKEN`). Default `mock-setup-token`.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `MOCK_SERVER_VERSION`                         | The version the probes report.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `LOG_LEVEL`, `LOG_FORMAT`                     | `trace` to `error`; `console` or `json`.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ### Two people on two machines
 

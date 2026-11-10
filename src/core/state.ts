@@ -83,7 +83,8 @@ export const personById = (id: string): Person | undefined =>
 
 /** Put the invented data back. Whoever is signed in stays signed in. */
 export const resetData = (): void => {
-  mockState.data = product().seed();
+  const { installSeed, seed, startsAsInstall } = product();
+  mockState.data = installSeed && startsAsInstall?.() ? installSeed() : seed();
   mockState.failNext = null;
   mockState.maintenance = noMaintenance();
   publish(MAINTENANCE_CHANGED, noMaintenance());
@@ -103,9 +104,13 @@ export const endSessions = (personId?: string): void => {
 /** Back to first boot: the seed data, nobody signed in, and first-run setup when asked. */
 export const startFresh = (firstRun = false): void => {
   resetData();
+  const { installSeed, startsAsInstall } = product();
+  // A new install has none of the seed's people, so it is not the seed with setup switched on.
+  if (firstRun && installSeed) mockState.data = installSeed();
   mockState.pending.clear();
   endSessions();
-  mockState.needsSetup = firstRun;
+  mockState.needsSetup =
+    firstRun || (installSeed !== undefined && startsAsInstall?.() === true);
   mockState.freshAt = new Date().toISOString();
 };
 

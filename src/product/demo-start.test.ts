@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // The demo start state: a brand-new install with the basic setup (the people, the category tree,
 // the templates, the workflows, the groups and the settings) and no sample documents. The
-// "Start as a new install" control keeps the sample data and only sends the clients through
-// first-run setup; this one takes the documents away too, and Reset and Start fresh then return
-// to it until the sample data is asked for again.
+// "Start as a new install" control goes further (install-start.test.ts): no people either, so
+// first-run setup makes the first admin. This one keeps the people and takes the documents away,
+// and Reset and Start fresh then return to it until the sample data is asked for again.
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
