@@ -221,8 +221,18 @@ export const seed = (): StewardData => {
  * Which data a reset returns to: the sample data, or the demo start state. The demo can be chosen
  * when the mock boots (MOCK_START=demo) or from the controls page.
  */
-export const startState: { value: "demo" | "sample" } = {
-  value: process.env.MOCK_START === "demo" ? "demo" : "sample",
+export type StartState = "demo" | "install" | "sample";
+
+export const parseStartState = (value: unknown): StartState =>
+  value === "demo" || value === "install" ? value : "sample";
+
+/**
+ * "install" is a brand-new install (installSeed): no people, so first-run setup makes the first
+ * admin, and Reset and Start fresh return to setup. MOCK_FRESH_INSTALL=1 asks for the same
+ * install at boot.
+ */
+export const startState: { value: StartState } = {
+  value: parseStartState(process.env.MOCK_START),
 };
 
 /**
@@ -251,6 +261,39 @@ export const demoSeed = (): StewardData => ({
   runs: [],
   versions: [],
 });
+
+/**
+ * A brand-new install, as the gateway's first boot leaves it: the demo start state (the category
+ * tree, templates, workflows, groups, organisations and settings; no documents and empty
+ * libraries) with nobody to sign in as. First-run setup makes the first site admin. Everything
+ * in the demo that names a person goes too: category owners and access rules for a user, the
+ * workflows' approvers, the files' uploader, saved notification choices.
+ */
+export const installSeed = (): StewardData => {
+  const base = demoSeed();
+  return {
+    ...base,
+    assets: {},
+    breakGlass: [],
+    categories: base.categories.map((category) => ({
+      ...category,
+      approverRule: [],
+      authorRule: [],
+      owners: [],
+      rules: category.rules.filter((rule) => rule.subjectKind !== "USER"),
+    })),
+    notificationPrefs: {},
+    people: [],
+    workflowDefs: base.workflowDefs.map((workflow) => ({
+      ...workflow,
+      stages: workflow.stages.map((stage) => ({
+        ...stage,
+        approvers: [],
+        vetoApproverIds: [],
+      })),
+    })),
+  };
+};
 
 /** The mock's state as Steward's data: the core holds it as its own minimal shape. */
 export const stewardData = (): StewardData => mockState.data as StewardData;

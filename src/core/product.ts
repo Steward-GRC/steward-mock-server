@@ -48,6 +48,12 @@ export interface Product {
   /** The product's own controls. */
   actions: ProductAction[];
   /**
+   * What a brand-new install holds: the product's own basic setup and nobody to sign in as, so
+   * first-run setup makes the first person. "Start as a new install" reseeds from it. A product
+   * without one keeps its seed and only sends the clients through first-run setup.
+   */
+  installSeed?: () => ProductData;
+  /**
    * What each term on the Users card means (the roles, the groups), as an info box under its
    * introduction. Left out, the card has no info box.
    */
@@ -94,6 +100,11 @@ export interface Product {
    * `sessionOfCookie(request)` from src/core/auth.ts reads the session from the upgrade.
    */
   sockets?: ProductSockets;
+  /**
+   * True while the product's start state is that install: Reset and Start fresh then return to
+   * it and to first-run setup, instead of to the seed.
+   */
+  startsAsInstall?: () => boolean;
   /** The counts the controls page shows under Data. */
   summary: () => Record<string, unknown>;
 }
