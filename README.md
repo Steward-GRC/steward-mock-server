@@ -24,8 +24,8 @@ in `src/product/schema-pending.graphql` and leave it once the pinned copy carrie
   with a bearer token, and both read and change the same invented data. A change one client makes
   reaches every open subscription.
 - 🎛️ **A controls page at `/_mock`:** sign someone in, fail the next call (as a GraphQL error or
-  an HTTP status), expire every session, put the sample data back, start fresh, or start as a new
-  install. A product adds its own buttons.
+  an HTTP status), expire every session, put the sample data back, start fresh, start as a new
+  install, or switch to the demo start state (no documents). A product adds its own buttons.
 - 🧪 **Usable from a client's tests:** start it on a free port, or call `handle` with a `Request`
   and no port at all.
 - 🪶 **No build step:** Node 24 runs the TypeScript sources directly. Two runtime dependencies:
@@ -132,16 +132,17 @@ state starts the next room after everyone has left, and the sender is told it wa
 
 ### Settings
 
-| Variable                                      | What it does                                                                                                                            |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                        |
-| `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network. |
-| `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                  |
-| `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                 |
-| `MOCK_SESSION_COOKIE`                         | The session cookie's name, when a client reads the real gateway's name.                                                                 |
-| `MOCK_FRESH_INSTALL`                          | `1` starts it as a new install, so clients walk first-run setup.                                                                        |
-| `MOCK_SERVER_VERSION`                         | The version the probes report.                                                                                                          |
-| `LOG_LEVEL`, `LOG_FORMAT`                     | `trace` to `error`; `console` or `json`.                                                                                                |
+| Variable                                      | What it does                                                                                                                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                                        | The HTTP port (default 5175). `--port` on the command line wins.                                                                                                                  |
+| `HOST`                                        | Where to listen. Loopback by default, because the controls have no sign-in; set `0.0.0.0` to reach it from a phone on the same network.                                           |
+| `HTTPS_PORT`, `MOCK_TLS_CERT`, `MOCK_TLS_KEY` | Also serve HTTPS, for a client that refuses plain HTTP (an iOS app). `--https-port` on the command line sets the port.                                                            |
+| `MOCK_CORS_ORIGINS`                           | Comma-separated origins allowed to call it with credentials, for a web client served from another port without a proxy.                                                           |
+| `MOCK_SESSION_COOKIE`                         | The session cookie's name, when a client reads the real gateway's name.                                                                                                           |
+| `MOCK_FRESH_INSTALL`                          | `1` starts it as a new install, so clients walk first-run setup.                                                                                                                  |
+| `MOCK_START`                                  | `demo` starts on the demo start state: a brand-new install with the people, category tree, templates, workflows and groups, and no documents. Reset and Start fresh return to it. |
+| `MOCK_SERVER_VERSION`                         | The version the probes report.                                                                                                                                                    |
+| `LOG_LEVEL`, `LOG_FORMAT`                     | `trace` to `error`; `console` or `json`.                                                                                                                                          |
 
 ### Two people on two machines
 

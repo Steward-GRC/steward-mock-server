@@ -10,7 +10,7 @@ import type { Product } from "#core/product.ts";
 
 import { collabSockets } from "#product/collab.ts";
 import { productActions, productSummary } from "#product/controls.ts";
-import { seed } from "#product/data.ts";
+import { demoSeed, seed, startState } from "#product/data.ts";
 import "#product/groups.ts";
 import { stewardMaintenance } from "#product/maintenance.ts";
 import { resolvers } from "#product/resolvers.ts";
@@ -44,7 +44,7 @@ export const steward: Product = {
   roleChoices,
   routes: stewardRoutes,
   schema: [read("schema.graphql"), read("schema-pending.graphql")],
-  seed,
+  seed: () => (startState.value === "demo" ? demoSeed() : seed()),
   settings: {
     graphqlPath: "/query",
     name: "Steward",

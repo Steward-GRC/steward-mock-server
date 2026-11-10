@@ -6,9 +6,9 @@
 import type { Action, ProductControl } from "#core/controls.ts";
 
 import { refuse } from "#core/http.ts";
-import { mockState } from "#core/state.ts";
+import { mockState, startFresh } from "#core/state.ts";
 import { assetActions } from "#product/assets.ts";
-import { type SignInMethods, stewardData } from "#product/data.ts";
+import { type SignInMethods, startState, stewardData } from "#product/data.ts";
 import { asSteward, type StewardPerson } from "#product/data/people.ts";
 import { expireTestLinks } from "#product/sso.ts";
 
@@ -98,6 +98,16 @@ const needsOnboarding: ProductControl = (body) => {
 };
 
 /**
+ * POST /_mock/controls {kind: "start-state", state: "demo" | "sample"}: which data Reset and Start
+ * fresh return to, and a fresh start on it with everyone signed out.
+ */
+const startStateControl: ProductControl = (body) => {
+  startState.value = body.state === "demo" ? "demo" : "sample";
+  startFresh(false);
+  return { startState: startState.value };
+};
+
+/**
  * POST /_mock/controls {kind: "ai-simulation", on}: whether Ask is simulated (the default) or AI
  * answers as if the ai service were down.
  */
@@ -159,6 +169,22 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
   },
   ...signInMethodActions,
   ...assetActions,
+  {
+    body: { state: "demo" },
+    hint: "A brand-new install: the people, categories, templates, workflows and groups, and no documents. Reset and Start fresh return here. Everyone is signed out.",
+    kind: "start-state",
+    label: "Demo start state",
+    run: startStateControl,
+    section: "Start over",
+  },
+  {
+    body: { state: "sample" },
+    hint: "The sample data, with its documents. Reset and Start fresh return here. Everyone is signed out.",
+    kind: "start-state",
+    label: "Sample data start state",
+    run: startStateControl,
+    section: "Start over",
+  },
   {
     body: { on: true },
     hint: "Ask answers from the policies the person may read, with citations; aiHealth says available.",
