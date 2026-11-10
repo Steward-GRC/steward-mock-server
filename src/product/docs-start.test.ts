@@ -135,6 +135,11 @@ describe("the docs start state's data", () => {
         `${person.username} has no second factor to enrol`,
       );
       assert.notEqual(person.disabled, true, `${person.username} is enabled`);
+      assert.equal(
+        (person as { passkey?: boolean }).passkey,
+        true,
+        `${person.username} has a strong factor, so there is no enrolment nudge`,
+      );
     }
   });
 

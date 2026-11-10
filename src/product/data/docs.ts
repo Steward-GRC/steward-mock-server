@@ -53,7 +53,16 @@ const docsPeople = (): StewardData["people"] =>
       totpEnrolledAt?: string;
       totpLabel?: null | string;
     } & typeof person;
-    const kept = { ...rest, secondFactor: false };
+    // A passkey is a strong factor, so the staff app shows no "add an authenticator app" nudge, and
+    // it asks for nothing more at a password sign-in.
+    const kept = {
+      ...rest,
+      localAccount: true,
+      passkey: true,
+      passkeyCreatedAt: "2026-06-18T08:15:00Z",
+      passkeyLabel: "Work laptop",
+      secondFactor: false,
+    };
     return person.id === FRANK
       ? {
           ...kept,
@@ -1198,7 +1207,7 @@ const docsLinks = (): Record<string, VersionLinks> => {
     contactBlockIds: ["contact-block-2"],
     definitionIds: ["definition-1", "definition-2"],
     referenceIds: ["reference-1", "reference-2"],
-    related: [{ policyId: "policy-5", type: "RELATED_TO" }],
+    related: [{ policyId: "policy-4", type: "RELATED_TO" }],
   };
   const expenses: VersionLinks = {
     contactBlockIds: ["contact-block-3"],
