@@ -19,6 +19,7 @@ import {
   publishVersion,
   versionSubject,
 } from "#product/resolvers/policies.ts";
+import { readsCategory } from "#product/resolvers/raci.ts";
 import {
   caller,
   data,
@@ -78,9 +79,10 @@ const SIGNALS_NEEDING_COMMENT = new Set([
   "SIGNAL_TYPE_REJECT",
 ]);
 
-/** Approvals a stage needs: one, a majority, or all of its seats. */
+/** Approvals a stage needs: one, a majority, all of its seats, or the N of an nofm stage. */
 const required = (stage: RunStage): number => {
   const seats = stage.seats.length;
+  if (stage.quorum === "nofm") return stage.quorumN ?? 0;
   if (stage.quorum === "all") return seats;
   if (stage.quorum === "majority") return Math.floor(seats / 2) + 1;
   return 1;
@@ -116,6 +118,30 @@ const stageMet = (stage: RunStage): boolean => {
     singlesMet &&
     (stage.groups ?? []).every((g) => unitOf(stage, g).status === "SATISFIED")
   );
+};
+
+/** The group units of a stage that have a member. */
+const unitsWithMembers = (stage: WorkflowStage, keep = (_id: string) => true) =>
+  stage.groupUnits.filter((g) => g.memberUserIds.some(keep)).length;
+
+/** steward-workflow's MeetsQuorum: nofm needs N votes, any other quorum one. */
+const meetsQuorum = (stage: WorkflowStage, votes: number): boolean =>
+  stage.quorum === "nofm" ? votes >= stage.quorumN : votes > 0;
+
+/**
+ * Who is seated on a stage as an individual. Approvers who cannot read the policy are dropped; a
+ * group unit with a reader left counts as one vote. When the votes left cannot meet the stage
+ * quorum, the owners of the policy's home category join as individual seats (steward-workflow's
+ * applyFilter).
+ */
+const approversOf = (stage: WorkflowStage, categoryId: string): string[] => {
+  const reads = (userId: string) => readsCategory(userId, categoryId);
+  const seated = stage.approvers.filter(reads);
+  const votes = seated.length + unitsWithMembers(stage, reads);
+  if (meetsQuorum(stage, votes)) return seated;
+  const owners =
+    data().categories.find((c) => c.id === categoryId)?.owners ?? [];
+  return [...new Set([...seated, ...owners])];
 };
 
 /** Seats nobody needs any more once a stage or the run is settled. */
@@ -305,6 +331,16 @@ export const workflowResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           `The "${unstaffed.name}" stage has no approver.`,
         );
+      // steward-workflow's size check: an nofm stage cannot ask for more approvals than it has
+      // votes, and a group unit with members is one vote
+      for (const [index, s] of workflow.stages.entries()) {
+        const votes = s.approvers.length + unitsWithMembers(s);
+        if (s.quorum === "nofm" && s.quorumN > votes)
+          throw refuse(
+            "FAILED_PRECONDITION",
+            `stage ${String(index)}: quorum_n=${String(s.quorumN)} exceeds pool size ${String(votes)}`,
+          );
+      }
       cancelRuns(version.id);
       const run: Run = {
         currentStageIdx: 0,
@@ -314,7 +350,8 @@ export const workflowResolvers: Resolvers = {
         stages: workflow.stages.map((stage) => ({
           name: stage.name,
           quorum: stage.quorum,
-          seats: stage.approvers.map((userId) => ({
+          quorumN: stage.quorumN,
+          seats: approversOf(stage, policy.homeCategoryId).map((userId) => ({
             comment: null,
             decidedAt: null,
             state: "pending",

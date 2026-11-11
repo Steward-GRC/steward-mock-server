@@ -144,8 +144,10 @@ export interface WorkflowStage {
   id: string;
   name: string;
   pinnedLast: boolean;
-  /** one, majority or all of the stage's approvers. */
+  /** one, majority, all or nofm of the stage's approvers. */
   quorum: string;
+  /** The approvals an nofm stage needs; zero on every other quorum. */
+  quorumN: number;
   rejectOnSlaBreach: boolean;
   slaDays: null | number;
   /** Users who hold a veto on this stage. */
@@ -401,6 +403,7 @@ export const stage = (
   groupUnits: [],
   pinnedLast: false,
   quorum: "one",
+  quorumN: 0,
   rejectOnSlaBreach: false,
   slaDays: null,
   vetoApproverIds: [],

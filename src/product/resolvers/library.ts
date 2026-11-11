@@ -161,14 +161,40 @@ interface StageInput {
   name: string;
   pinnedLast?: boolean | null;
   quorum: string;
+  quorumN?: null | number;
   rejectOnSlaBreach?: boolean | null;
   slaDays?: null | number;
   vetoApproverIds?: null | string[];
   vetoGroupIds?: null | string[];
 }
 
-const stagesOf = (input: StageInput[]): WorkflowStage[] =>
-  input.map((s) => ({
+/**
+ * steward-workflow's Stage.Validate for the n-of-m quorum, applied when a definition is saved: an
+ * nofm stage needs an N of at least one, any other quorum takes none, and a stage that names
+ * approvers cannot ask for more of them than it names (a stage with none is a draft).
+ */
+const checkQuorum = (s: StageInput) => {
+  const n = s.quorumN ?? 0;
+  if (s.quorum === "nofm" && n < 1)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": quorum_n must be >= 1 when quorum is "nofm"`,
+    );
+  if (s.quorum !== "nofm" && n !== 0)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": quorum_n only valid when quorum is "nofm"`,
+    );
+  if (s.quorum === "nofm" && s.approvers.length > 0 && n > s.approvers.length)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": quorum_n (${String(n)}) exceeds approver count (${String(s.approvers.length)})`,
+    );
+};
+
+const stagesOf = (input: StageInput[]): WorkflowStage[] => {
+  for (const s of input) checkQuorum(s);
+  return input.map((s) => ({
     approvers: [...s.approvers],
     approversByCategory: (s.approversByCategory ?? []).map((c) => ({
       approverIds: [...c.approverIds],
@@ -182,11 +208,13 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] =>
     name: s.name,
     pinnedLast: s.pinnedLast ?? false,
     quorum: s.quorum,
+    quorumN: s.quorumN ?? 0,
     rejectOnSlaBreach: s.rejectOnSlaBreach ?? false,
     slaDays: s.slaDays ?? null,
     vetoApproverIds: [...(s.vetoApproverIds ?? [])],
     vetoGroupIds: [...(s.vetoGroupIds ?? [])],
   }));
+};
 
 const workflowFor = (id: string) =>
   found(

@@ -326,6 +326,17 @@ extend type Mutation {
   setWorkflowVetoEnabled(id: ID!, enabled: Boolean!): WorkflowDef!
 }
 
+# An n-of-m stage quorum, as steward-workflow's builder keeps it: quorum "nofm" with quorumN, the
+# approvals the stage needs. quorumN is zero on every other quorum. Not on steward-workflow's API
+# yet (its stage quorum there is one, majority or all).
+extend type WorkflowStageDef {
+  quorumN: Int!
+}
+
+extend input WorkflowStageInput {
+  quorumN: Int
+}
+
 # Live co-editing inside an appendix: its own room and token, away from the policy's draft. Whoever
 # may edit the policy may join; a checkpoint becomes the appendix's draft.
 type AppendixCollabToken {
