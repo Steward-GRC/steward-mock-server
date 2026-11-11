@@ -4,7 +4,7 @@
 // the copy names the pinned commit and matches the hash scripts/schema-copy.sh recorded, so a
 // hand edit or a half-done bump fails here instead of drifting from the gateway.
 
-import { buildSchema } from "graphql";
+import { buildSchema, parse } from "graphql";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -24,6 +24,22 @@ const pins = Object.fromEntries(
 );
 
 const schema = read("./schema.graphql");
+
+const named = (source: string) => {
+  const types = new Set<string>();
+  const fields = new Set<string>();
+  for (const definition of parse(source).definitions) {
+    if (!("name" in definition) || !definition.name) continue;
+    if (!definition.kind.endsWith("Extension")) {
+      types.add(definition.name.value);
+    }
+    const members = "fields" in definition ? (definition.fields ?? []) : [];
+    for (const member of members) {
+      fields.add(`${definition.name.value}.${member.name.value}`);
+    }
+  }
+  return { fields, types };
+};
 
 describe("the gateway schema copy", () => {
   it("names the pinned steward-gateway commit", () => {
@@ -45,5 +61,24 @@ describe("the gateway schema copy", () => {
     const built = buildSchema(schema);
     assert.ok(built.getQueryType()?.getFields().me);
     assert.ok(built.getQueryType()?.getFields().globalSettings);
+  });
+
+  it("is not repeated in the pending schema", () => {
+    const pinned = named(schema);
+    const pending = named(read("./schema-pending.graphql"));
+    const repeatedTypes = [...pending.types].filter((t) => pinned.types.has(t));
+    const repeatedFields = [...pending.fields].filter((f) =>
+      pinned.fields.has(f),
+    );
+    assert.deepEqual(
+      repeatedTypes,
+      [],
+      "schema-pending.graphql declares types the pinned gateway schema carries",
+    );
+    assert.deepEqual(
+      repeatedFields,
+      [],
+      "schema-pending.graphql declares fields the pinned gateway schema carries",
+    );
   });
 });
