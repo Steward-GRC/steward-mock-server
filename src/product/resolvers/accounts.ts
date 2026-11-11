@@ -44,6 +44,52 @@ const log = createLogger("steward-accounts");
 const coded = (code: string, message: string) =>
   new GraphQLError(message, { extensions: { code } });
 
+/** Kratos's password policy has a minimum length of 8 (identity leaves the rest to Kratos). */
+const PASSWORD_MIN = 8;
+
+/**
+ * A few of the passwords a breach list always holds. Kratos asks Have I Been Pwned; the mock has no
+ * network, so a short fixed list stands for "breached".
+ */
+const BREACHED = new Set([
+  "11111111",
+  "12345678",
+  "123456789",
+  "1234567890",
+  "abc12345",
+  "football",
+  "iloveyou",
+  "letmein1",
+  "password",
+  "password1",
+  "password123",
+  "qwerty123",
+  "qwertyuiop",
+  "welcome1",
+]);
+
+/**
+ * identity's ChangePassword outcome for the password policy: too short, breached, or too similar
+ * to the identifier (the email), which the mock reads as the email, its mailbox part or the
+ * username, with any case, and a password that holds the whole email. Kratos scores similarity;
+ * the mock keeps the rule exact so a test can tell why.
+ */
+const weakPassword = (person: StewardPerson, next: string): boolean => {
+  const lower = next.toLowerCase();
+  const email = person.email.toLowerCase();
+  const identifiers = [
+    email,
+    email.split("@", 1)[0] ?? "",
+    person.username.toLowerCase(),
+  ];
+  return (
+    [...next].length < PASSWORD_MIN ||
+    BREACHED.has(lower) ||
+    identifiers.some((id) => id !== "" && lower === id) ||
+    (email !== "" && lower.includes(email))
+  );
+};
+
 const personFor = (userId: string) =>
   found(
     people().find((p) => p.id === userId),
@@ -140,6 +186,64 @@ const impersonationView = (
 
 export const accountResolvers: Resolvers = {
   Mutation: {
+    /**
+     * identity's ChangeMyPassword (steward-identity#66) behind the gateway field proposed in
+     * steward-gateway#72: the signed-in person's own password, never one a request names. Refused
+     * while acting as someone (identity's ACT_AS_FORBIDDEN). Identity proves the current password
+     * before it applies the policy, so a wrong current answers first. An attempt is audited as
+     * user.password.changed or user.password.change_failed; no password goes in the trail or a log.
+     */
+    changeMyPassword: (
+      _root,
+      given: { currentPassword: string; newPassword: string },
+      context: Context,
+    ) => {
+      const person = realCaller(context);
+      if (impersonationOf(context)) {
+        log.debug("change my password refused while acting as another", {
+          personId: person.id,
+        });
+        throw coded(
+          "ACT_AS_FORBIDDEN",
+          "This action isn't available while you're acting as another user. Stop acting as them first.",
+        );
+      }
+      if (!given.currentPassword || !given.newPassword)
+        throw refuse(
+          "BAD_USER_INPUT",
+          "current_password and new_password required",
+        );
+      if (!person.localAccount) {
+        log.debug("change my password: no local password", {
+          personId: person.id,
+        });
+        throw coded(
+          "NO_LOCAL_PASSWORD",
+          "This account signs in through your organisation and has no Steward password to change.",
+        );
+      }
+      if (!person.password || given.currentPassword !== person.password) {
+        log.debug("change my password: wrong current password", {
+          personId: person.id,
+        });
+        record("user.password.change_failed", person, userSubject(person));
+        throw coded("CURRENT_PASSWORD_WRONG", "The current password is wrong.");
+      }
+      if (weakPassword(person, given.newPassword)) {
+        log.debug("change my password: refused by the password policy", {
+          personId: person.id,
+        });
+        record("user.password.change_failed", person, userSubject(person));
+        throw coded(
+          "PASSWORD_TOO_WEAK",
+          "That password doesn't meet the password rules. Choose a longer password that isn't common or easy to guess.",
+        );
+      }
+      person.password = given.newPassword;
+      record("user.password.changed", person, userSubject(person));
+      log.info("password changed by its owner", { personId: person.id });
+      return true;
+    },
     grantRoot: (
       _root,
       given: { otp: string; userId: string },
