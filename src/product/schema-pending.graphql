@@ -456,3 +456,17 @@ extend type AckRosterEntry {
 extend type OverdueEntry {
   dueAt: String
 }
+
+# The organisation's monthly limit on AI provider requests, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/85 and built in the gateway's
+# feat/85-ai-settings-limit-notice branch. 0 means no limit. setAIMonthlyLimit is site admin only,
+# like the other ai settings; a negative limit is InvalidArgument, 0 clears it, and it answers the
+# limit now in force. Both move to the pinned copy (schema.graphql) once that gateway PR merges.
+extend type AIConfig {
+  "Provider requests allowed per calendar month (UTC); 0 means no limit."
+  monthlyLimit: Int!
+}
+
+extend type Mutation {
+  setAIMonthlyLimit(limit: Int!): Int!
+}
