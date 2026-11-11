@@ -88,6 +88,8 @@ export interface RunGroup {
 }
 
 export interface RunStage {
+  /** When the stage is due: fixed from the day it is entered; absent until then or with no SLA. */
+  dueAt?: null | string;
   /** Approve-as-group units on the stage; their members are the seats with that `groupId`. */
   groups?: RunGroup[];
   name: string;
@@ -96,6 +98,8 @@ export interface RunStage {
   /** The approvals an nofm stage needs; absent or zero on every other quorum. */
   quorumN?: number;
   seats: Seat[];
+  /** The workflow stage's SLA in days, kept to fix `dueAt` when the stage is entered. */
+  slaDays?: null | number;
   /** Seat holders whose single reject ends the run (the workflow opted in to vetoes). */
   vetoUserIds?: string[];
 }
@@ -623,6 +627,7 @@ export const runs = (): Run[] => [
     policyVersionId: "version-4",
     stages: [
       {
+        dueAt: "2026-09-25T00:00:00Z",
         name: "Review",
         quorum: "majority",
         seats: [seat("task-1", "user-charlie"), seat("task-2", "user-alice")],

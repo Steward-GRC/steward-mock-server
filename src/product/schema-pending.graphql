@@ -307,6 +307,28 @@ extend type Mutation {
   setVersionContacts(policyVersionId: ID!, contactBlockIds: [ID!]!): PolicyVersionLinks!
 }
 
+# Who submitted the run and when, and each stage's due date and rule, proposed in
+# steward-gateway#68 (steward-workflow#49 sends them). stageProgress is index-aligned with
+# stageNames. approvals and required count individual seats only; approve-as-group units keep
+# their own tally in stageUnitProgress. This goes once the pinned gateway SDL carries them.
+extend type WorkflowStatus {
+  # The user who submitted the run (the account acted as, during act-as).
+  submittedBy: String
+  submittedAt: DateTime
+  stageProgress: [StageProgress!]!
+}
+
+type StageProgress {
+  # The earliest due date among the stage's live seats; null until the stage is entered.
+  dueAt: DateTime
+  # one, majority, all or nofm.
+  quorum: String!
+  # The approvals an nofm stage needs; 0 on every other rule.
+  quorumN: Int!
+  approvals: Int!
+  required: Int!
+}
+
 # The name of the workflow that applies to a policy, so an author sees which one it is; null when
 # none resolves. Proposed in steward-gateway#137, merged in steward-gateway#140 (the pinned copy
 # moves past it with the next schema bump, and this goes then).
