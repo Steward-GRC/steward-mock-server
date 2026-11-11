@@ -21,6 +21,7 @@ export const AUDIT_ACTIONS = {
     "category.deleted",
     "category.governance_updated",
     "category.moved",
+    "category.reordered",
     "category.renamed",
     "category_rule.created",
     "category_rule.deleted",

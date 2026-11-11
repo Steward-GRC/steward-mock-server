@@ -68,6 +68,30 @@ const subtreeOf = (id: string): Category[] => {
   return data().categories.filter((c) => ids.has(c.id));
 };
 
+/** The next free place among a parent's children: one past the highest, or zero for the first. */
+const nextOrder = (parentId: null | string, except?: string) =>
+  Math.max(
+    -1,
+    ...data()
+      .categories.filter((c) => c.parentId === parentId && c.id !== except)
+      .map((c) => c.order),
+  ) + 1;
+
+/** A parent's children in their stored order, then by name and id as steward-core breaks ties. */
+const childrenOf = (parentId: null | string): Category[] =>
+  data()
+    .categories.filter((c) => c.parentId === parentId)
+    .toSorted(
+      (a, b) =>
+        a.order - b.order ||
+        a.name.localeCompare(b.name, "en") ||
+        a.id.localeCompare(b.id, "en"),
+    );
+
+/** Categories depth first, each parent's children in order, as the gateway's categoryTree walks them. */
+const walkFrom = (parentId: null | string): Category[] =>
+  childrenOf(parentId).flatMap((c) => [c, ...walkFrom(c.id)]);
+
 const heightOf = (id: string): number => {
   const children = data().categories.filter((c) => c.parentId === id);
   return 1 + Math.max(0, ...children.map((c) => heightOf(c.id)));
@@ -379,6 +403,7 @@ export const libraryResolvers: Resolvers = {
         id: newId("category"),
         idpGroupIds: null,
         name: given.name,
+        order: nextOrder(parentId),
         owners: [],
         parentId,
         reviewCadence: "NONE",
@@ -624,6 +649,7 @@ export const libraryResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           `Categories go at most ${String(MAX_DEPTH)} levels deep.`,
         );
+      category.order = nextOrder(parentId, category.id);
       category.parentId = parentId;
       record("category.moved", admin, categorySubject(category));
       return category;
@@ -675,6 +701,40 @@ export const libraryResolvers: Resolvers = {
         librarySubject("template", template.id, template.name),
       );
       return template;
+    },
+    reorderCategories: (
+      _root,
+      given: { orderedIds: string[]; parentId?: null | string },
+      context: Context,
+    ) => {
+      const admin = siteAdmin(context);
+      const parentId = given.parentId ?? null;
+      const parent = parentId ? categoryFor(parentId) : null;
+      const siblings = childrenOf(parentId);
+      const listed = new Set(given.orderedIds);
+      // every child exactly once, else nothing changes
+      if (
+        given.orderedIds.length !== siblings.length ||
+        listed.size !== given.orderedIds.length ||
+        siblings.some((c) => !listed.has(c.id))
+      )
+        throw refuse(
+          "BAD_USER_INPUT",
+          "orderedIds must list every child of the parent exactly once.",
+        );
+      const byId = new Map(siblings.map((c) => [c.id, c]));
+      for (const [position, id] of given.orderedIds.entries()) {
+        const child = byId.get(id);
+        if (child) child.order = position;
+      }
+      record(
+        "category.reordered",
+        admin,
+        parent
+          ? categorySubject(parent)
+          : { id: "root", kind: "category", label: "Top level" },
+      );
+      return childrenOf(parentId);
     },
     retireTemplate: (_root, given: { id: string }, context: Context) => {
       const admin = templateAdmin(context);
@@ -923,9 +983,7 @@ export const libraryResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      return data().categories.filter(
-        (c) => c.parentId === (given.parentId ?? null),
-      );
+      return childrenOf(given.parentId ?? null);
     },
     categoryDocumentCounts: (
       _root,
@@ -942,9 +1000,10 @@ export const libraryResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      if (!given.rootId) return data().categories;
+      if (!given.rootId) return walkFrom(null);
       siteAdmin(context);
-      return subtreeOf(categoryFor(given.rootId).id);
+      const root = categoryFor(given.rootId);
+      return [root, ...walkFrom(root.id)];
     },
     contactBlocks: (
       _root,

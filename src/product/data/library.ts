@@ -23,6 +23,11 @@ export interface Category {
   id: string;
   idpGroupIds: null | string[];
   name: string;
+  /**
+   * Position among the siblings under the same parent, from zero; lower comes first. Gaps are
+   * possible after a delete, so only the relative order counts (steward-core's order_index).
+   */
+  order: number;
   owners: string[];
   parentId: null | string;
   reviewCadence: "ANNUAL" | "BIENNIAL" | "NONE" | "ON_DATE";
@@ -171,6 +176,7 @@ export const category = (
   documentTypes: "BOTH",
   exclusionGroupIds: null,
   idpGroupIds: null,
+  order: 0,
   owners: [],
   parentId: null,
   reviewCadence: "NONE",
@@ -179,147 +185,158 @@ export const category = (
   ...given,
 });
 
+/** Give each category its position among the siblings that come before it in the list, from zero. */
+export const withSiblingOrder = (list: Category[]): Category[] => {
+  const seen = new Map<null | string, number>();
+  return list.map((c) => {
+    const order = seen.get(c.parentId) ?? 0;
+    seen.set(c.parentId, order + 1);
+    return { ...c, order };
+  });
+};
+
 /**
  * The design brief's four top-level categories, two subcategories each; Devices goes a third level
  * deep. Each carries the stored code its document numbers use, as steward-core keeps one per
  * category, so numbers read POL-FACILITIES-000001 rather than a six-letter cut of the slug.
  */
-export const categories = (): Category[] => [
-  category({
-    ackEveryone: true,
-    ackEveryoneSet: true,
-    ackTriggers: "ON_PUBLISH",
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "FINANCE",
-    defaultTemplateId: "template-1",
-    defaultWorkflowId: "workflow-1",
-    id: "category-finance",
-    name: "Finance",
-    owners: ["user-alice"],
-    reviewCadence: "ANNUAL",
-    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
-    slug: "finance",
-  }),
-  category({
-    code: "EXPENSES",
-    defaultWorkflowId: "workflow-1",
-    documentTypes: "POLICIES",
-    id: "category-expenses",
-    name: "Expenses",
-    parentId: "category-finance",
-    rules: [
-      raci("GROUP", "Finance team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
-      raci("USER", "user-erin", ["BLANK", "BLANK", "DENY", "DENY"]),
-      raci("GROUP", "All staff", ["ALLOW", "BLANK", "BLANK", "BLANK"]),
-    ],
-    slug: "expenses",
-  }),
-  category({
-    code: "PURCHASING",
-    defaultWorkflowId: "workflow-1",
-    id: "category-purchasing",
-    name: "Purchasing",
-    parentId: "category-finance",
-    slug: "purchasing",
-  }),
-  category({
-    ackTriggers: "ON_CHANGE",
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "PEOPLE",
-    defaultWorkflowId: "workflow-1",
-    id: "category-people",
-    name: "People",
-    slug: "people",
-  }),
-  category({
-    code: "LEAVE",
-    defaultWorkflowId: "workflow-1",
-    id: "category-leave",
-    name: "Leave",
-    parentId: "category-people",
-    slug: "leave",
-  }),
-  category({
-    code: "CONDUCT",
-    defaultWorkflowId: "workflow-1",
-    documentTypes: "PROCEDURES",
-    id: "category-conduct",
-    name: "Conduct",
-    parentId: "category-people",
-    slug: "conduct",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "INFORMATION",
-    defaultTemplateId: "template-1",
-    defaultWorkflowId: "workflow-1",
-    id: "category-information",
-    idpGroupIds: ["information-staff"],
-    name: "Information",
-    owners: ["user-charlie"],
-    reviewCadence: "BIENNIAL",
-    slug: "information",
-  }),
-  category({
-    code: "RECORDS",
-    defaultWorkflowId: "workflow-1",
-    id: "category-records",
-    name: "Records",
-    parentId: "category-information",
-    slug: "records",
-  }),
-  category({
-    code: "DEVICES",
-    defaultTemplateId: "template-2",
-    defaultWorkflowId: "workflow-1",
-    id: "category-devices",
-    name: "Devices",
-    parentId: "category-information",
-    slug: "devices",
-  }),
-  category({
-    code: "PHONES",
-    defaultTemplateNone: true,
-    exclusionGroupIds: [],
-    id: "category-phones",
-    name: "Phones",
-    parentId: "category-devices",
-    slug: "phones",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "WORKPLACE",
-    documentTypes: "NONE",
-    id: "category-workplace",
-    name: "Workplace",
-    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
-    slug: "workplace",
-  }),
-  category({
-    code: "FACILITIES",
-    defaultWorkflowId: "workflow-2",
-    id: "category-facilities",
-    name: "Facilities",
-    parentId: "category-workplace",
-    rules: [
-      raci("GROUP", "Facilities team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
-      raci("GROUP", "All staff", ["ALLOW", "ALLOW", "BLANK", "DENY"]),
-    ],
-    slug: "facilities",
-  }),
-  category({
-    authorRule: ["user-jon"],
-    code: "TRAVEL",
-    id: "category-travel",
-    name: "Travel",
-    parentId: "category-workplace",
-    slug: "travel",
-  }),
-];
+export const categories = (): Category[] =>
+  withSiblingOrder([
+    category({
+      ackEveryone: true,
+      ackEveryoneSet: true,
+      ackTriggers: "ON_PUBLISH",
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "FINANCE",
+      defaultTemplateId: "template-1",
+      defaultWorkflowId: "workflow-1",
+      id: "category-finance",
+      name: "Finance",
+      owners: ["user-alice"],
+      reviewCadence: "ANNUAL",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "finance",
+    }),
+    category({
+      code: "EXPENSES",
+      defaultWorkflowId: "workflow-1",
+      documentTypes: "POLICIES",
+      id: "category-expenses",
+      name: "Expenses",
+      parentId: "category-finance",
+      rules: [
+        raci("GROUP", "Finance team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
+        raci("USER", "user-erin", ["BLANK", "BLANK", "DENY", "DENY"]),
+        raci("GROUP", "All staff", ["ALLOW", "BLANK", "BLANK", "BLANK"]),
+      ],
+      slug: "expenses",
+    }),
+    category({
+      code: "PURCHASING",
+      defaultWorkflowId: "workflow-1",
+      id: "category-purchasing",
+      name: "Purchasing",
+      parentId: "category-finance",
+      slug: "purchasing",
+    }),
+    category({
+      ackTriggers: "ON_CHANGE",
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "PEOPLE",
+      defaultWorkflowId: "workflow-1",
+      id: "category-people",
+      name: "People",
+      slug: "people",
+    }),
+    category({
+      code: "LEAVE",
+      defaultWorkflowId: "workflow-1",
+      id: "category-leave",
+      name: "Leave",
+      parentId: "category-people",
+      slug: "leave",
+    }),
+    category({
+      code: "CONDUCT",
+      defaultWorkflowId: "workflow-1",
+      documentTypes: "PROCEDURES",
+      id: "category-conduct",
+      name: "Conduct",
+      parentId: "category-people",
+      slug: "conduct",
+    }),
+    category({
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "INFORMATION",
+      defaultTemplateId: "template-1",
+      defaultWorkflowId: "workflow-1",
+      id: "category-information",
+      idpGroupIds: ["information-staff"],
+      name: "Information",
+      owners: ["user-charlie"],
+      reviewCadence: "BIENNIAL",
+      slug: "information",
+    }),
+    category({
+      code: "RECORDS",
+      defaultWorkflowId: "workflow-1",
+      id: "category-records",
+      name: "Records",
+      parentId: "category-information",
+      slug: "records",
+    }),
+    category({
+      code: "DEVICES",
+      defaultTemplateId: "template-2",
+      defaultWorkflowId: "workflow-1",
+      id: "category-devices",
+      name: "Devices",
+      parentId: "category-information",
+      slug: "devices",
+    }),
+    category({
+      code: "PHONES",
+      defaultTemplateNone: true,
+      exclusionGroupIds: [],
+      id: "category-phones",
+      name: "Phones",
+      parentId: "category-devices",
+      slug: "phones",
+    }),
+    category({
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "WORKPLACE",
+      documentTypes: "NONE",
+      id: "category-workplace",
+      name: "Workplace",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "workplace",
+    }),
+    category({
+      code: "FACILITIES",
+      defaultWorkflowId: "workflow-2",
+      id: "category-facilities",
+      name: "Facilities",
+      parentId: "category-workplace",
+      rules: [
+        raci("GROUP", "Facilities team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
+        raci("GROUP", "All staff", ["ALLOW", "ALLOW", "BLANK", "DENY"]),
+      ],
+      slug: "facilities",
+    }),
+    category({
+      authorRule: ["user-jon"],
+      code: "TRAVEL",
+      id: "category-travel",
+      name: "Travel",
+      parentId: "category-workplace",
+      slug: "travel",
+    }),
+  ]);
 
 export const templates = (): Template[] => [
   {
