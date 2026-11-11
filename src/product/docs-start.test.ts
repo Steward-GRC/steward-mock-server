@@ -80,6 +80,7 @@ const NUMBERS = [
   "POL-PURCHASING-000001",
   "POL-FACILITIES-000002",
   "POL-RECORDS-000002",
+  "POL-RECORDS-000003",
 ];
 
 describe("the docs start state's data", () => {
@@ -106,11 +107,11 @@ describe("the docs start state's data", () => {
         contacts: 3,
         definitions: 5,
         people: 8,
-        policies: 13,
+        policies: 14,
         references: 3,
         reviewThreads: 4,
         runs: 12,
-        versions: 17,
+        versions: 18,
         workflows: 4,
       },
     );
@@ -241,6 +242,43 @@ describe("the states each guide screenshot needs", () => {
       (c) => c.id === locked.homeCategoryId,
     );
     assert.equal(category?.defaultTemplateLocked, true);
+  });
+
+  it("has Bob's Editor Tour draft: a callout, an open toggle, a button, a divider, an image and a file", () => {
+    const tour = byNumber("POL-RECORDS-000003");
+    assert.equal(tour.title, "Editor Tour");
+    assert.equal(tour.ownerUserId, "user-bob");
+    const draft = draftOf("POL-RECORDS-000003");
+    assert.ok(draft);
+    assert.equal(draft.status, "DRAFT");
+    const found: Record<string, Record<string, unknown>> = {};
+    const get = (type: string) => found[type] ?? {};
+    const walk = (node: Record<string, unknown>) => {
+      if (typeof node.type === "string") found[node.type] ??= node;
+      for (const child of (node.children as Record<string, unknown>[]) ?? [])
+        walk(child);
+    };
+    walk(JSON.parse(draft.contentJson).root);
+    for (const type of [
+      "callout",
+      "toggle",
+      "button",
+      "horizontalrule",
+      "image",
+      "file",
+    ])
+      assert.ok(found[type], `has a ${type}`);
+    assert.match(String(get("callout").calloutText), /\S/);
+    assert.match(String(get("toggle").heading), /\S/);
+    assert.match(String(get("toggle").content), /\S/);
+    assert.match(String(get("button").buttonText), /\S/);
+    assert.match(String(get("button").buttonUrl), /^https:\/\/example\.org/);
+    assert.match(String(get("image").alt), /\S/);
+    assert.match(String(get("image").caption), /\S/);
+    assert.match(String(get("file").fileTitle), /\S/);
+    const required = ["purpose", "scope", "policy-statement"];
+    for (const key of required)
+      assert.notEqual(bodyOf(draft.contentJson, key), "", `fills ${key}`);
   });
 
   it("has a locked default template on Finance and an unlocked one on Information", () => {
@@ -428,8 +466,8 @@ describe("the states each guide screenshot needs", () => {
 describe("Reset and Start fresh return to the docs state", () => {
   it("until another start state is chosen", async () => {
     await control(base, { kind: "reset" });
-    assert.equal(data().policies.length, 13);
+    assert.equal(data().policies.length, 14);
     await control(base, { kind: "fresh" });
-    assert.equal(data().policies.length, 13);
+    assert.equal(data().policies.length, 14);
   });
 });
