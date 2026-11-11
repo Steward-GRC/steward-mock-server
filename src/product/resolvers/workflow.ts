@@ -505,6 +505,42 @@ export const workflowResolvers: Resolvers = {
     },
   },
   Query: {
+    // The caller's own approved or rejected seats on runs still in review (a request for changes
+    // leaves the seat pending, so it is not one): one entry per run, the newest decision, and
+    // none from before the run started. A policy the caller can no longer read is left out.
+    decidedApprovals: (_root, _given, context: Context) => {
+      const person = caller(context);
+      return openRuns()
+        .flatMap((run) => {
+          const policy = data().policies.find((p) => p.id === run.policyId);
+          if (!policy || readEffect(person, policy) === "deny") return [];
+          const newest = run.stages
+            .flatMap((stage) => stage.seats)
+            .filter(
+              (s) =>
+                s.userId === person.id &&
+                (s.state === "approved" || s.state === "rejected") &&
+                s.decidedAt !== null &&
+                s.decidedAt >= run.submittedAt,
+            )
+            .toSorted((a, b) =>
+              (b.decidedAt ?? "").localeCompare(a.decidedAt ?? ""),
+            )[0];
+          if (!newest?.decidedAt) return [];
+          return [
+            {
+              currentStageIdx: run.currentStageIdx,
+              decidedAt: newest.decidedAt,
+              decision: newest.state,
+              policyTitle: policy.title,
+              policyVersionId: run.policyVersionId,
+              runId: run.id,
+              stageCount: run.stages.length,
+            },
+          ];
+        })
+        .toSorted((a, b) => b.decidedAt.localeCompare(a.decidedAt));
+    },
     // steward-gateway's gate runs first (the same one submit uses), then the answer is the
     // workflow's name and whether it can run, never its stages.
     effectiveWorkflow: (

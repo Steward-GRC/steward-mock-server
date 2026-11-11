@@ -335,3 +335,23 @@ type StageProgress {
 extend type EffectiveWorkflow {
   name: String
 }
+
+# The runs the caller has already decided that are still in review, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/68 (steward-workflow#45): the inbox's
+# "In progress" group. The caller's own approved or rejected seats; one entry per run (the newest
+# decision), newest first; a run that is published, rejected or withdrawn drops out, and so does a
+# policy the caller can no longer read. decidedAt is RFC 3339.
+extend type Query {
+  decidedApprovals: [DecidedApproval!]!
+}
+
+type DecidedApproval {
+  policyVersionId: ID!
+  policyTitle: String!
+  runId: String!
+  currentStageIdx: Int!
+  stageCount: Int!
+  # "approved" or "rejected"
+  decision: String!
+  decidedAt: String!
+}
