@@ -13,6 +13,19 @@ export interface NotificationPrefs {
   digest?: { dailyHour: number; weeklyDow: number };
   /** By kind, in the order they were first saved. */
   overrides: Record<string, NotifCadence>;
+  /** Absent when quiet hours are off. */
+  quietHours?: QuietHours;
+}
+
+/**
+ * A window of local hours in which email and push are held: start is the first hour held, end the
+ * first hour not held, and end below start crosses midnight.
+ */
+export interface QuietHours {
+  end: number;
+  start: number;
+  /** An IANA name. */
+  timezone: string;
 }
 
 /** Alice moved workflow mail to the daily digest but keeps approvals immediate. */
