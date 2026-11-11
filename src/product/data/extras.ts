@@ -80,9 +80,9 @@ export const imageCard = (id: string, alt: string, caption = ""): Block =>
   block("image", "", {
     alt,
     caption,
-    height: 1,
+    height: 270,
     src: `/api/assets/${id}`,
-    width: 1,
+    width: 480,
   });
 
 /** The editor's Callout card, without an emoji. */
