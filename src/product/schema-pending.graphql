@@ -306,3 +306,10 @@ extend type Mutation {
   setVersionReferences(policyVersionId: ID!, referenceIds: [ID!]!): PolicyVersionLinks!
   setVersionContacts(policyVersionId: ID!, contactBlockIds: [ID!]!): PolicyVersionLinks!
 }
+
+# The name of the workflow that applies to a policy, so an author sees which one it is; null when
+# none resolves. Proposed in steward-gateway#137, merged in steward-gateway#140 (the pinned copy
+# moves past it with the next schema bump, and this goes then).
+extend type EffectiveWorkflow {
+  name: String
+}
