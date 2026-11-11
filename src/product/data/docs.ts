@@ -22,6 +22,7 @@ import {
   section,
   stage,
   type TemplateVersion,
+  withSiblingOrder,
   type Workflow,
 } from "#product/data/library.ts";
 import {
@@ -103,7 +104,7 @@ const docsCategories = (): Category[] => {
     parentId: "category-security",
     slug: "incident-response",
   };
-  return [
+  return withSiblingOrder([
     // Finance: the locked default template (admin-1, "Authors must use this template").
     patch("category-finance", {
       defaultTemplateLocked: true,
@@ -134,7 +135,7 @@ const docsCategories = (): Category[] => {
     }),
     patch("category-facilities", {}),
     patch("category-travel", { authorRule: [] }),
-  ];
+  ]);
 };
 
 const docsTemplateVersions = (): TemplateVersion[] => [
