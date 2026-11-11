@@ -121,6 +121,31 @@ const aiSimulation: ProductControl = (body) => {
   return { aiSimulated: stewardData().aiSimulated };
 };
 
+/** The reasons steward-ai's GetProviderStatus gives for a failing provider. */
+const PROVIDER_REASONS = ["auth_failed", "provider_error", "not_configured"];
+
+/**
+ * POST /_mock/controls {kind: "ai-provider", providerReason}: the model provider behind the ai
+ * service. null brings it back; auth_failed, provider_error or not_configured is an outage with
+ * that reason, and "" an outage ai gave no reason for. aiHealth then says provider_unavailable with
+ * the reason as providerReason, while the simulation is on (with it off the service is unreachable).
+ */
+const aiProvider: ProductControl = (body) => {
+  const reason = body.providerReason ?? null;
+  if (
+    reason !== null &&
+    (typeof reason !== "string" ||
+      (reason !== "" && !PROVIDER_REASONS.includes(reason)))
+  )
+    return refuse(
+      400,
+      "unknown_provider_reason",
+      `providerReason is null, "", or one of ${PROVIDER_REASONS.join(", ")}.`,
+    );
+  stewardData().aiProviderOutage = reason;
+  return { aiProviderOutage: reason };
+};
+
 /**
  * POST /_mock/controls {kind: "add-duplicate-person", personId}: a second account for the same
  * person, to try Merge accounts on (steward-web bug log #110). Same email, the name spelled
@@ -156,6 +181,46 @@ const addDuplicatePerson: ProductControl = (body) => {
 };
 
 export const productActions: ({ run: ProductControl } & Action)[] = [
+  {
+    body: { providerReason: null },
+    hint: "The model provider works: aiHealth has no providerReason.",
+    kind: "ai-provider",
+    label: "AI provider healthy",
+    run: aiProvider,
+    section: "AI",
+  },
+  {
+    body: { providerReason: "auth_failed" },
+    hint: "The provider refuses its credential: aiHealth says provider_unavailable, providerReason auth_failed.",
+    kind: "ai-provider",
+    label: "AI provider: auth failed",
+    run: aiProvider,
+    section: "AI",
+  },
+  {
+    body: { providerReason: "provider_error" },
+    hint: "The provider call fails: aiHealth says provider_unavailable, providerReason provider_error.",
+    kind: "ai-provider",
+    label: "AI provider: error",
+    run: aiProvider,
+    section: "AI",
+  },
+  {
+    body: { providerReason: "not_configured" },
+    hint: "No provider is set up: aiHealth says provider_unavailable, providerReason not_configured.",
+    kind: "ai-provider",
+    label: "AI provider: not configured",
+    run: aiProvider,
+    section: "AI",
+  },
+  {
+    body: { providerReason: "" },
+    hint: "An outage ai gave no reason for: provider_unavailable with a null providerReason.",
+    kind: "ai-provider",
+    label: "AI provider: no reason",
+    run: aiProvider,
+    section: "AI",
+  },
   {
     body: { personId: "user-erin" },
     hint: "Adds a second account for Erin (same email, name spelled differently, the other kind of sign-in) to try Merge accounts on.",

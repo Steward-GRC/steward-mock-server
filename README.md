@@ -148,7 +148,7 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
 published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
-**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The AI jobs are
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The **AI provider** buttons simulate the model provider failing while the service answers: `aiHealth` says `provider_unavailable` and `providerReason` is `auth_failed`, `provider_error`, `not_configured` or null (no reason); `providerReason` is null in every other state (a field the pinned gateway schema does not carry yet, so it sits in `schema-pending.graphql`). The AI jobs are
 simulated too (generate a draft, review, revise, enrichment suggestions): a submit returns a job id, the job runs for about
 2.5 seconds (`MOCK_AI_JOB_MS` changes it), `aiJob` and the `aiJobResult` subscription report it, and `aiJobResultContent` returns a
 made-up result marked as simulated: sections, review findings, a change set. With the simulation off they fail as the gateway does while the ai
@@ -300,6 +300,8 @@ Saving a workflow refuses an N below one, an N on another quorum and an N above 
 `submitWorkflow` refuses an N above the stage's votes, its approvers plus each group unit with
 members. Approvers who cannot read the policy are not seated, and when the votes left cannot meet the
 quorum the home category's owners are seated as individuals. `nofm.test.ts` is the reference.
+
+An approver who sends comments back (`REQUEST_CHANGES`) keeps the seat pending with `comment` null, and the seat shows `changesRequested` (the latest comment) and `changesRequestedAt`, which stay after the seat decides and are null for a reader who sees the policy obfuscated (also in `schema-pending.graphql`). `changes-requested.test.ts` is the reference.
 
 While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
 are accepted) and its status stays In review. Each approver is shown what changed since the text they

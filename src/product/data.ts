@@ -101,6 +101,11 @@ export interface SignInMethods {
 
 export interface StewardData extends ProductData {
   acknowledgements: Acknowledgement[];
+  /**
+   * The model provider's outage while the ai service answers: null when it is healthy, else ai's
+   * reason (auth_failed, provider_error, not_configured), or "" for an outage with no reason.
+   */
+  aiProviderOutage: null | string;
   /** Whether Ask and the AI health answer from the simulation (the controls switch it). */
   aiSimulated: boolean;
   /** The appendices of policies and procedures, each with its own version table. */
@@ -170,6 +175,7 @@ export const seed = (): StewardData => {
   syncAppendices(appendices, allVersions, "policy-3");
   return {
     acknowledgements: acknowledgements(),
+    aiProviderOutage: null,
     aiSimulated: true,
     appendices,
     askedQuestions: [],

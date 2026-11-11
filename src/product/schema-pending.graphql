@@ -410,3 +410,21 @@ extend type Mutation {
   setVersionReferences(policyVersionId: ID!, referenceIds: [ID!]!): PolicyVersionLinks!
   setVersionContacts(policyVersionId: ID!, contactBlockIds: [ID!]!): PolicyVersionLinks!
 }
+
+# Why the model provider is failing, as steward-gateway serves it (steward-gateway#110): ai's own
+# reason, passed on beside the one stable `reason`. One of "auth_failed" (the provider refused the
+# credential), "provider_error" (the provider call failed) or "not_configured" (no provider is set
+# up). Set only when reason is "provider_unavailable" and ai gave a reason; null otherwise, never "".
+extend type AIHealth {
+  providerReason: String
+}
+
+# What a seat asked for when it sent comments back, as steward-gateway serves it
+# (steward-gateway#106), read from the seat's history. The latest request wins. Asking for changes
+# is not a decision: the seat stays pending and `comment` stays null. Both are null when no changes
+# were requested, and for a reader who sees the policy obfuscated.
+extend type StageAssignee {
+  changesRequested: String
+  # ISO-8601 time of that request.
+  changesRequestedAt: String
+}
