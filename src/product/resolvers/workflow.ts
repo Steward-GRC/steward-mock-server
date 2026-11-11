@@ -8,9 +8,14 @@
 // version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
 // and the version; a seat decides once.
 
-import type { WorkflowStage } from "#product/data/library.ts";
+import type { Workflow, WorkflowStage } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
-import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
+import type {
+  Policy,
+  Run,
+  RunGroup,
+  RunStage,
+} from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canEdit, readEffect } from "#product/access.ts";
@@ -171,6 +176,24 @@ const poolOf = (stage: WorkflowStage, lineage: string[]): string[] => {
       return entry.approverIds.length > 0 ? entry.approverIds : stage.approvers;
   }
   return stage.approvers;
+};
+
+/**
+ * The workflow a policy goes through: its own, else its home category's, and never an archived
+ * one (steward-workflow doesn't look at ancestors). submitWorkflow and effectiveWorkflow share it.
+ */
+const workflowOf = (policy: Policy) => {
+  const home = data().categories.find((c) => c.id === policy.homeCategoryId);
+  const workflowId = policy.workflowDefId ?? home?.defaultWorkflowId;
+  return data().workflowDefs.find((w) => w.id === workflowId && !w.archived);
+};
+
+/** The first stage of the workflow with neither an approver pool nor a group with members. */
+const unstaffedStageOf = (workflow: Workflow, policy: Policy) => {
+  const lineage = lineageOf(policy.homeCategoryId);
+  return workflow.stages.find(
+    (s) => poolOf(s, lineage).length === 0 && unitsWithMembers(s) === 0,
+  );
 };
 
 /** Who a stage seats: individuals, and each group unit's members by group. */
@@ -428,13 +451,7 @@ export const workflowResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "A document with no content can't be submitted.",
         );
-      const home = data().categories.find(
-        (c) => c.id === policy.homeCategoryId,
-      );
-      const workflowId = policy.workflowDefId ?? home?.defaultWorkflowId;
-      const workflow = data().workflowDefs.find(
-        (w) => w.id === workflowId && !w.archived,
-      );
+      const workflow = workflowOf(policy);
       if (!workflow)
         throw refuse(
           "FAILED_PRECONDITION",
@@ -444,9 +461,7 @@ export const workflowResolvers: Resolvers = {
       // and a stage with neither a pool nor group members would never finish
       const lineage = lineageOf(policy.homeCategoryId);
       const pools = workflow.stages.map((s) => poolOf(s, lineage));
-      const unstaffed = workflow.stages.find(
-        (s, index) => pools[index]!.length === 0 && unitsWithMembers(s) === 0,
-      );
+      const unstaffed = unstaffedStageOf(workflow, policy);
       if (unstaffed)
         throw refuse(
           "FAILED_PRECONDITION",
@@ -490,6 +505,37 @@ export const workflowResolvers: Resolvers = {
     },
   },
   Query: {
+    // steward-gateway's gate runs first (the same one submit uses), then the answer is the
+    // workflow's name and whether it can run, never its stages.
+    effectiveWorkflow: (
+      _root,
+      given: { policyId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const policy = found(
+        data().policies.find((p) => p.id === given.policyId),
+        "policy",
+      );
+      if (!canEdit(person, policy)) throw forbidden();
+      const workflow = workflowOf(policy);
+      if (!workflow)
+        return {
+          firstUnstaffedStage: null,
+          hasWorkflow: false,
+          name: null,
+          usable: true,
+          workflowDefId: null,
+        };
+      const unstaffed = unstaffedStageOf(workflow, policy);
+      return {
+        firstUnstaffedStage: unstaffed?.name ?? null,
+        hasWorkflow: true,
+        name: workflow.name || null,
+        usable: !unstaffed,
+        workflowDefId: workflow.id,
+      };
+    },
     pendingTasks: (_root, _given, context: Context) => {
       const person = caller(context);
       return openRuns().flatMap((run) =>
