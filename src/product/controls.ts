@@ -121,13 +121,21 @@ const aiSimulation: ProductControl = (body) => {
   return { aiSimulated: stewardData().aiSimulated };
 };
 
-/** The reasons steward-ai's GetProviderStatus gives for a failing provider. */
-const PROVIDER_REASONS = ["auth_failed", "provider_error", "not_configured"];
+/**
+ * The reasons steward-ai's GetProviderStatus gives while it is not available: a failing provider,
+ * or jobs_unavailable when the service has no Kubernetes API so no job can run.
+ */
+const PROVIDER_REASONS = [
+  "auth_failed",
+  "provider_error",
+  "not_configured",
+  "jobs_unavailable",
+];
 
 /**
  * POST /_mock/controls {kind: "ai-provider", providerReason}: the model provider behind the ai
- * service. null brings it back; auth_failed, provider_error or not_configured is an outage with
- * that reason, and "" an outage ai gave no reason for. aiHealth then says provider_unavailable with
+ * service. null brings it back; auth_failed, provider_error, not_configured or jobs_unavailable is
+ * an outage with that reason (jobs_unavailable also refuses the job submits), and "" an outage ai gave no reason for. aiHealth then says provider_unavailable with
  * the reason as providerReason, while the simulation is on (with it off the service is unreachable).
  */
 const aiProvider: ProductControl = (body) => {
@@ -144,6 +152,17 @@ const aiProvider: ProductControl = (body) => {
     );
   stewardData().aiProviderOutage = reason;
   return { aiProviderOutage: reason };
+};
+
+/**
+ * POST /_mock/controls {kind: "ai-limit", reached}: whether an AI usage limit holds, the
+ * organisation's monthly limit or the caller's daily one (the gateway reports both the same way).
+ * aiHealth then says limit_reached, with no providerReason, and the job submits are refused with
+ * FailedPrecondition. A provider outage, or the ai service being down, is reported in its place.
+ */
+const aiLimit: ProductControl = (body) => {
+  stewardData().aiLimitReached = body.reached !== false;
+  return { aiLimitReached: stewardData().aiLimitReached };
 };
 
 /**
@@ -285,6 +304,30 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
     kind: "ai-simulation",
     label: "Simulated AI off",
     run: aiSimulation,
+    section: "AI",
+  },
+  {
+    body: { providerReason: "jobs_unavailable" },
+    hint: "ai has no Kubernetes API: aiHealth says provider_unavailable, providerReason jobs_unavailable, and the job submits fail.",
+    kind: "ai-provider",
+    label: "AI provider: jobs unavailable",
+    run: aiProvider,
+    section: "AI",
+  },
+  {
+    body: { reached: true },
+    hint: "The monthly or daily AI limit is reached: aiHealth says limit_reached and the job submits are refused.",
+    kind: "ai-limit",
+    label: "AI limit reached",
+    run: aiLimit,
+    section: "AI",
+  },
+  {
+    body: { reached: false },
+    hint: "No AI limit holds: aiHealth and the submits work again.",
+    kind: "ai-limit",
+    label: "AI limit clear",
+    run: aiLimit,
     section: "AI",
   },
   {
