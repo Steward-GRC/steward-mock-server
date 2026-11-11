@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Approval runs, as steward-workflow keeps them. submitWorkflow starts a run on the policy's own
 // workflow or its home category's (steward-workflow doesn't look at ancestors), with a seat per
-// approver on each stage. The caller's pending seats on the current stage are their tasks. An
+// approver on each stage: the individuals from the nearest approversByCategory entry on the
+// category lineage, else the stage's approvers, and each group unit's members under its group. The caller's pending seats on the current stage are their tasks. An
 // approval that meets the stage's quorum moves the run on, and the last stage's publishes the
 // version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
 // and the version; a seat decides once.
@@ -43,6 +44,8 @@ const EMPTY_STATUS = {
 };
 
 const IN_REVIEW = "APPROVAL_STATUS_IN_REVIEW";
+
+const MAX_LINEAGE = 16;
 
 /** The run that answers for a version: an open one first, else the latest. */
 export const runFor = (policyVersionId: string): Run | undefined => {
@@ -121,27 +124,117 @@ const stageMet = (stage: RunStage): boolean => {
 };
 
 /** The group units of a stage that have a member. */
-const unitsWithMembers = (stage: WorkflowStage, keep = (_id: string) => true) =>
-  stage.groupUnits.filter((g) => g.memberUserIds.some(keep)).length;
+const unitsWithMembers = (stage: WorkflowStage) =>
+  stage.groupUnits.filter((g) => g.memberUserIds.length > 0).length;
 
 /** steward-workflow's MeetsQuorum: nofm needs N votes, any other quorum one. */
 const meetsQuorum = (stage: WorkflowStage, votes: number): boolean =>
   stage.quorum === "nofm" ? votes >= stage.quorumN : votes > 0;
 
+/** The policy's category and its ancestors, home first (the gateway's lineage). */
+const lineageOf = (categoryId: string): string[] => {
+  const lineage: string[] = [];
+  for (
+    let at = data().categories.find((c) => c.id === categoryId);
+    at && lineage.length < MAX_LINEAGE;
+    at = data().categories.find((c) => c.id === at?.parentId)
+  )
+    lineage.push(at.id);
+  return lineage;
+};
+
 /**
- * Who is seated on a stage as an individual. Approvers who cannot read the policy are dropped; a
- * group unit with a reader left counts as one vote. When the votes left cannot meet the stage
- * quorum, the owners of the policy's home category join as individual seats (steward-workflow's
- * applyFilter).
+ * steward-workflow's eligibility.StagePool: the first category on the lineage with an
+ * approversByCategory entry gives the stage's individual approvers; with no entry, or an empty
+ * one, the stage's own approvers do.
  */
-const approversOf = (stage: WorkflowStage, categoryId: string): string[] => {
+const poolOf = (stage: WorkflowStage, lineage: string[]): string[] => {
+  for (const id of lineage) {
+    const entry = stage.approversByCategory.find((c) => c.categoryId === id);
+    if (entry)
+      return entry.approverIds.length > 0 ? entry.approverIds : stage.approvers;
+  }
+  return stage.approvers;
+};
+
+/** Who a stage seats: individuals, and each group unit's members by group. */
+interface StageSeating {
+  individuals: string[];
+  members: Map<string, string[]>;
+}
+
+/**
+ * Who is seated on a stage, as steward-workflow's assigner does. Approvers and group members who
+ * cannot read the policy are dropped; a group unit with a reader left counts as one vote. When
+ * the votes left cannot meet the stage quorum, the owners of the policy's home category join as
+ * individual seats (applyFilter).
+ */
+const seatingOf = (
+  stage: WorkflowStage,
+  pool: string[],
+  categoryId: string,
+): StageSeating => {
   const reads = (userId: string) => readsCategory(userId, categoryId);
-  const seated = stage.approvers.filter(reads);
-  const votes = seated.length + unitsWithMembers(stage, reads);
-  if (meetsQuorum(stage, votes)) return seated;
+  const seated = pool.filter((id) => reads(id));
+  const members = new Map(
+    stage.groupUnits.map((g) => [g.groupId, g.memberUserIds.filter(reads)]),
+  );
+  const votes =
+    seated.length + [...members.values()].filter((m) => m.length > 0).length;
+  if (meetsQuorum(stage, votes)) return { individuals: seated, members };
   const owners =
     data().categories.find((c) => c.id === categoryId)?.owners ?? [];
-  return [...new Set([...seated, ...owners])];
+  return { individuals: [...new Set([...seated, ...owners])], members };
+};
+
+/** A group's required approvals, as steward-workflow's requiredForQuorum. */
+const requiredOf = (quorum: string, roster: number): number => {
+  if (quorum === "all") return roster;
+  if (quorum === "majority") return Math.floor(roster / 2) + 1;
+  return 1;
+};
+
+const seatFor = (userId: string, groupId?: string) => ({
+  comment: null,
+  decidedAt: null,
+  state: "pending",
+  taskId: newId("task"),
+  userId,
+  ...(groupId ? { groupId } : {}),
+});
+
+const groupName = (id: string) =>
+  data().platformGroups.find((g) => g.id === id)?.name ?? id;
+
+/** The run's stage: individual seats first, then each group unit with a seated member. */
+const runStageOf = (
+  stage: WorkflowStage,
+  seating: StageSeating,
+  vetoEnabled: boolean,
+): RunStage => {
+  const membersOf = (groupId: string) => seating.members.get(groupId) ?? [];
+  const units = stage.groupUnits.filter((g) => membersOf(g.groupId).length > 0);
+  return {
+    groups: units.map((g) => {
+      const quorum = g.internalQuorum || "one";
+      return {
+        id: g.groupId,
+        name: groupName(g.groupId),
+        quorum,
+        required: requiredOf(quorum, membersOf(g.groupId).length),
+      };
+    }),
+    name: stage.name,
+    quorum: stage.quorum,
+    quorumN: stage.quorumN,
+    seats: [
+      ...seating.individuals.map((userId) => seatFor(userId)),
+      ...units.flatMap((g) =>
+        membersOf(g.groupId).map((userId) => seatFor(userId, g.groupId)),
+      ),
+    ],
+    vetoUserIds: vetoEnabled ? vetoHolders(stage) : [],
+  };
 };
 
 /** Seats nobody needs any more once a stage or the run is settled. */
@@ -328,16 +421,22 @@ export const workflowResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "No approval workflow is attached to this policy's category.",
         );
-      const unstaffed = workflow.stages.find((s) => s.approvers.length === 0);
+      // steward-workflow's Submit: each stage's individual pool comes from the category lineage,
+      // and a stage with neither a pool nor group members would never finish
+      const lineage = lineageOf(policy.homeCategoryId);
+      const pools = workflow.stages.map((s) => poolOf(s, lineage));
+      const unstaffed = workflow.stages.find(
+        (s, index) => pools[index]!.length === 0 && unitsWithMembers(s) === 0,
+      );
       if (unstaffed)
         throw refuse(
           "FAILED_PRECONDITION",
           `The "${unstaffed.name}" stage has no approver.`,
         );
-      // steward-workflow's size check: an nofm stage cannot ask for more approvals than it has
-      // votes, and a group unit with members is one vote
+      // the size check: an nofm stage cannot ask for more approvals than it has votes, and a
+      // group unit with members is one vote
       for (const [index, s] of workflow.stages.entries()) {
-        const votes = s.approvers.length + unitsWithMembers(s);
+        const votes = pools[index]!.length + unitsWithMembers(s);
         if (s.quorum === "nofm" && s.quorumN > votes)
           throw refuse(
             "FAILED_PRECONDITION",
@@ -350,19 +449,13 @@ export const workflowResolvers: Resolvers = {
         id: newId("run"),
         policyId: policy.id,
         policyVersionId: version.id,
-        stages: workflow.stages.map((stage) => ({
-          name: stage.name,
-          quorum: stage.quorum,
-          quorumN: stage.quorumN,
-          seats: approversOf(stage, policy.homeCategoryId).map((userId) => ({
-            comment: null,
-            decidedAt: null,
-            state: "pending",
-            taskId: newId("task"),
-            userId,
-          })),
-          vetoUserIds: workflow.vetoEnabled ? vetoHolders(stage) : [],
-        })),
+        stages: workflow.stages.map((stage, index) =>
+          runStageOf(
+            stage,
+            seatingOf(stage, pools[index]!, policy.homeCategoryId),
+            workflow.vetoEnabled,
+          ),
+        ),
         status: IN_REVIEW,
         submittedAt: now(),
         submittedBy: person.id,
