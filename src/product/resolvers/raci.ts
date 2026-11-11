@@ -144,6 +144,21 @@ const resolve = (
   };
 };
 
+/**
+ * Whether the person reads a policy homed in the category, by the same rules the simulator runs:
+ * steward-workflow asks steward-authz this about every approver before it seats them. A person the
+ * mock does not know reads nothing.
+ */
+export const readsCategory = (userId: string, categoryId: string): boolean => {
+  const category = categoryOf(categoryId);
+  const person = people().find((p) => p.id === userId);
+  if (!category || !person) return false;
+  return resolve(chainOf(category), (c) => c.rules, {
+    groups: idpGroupsOf(person),
+    userId,
+  }).read;
+};
+
 /** steward-authz's CategoryRuleset.Validate, as steward-core runs it before storing. */
 const validated = (category: Category, rules: RaciRule[]): RaciRule[] => {
   for (const [index, rule] of rules.entries()) {

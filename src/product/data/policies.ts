@@ -93,6 +93,8 @@ export interface RunStage {
   name: string;
   /** The rule for the stage's individual seats (those with no `groupId`). */
   quorum: string;
+  /** The approvals an nofm stage needs; absent or zero on every other quorum. */
+  quorumN?: number;
   seats: Seat[];
   /** Seat holders whose single reject ends the run (the workflow opted in to vetoes). */
   vetoUserIds?: string[];

@@ -294,6 +294,13 @@ one reject is a rejection. A group counts the same way against its own required 
 final: the rejected version stays as it was, and the author's next save starts a new draft that needs a
 full new submission. Withdrawing a submission in review returns it to Draft.
 
+A stage's quorum is `one`, `majority`, `all` or `nofm`, which takes `quorumN`, the approvals the stage
+needs (a field the pinned gateway schema does not carry yet, so it sits in `schema-pending.graphql`).
+Saving a workflow refuses an N below one, an N on another quorum and an N above the approvers named.
+`submitWorkflow` refuses an N above the stage's votes, its approvers plus each group unit with
+members. Approvers who cannot read the policy are not seated, and when the votes left cannot meet the
+quorum the home category's owners are seated as individuals. `nofm.test.ts` is the reference.
+
 While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
 are accepted) and its status stays In review. Each approver is shown what changed since the text they
 last reviewed: `versionChangesSinceReview` returns the section diff, and the snapshot moves forward
