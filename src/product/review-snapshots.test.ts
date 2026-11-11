@@ -9,6 +9,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
+import { stewardData } from "#product/data.ts";
+import { people } from "#product/resolvers/shared.ts";
 import { startForTests, startFresh } from "#product/test-client.ts";
 import { call, signInAs } from "#product/web-client.ts";
 
@@ -156,7 +158,16 @@ describe("the changes since an approver last reviewed", () => {
     assert.ok(changed(await since("user-charlie")).length > 0);
   });
 
-  it("is refused with PermissionDenied for the author and for someone with no seat", async () => {
+  it("is refused with PermissionDenied for the author and for a reader with no seat", async () => {
+    // Erin cannot read this sensitive policy in the seed; make her a reader without a seat.
+    const erin = people().find((p) => p.id === "user-erin");
+    assert.ok(erin);
+    erin.readSensitive = true;
+    const travel = stewardData().categories.find(
+      (c) => c.id === "category-travel",
+    );
+    assert.ok(travel);
+    travel.authorRule.push("user-erin");
     for (const user of ["user-bob", "user-erin"]) {
       const answer = await as(user, "VersionChangesSinceReview", {
         policyVersionId: VERSION,
@@ -165,13 +176,66 @@ describe("the changes since an approver last reviewed", () => {
     }
   });
 
+  it("answers NotFound, before the seat check, to someone who cannot read the version", async () => {
+    // Erin has no seat and cannot read this sensitive policy: the read decision comes first.
+    const answer = await as("user-erin", "VersionChangesSinceReview", {
+      policyVersionId: VERSION,
+    });
+    assert.equal(answer.refused, "NotFound");
+    assert.equal(answer.data.versionChangesSinceReview ?? null, null);
+  });
+
   it("refuses markVersionReviewed the same way", async () => {
-    for (const user of ["user-bob", "user-erin"]) {
-      const answer = await as(user, "MarkVersionReviewed", {
-        policyVersionId: VERSION,
-      });
-      assert.equal(answer.refused, "PermissionDenied", user);
+    const bob = await as("user-bob", "MarkVersionReviewed", {
+      policyVersionId: VERSION,
+    });
+    assert.equal(bob.refused, "PermissionDenied");
+    const erin = await as("user-erin", "MarkVersionReviewed", {
+      policyVersionId: VERSION,
+    });
+    assert.equal(erin.refused, "NotFound");
+  });
+
+  it("gives a reader who sees the policy obfuscated no word diffs and a scrambled title", async () => {
+    // Alice is a site admin seated on the run; she reads this sensitive policy obfuscated.
+    await since("user-alice");
+    await authorEdits();
+    const answer = await as("user-alice", "VersionChangesSinceReview", {
+      policyVersionId: VERSION,
+    });
+    assert.equal(answer.refused, undefined, JSON.stringify(answer));
+    const diffs = answer.data.versionChangesSinceReview as {
+      changeType: string;
+      sectionKey: string;
+      sectionTitle: string;
+      wordDiffHtml: null | string;
+    }[];
+    assert.ok(diffs.length > 0);
+    for (const d of diffs) {
+      assert.equal(d.wordDiffHtml, null, d.sectionKey);
     }
+    const steps = diffs.find((d) => d.sectionKey === "steps");
+    assert.ok(steps);
+    // The gateway's scrambleText maps "Steps" to "Hsvph".
+    assert.equal(steps.sectionTitle, "Hsvph");
+    assert.equal(steps.changeType, "changed");
+  });
+
+  it("still gives a reader with full access the real title and word diffs", async () => {
+    await since("user-charlie");
+    await authorEdits();
+    const answer = await as("user-charlie", "VersionChangesSinceReview", {
+      policyVersionId: VERSION,
+    });
+    const diffs = answer.data.versionChangesSinceReview as {
+      sectionKey: string;
+      sectionTitle: string;
+      wordDiffHtml: null | string;
+    }[];
+    const steps = diffs.find((d) => d.sectionKey === "steps");
+    assert.ok(steps);
+    assert.equal(steps.sectionTitle, "Steps");
+    assert.match(steps.wordDiffHtml ?? "", /<ins>21<\/ins>/);
   });
 });
 

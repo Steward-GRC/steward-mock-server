@@ -193,6 +193,15 @@ export const obfuscated = (contentJson: string): string => {
   }
 };
 
+/** The gateway's scrambleText, for a section title an obfuscated read gets. */
+const SCRAMBLE = "xqzjvbkwflgncmdptrhsyuoaei";
+export const scrambled = (value: string) =>
+  value.replaceAll(/[a-zA-Z]/g, (ch) => {
+    const lower = ch.toLowerCase();
+    const swap = SCRAMBLE[(lower.codePointAt(0) ?? 97) - 97] ?? lower;
+    return ch === lower ? swap : swap.toUpperCase();
+  });
+
 /** A version as `person` may read it, or undefined when it's hidden from them. */
 export const readableVersion = (
   person: StewardPerson,

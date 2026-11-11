@@ -8,6 +8,7 @@
 
 import type { PolicyVersion } from "#product/data/policies.ts";
 
+import { scrambled } from "#product/access.ts";
 import { stewardData } from "#product/data.ts";
 import {
   diffVersions,
@@ -19,6 +20,11 @@ export interface ReviewSnapshot {
   at: string;
   contentJson: string;
 }
+
+/** A section diff as the gateway serves it: an obfuscated reader gets no word diff. */
+export type ServedSectionDiff = {
+  wordDiffHtml: null | string;
+} & Omit<SectionDiff, "wordDiffHtml">;
 
 const snapshots = () => stewardData().reviewSnapshots;
 
@@ -52,12 +58,15 @@ const titleOf = (key: string) => {
  * What changed in each section since the approver last reviewed. As the gateway does, sections that
  * did not change are left out, so nothing changed is an empty list. Sections come from the version's
  * pinned template; a version with none is read by the sections its text has, so a draft saved
- * without a template version can still be compared.
+ * without a template version can still be compared. A reader who sees the policy obfuscated gets
+ * the gateway's obfuscateSectionDiffs: no word diffs and a scrambled title. The snapshot and the
+ * diff always use the real text.
  */
 export const changesSinceReview = (
   userId: string,
   version: PolicyVersion,
-): SectionDiff[] => {
+  obscured = false,
+): ServedSectionDiff[] => {
   const before = snapshotOf(userId, version).contentJson;
   const template = stewardData().templateVersions.find(
     (t) => t.id === version.templateVersionId,
@@ -70,7 +79,15 @@ export const changesSinceReview = (
           ...(parseContent(version.contentJson)?.keys() ?? []),
         ]),
       ].map((key) => ({ key, title: titleOf(key) }));
-  return (diffVersions(before, version.contentJson, defs, false) ?? []).filter(
-    (diff) => diff.changeType !== "unchanged",
-  );
+  return (diffVersions(before, version.contentJson, defs, false) ?? [])
+    .filter((diff) => diff.changeType !== "unchanged")
+    .map((diff) =>
+      obscured
+        ? {
+            ...diff,
+            sectionTitle: scrambled(diff.sectionTitle),
+            wordDiffHtml: null,
+          }
+        : diff,
+    );
 };
