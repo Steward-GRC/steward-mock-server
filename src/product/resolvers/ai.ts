@@ -99,10 +99,23 @@ export const aiResolvers: Resolvers = {
   Query: {
     aiConfig: adminDown,
     aiEnabled: down,
-    aiHealth: () =>
-      data().aiSimulated
-        ? { available: true, reason: null }
-        : { available: false, reason: "ai_service_unavailable" },
+    aiHealth: () => {
+      if (!data().aiSimulated)
+        return {
+          available: false,
+          providerReason: null,
+          reason: "ai_service_unavailable",
+        };
+      const outage = data().aiProviderOutage;
+      // ai answers but its provider fails: providerReason is ai's own code, null when it gave none
+      if (outage !== null)
+        return {
+          available: false,
+          providerReason: outage || null,
+          reason: "provider_unavailable",
+        };
+      return { available: true, providerReason: null, reason: null };
+    },
     aiJob: reading((given: { jobId: string }, context) =>
       jobStatus(given.jobId, context),
     ),

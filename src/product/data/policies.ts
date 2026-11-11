@@ -102,6 +102,8 @@ export interface RunStage {
 
 /** One approver's seat on a stage of a run. */
 export interface Seat {
+  /** The latest comments the seat's holder sent back, kept after the seat decides. */
+  changesRequested?: { at: string; comment: string };
   comment: null | string;
   decidedAt: null | string;
   /** The group whose seat this is; absent or null for an individual seat. */

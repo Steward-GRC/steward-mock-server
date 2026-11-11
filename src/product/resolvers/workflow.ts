@@ -12,7 +12,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
-import { canEdit } from "#product/access.ts";
+import { canEdit, readEffect } from "#product/access.ts";
 import { hasContent } from "#product/content.ts";
 import {
   cancelRuns,
@@ -258,7 +258,10 @@ export const workflowResolvers: Resolvers = {
       if (given.signal === "SIGNAL_TYPE_REQUEST_CHANGES") {
         // sending comments back is an approver's act: the seat stays open and no status changes,
         // and what they have been shown so far counts as reviewed
-        const { run } = pendingSeatOf(person, given.policyVersionId);
+        const { run, seat } = pendingSeatOf(person, given.policyVersionId);
+        // the seat's history keeps the comment: the latest request wins, and it outlives the
+        // seat's own decision (steward-gateway reads it back as changesRequested)
+        seat.changesRequested = { at: now(), comment: given.comment };
         markReviewed(person.id, partsOf(run).version);
         record(
           "workflow.signal.request_changes",
@@ -411,14 +414,23 @@ export const workflowResolvers: Resolvers = {
       given: { policyVersionId: string },
       context: Context,
     ) => {
-      caller(context);
+      const person = caller(context);
       const run = runFor(given.policyVersionId);
       if (!run) return EMPTY_STATUS;
+      // a free-text comment about the content: a reader who sees the policy obfuscated gets none
+      const obfuscatedReader =
+        readEffect(person, partsOf(run).policy) === "obfuscate";
       return {
         currentStageIdx: run.currentStageIdx,
         runId: run.id,
         stageAssignees: run.stages.map((stage) =>
           stage.seats.map((s) => ({
+            changesRequested: obfuscatedReader
+              ? null
+              : (s.changesRequested?.comment ?? null),
+            changesRequestedAt: obfuscatedReader
+              ? null
+              : (s.changesRequested?.at ?? null),
             comment: s.comment,
             decidedAt: s.decidedAt,
             groupId: s.groupId ?? null,

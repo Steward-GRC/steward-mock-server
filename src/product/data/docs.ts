@@ -1249,6 +1249,7 @@ export const docsSeed = (): StewardData => {
   return {
     ...base,
     acknowledgements: docsAcknowledgements(),
+    aiProviderOutage: null,
     aiSimulated: true,
     appendices,
     assets: base.assets,
