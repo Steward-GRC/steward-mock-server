@@ -10,6 +10,15 @@
 // relatedPolicySuggestions, policyVersionSummary) answer empty; everything else checks the caller as
 // the gateway does, then fails as a transport fault, which the gateway presents as INTERNAL with
 // its generic message.
+// The settings reads (aiConfig, aiRetrievalConfig) answer a default config for a site admin while
+// the simulation is on; the settings changes are not stored and stay refused as the unreachable
+// service. The reasons aiHealth gives while the service answers: provider_unavailable with ai's
+// providerReason (auth_failed, provider_error, not_configured, or jobs_unavailable when ai has no
+// Kubernetes API, which also fails the job submits as a transport fault), and limit_reached when
+// the organisation's monthly limit or the caller's daily limit is hit (the submits then refuse
+// with FailedPrecondition). The /_mock controls ai-provider and ai-limit switch them.
+
+import type { GraphQLError } from "graphql";
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
@@ -61,6 +70,50 @@ const submitDown = (
   throw unreachable();
 };
 
+/** The default settings a site admin reads while the simulation is on; nothing changes them. */
+const DEFAULT_TOP_K = 50;
+const defaultConfig = () => ({
+  baseUrl: "",
+  credentialLast4: "",
+  credentialSet: false,
+  dataNotice: {
+    acceptedAt: null,
+    acceptedBy: null,
+    acceptedVersion: "",
+    currentVersion: "1",
+  },
+  deployment: "",
+  enabled: true,
+  model: "",
+  provider: null,
+  region: "",
+  topK: DEFAULT_TOP_K,
+});
+
+/** A settings read: the default config for a site admin while simulated, else the service is down. */
+const settingsRead =
+  <Result>(read: () => Result) =>
+  (root: unknown, given: unknown, context: Context): Result => {
+    if (!data().aiSimulated) return adminDown(root, given, context);
+    siteAdmin(context);
+    return read();
+  };
+
+/**
+ * Why a job submit fails before its category check, when ai is up but cannot take it: no
+ * Kubernetes API for jobs (ai's reach fault, so the gateway's generic INTERNAL), or a usage limit
+ * (a FailedPrecondition the person is told about).
+ */
+const submitBlocked = (): GraphQLError | null => {
+  if (data().aiProviderOutage === "jobs_unavailable") return unreachable();
+  if (data().aiLimitReached)
+    return refuse(
+      "FAILED_PRECONDITION",
+      "The AI usage limit has been reached. Try again later.",
+    );
+  return null;
+};
+
 /** A job submission: simulated while the simulation is on, and checked the same way either way. */
 const submitting =
   (operation: JobOperation) =>
@@ -73,6 +126,8 @@ const submitting =
     const person = caller(context);
     const categoryId = given.input.categoryId;
     if (categoryId && !canAuthorIn(person, categoryId)) throw forbidden();
+    const blocked = submitBlocked();
+    if (blocked) throw blocked;
     return submitJob(operation, given.input, context);
   };
 
@@ -97,7 +152,7 @@ export const aiResolvers: Resolvers = {
     testAIProvider: adminDown,
   },
   Query: {
-    aiConfig: adminDown,
+    aiConfig: settingsRead(defaultConfig),
     aiEnabled: down,
     aiHealth: () => {
       if (!data().aiSimulated)
@@ -114,6 +169,13 @@ export const aiResolvers: Resolvers = {
           providerReason: outage || null,
           reason: "provider_unavailable",
         };
+      // a usage limit holds while ai and its provider are otherwise fine
+      if (data().aiLimitReached)
+        return {
+          available: false,
+          providerReason: null,
+          reason: "limit_reached",
+        };
       return { available: true, providerReason: null, reason: null };
     },
     aiJob: reading((given: { jobId: string }, context) =>
@@ -122,7 +184,7 @@ export const aiResolvers: Resolvers = {
     aiJobResultContent: reading((given: { resultRef: string }, context) =>
       jobContent(given.resultRef, context),
     ),
-    aiRetrievalConfig: adminDown,
+    aiRetrievalConfig: settingsRead(() => ({ topK: DEFAULT_TOP_K })),
     authoringAssist: down,
     policyVersionSummary: (_root, _given, context: Context) => {
       signedIn(context);

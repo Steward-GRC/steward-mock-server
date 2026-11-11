@@ -101,8 +101,9 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { groupId: "group-2", userId: READER },
   },
-  // AI isn't mocked: the settings answer as the gateway does with the ai service down.
-  AiConfig: { as: ADMIN, refused: AI_DOWN },
+  // the settings read answers a default config while the AI simulation is on (the simulation off is
+  // covered in ai-provider-reason.test.ts); the changes below stay refused as the ai service down
+  AiConfig: { as: ADMIN },
   AiHealth: { as: READER },
   // a job that was never submitted is not found (the submits are covered in ai-jobs.test.ts)
   AiJob: { as: AUTHOR, refused: "NotFound", variables: { jobId: "ai-job-0" } },
