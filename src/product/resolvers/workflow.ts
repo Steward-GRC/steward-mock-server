@@ -39,6 +39,7 @@ const EMPTY_STATUS = {
   runId: "",
   stageAssignees: [],
   stageNames: [],
+  stageProgress: [],
   stageUnitProgress: [],
   status: "APPROVAL_STATUS_UNSPECIFIED",
 };
@@ -109,6 +110,21 @@ const unitOf = (stage: RunStage, group: RunGroup) => {
     status,
   };
 };
+
+/** The individual approvals a stage has and needs; group units keep their own tally. */
+const individualProgress = (stage: RunStage) => {
+  const single = stage.seats.filter((s) => !s.groupId);
+  return {
+    approvals: single.filter((s) => s.state === "approved").length,
+    required: single.length === 0 ? 0 : required({ ...stage, seats: single }),
+  };
+};
+
+/** A stage's due date from the day it is entered: its SLA in days, none without one. */
+const dueFrom = (entered: string, stage: RunStage): null | string =>
+  stage.slaDays
+    ? new Date(Date.parse(entered) + stage.slaDays * 86_400_000).toISOString()
+    : null;
 
 /** The stage's own rule applies to its individual seats; each group needs its own quorum. */
 const stageMet = (stage: RunStage): boolean => {
@@ -233,6 +249,7 @@ const runStageOf = (
         membersOf(g.groupId).map((userId) => seatFor(userId, g.groupId)),
       ),
     ],
+    slaDays: stage.slaDays,
     vetoUserIds: vetoEnabled ? vetoHolders(stage) : [],
   };
 };
@@ -264,6 +281,8 @@ const advance = (run: Run, person: StewardPerson) => {
   closePending([stage]);
   if (run.currentStageIdx < run.stages.length - 1) {
     run.currentStageIdx += 1;
+    const entered = run.stages[run.currentStageIdx]!;
+    entered.dueAt = dueFrom(now(), entered);
     return;
   }
   const { policy, version } = partsOf(run);
@@ -461,6 +480,8 @@ export const workflowResolvers: Resolvers = {
         submittedBy: person.id,
         workflowDefId: workflow.id,
       };
+      const first = run.stages[0];
+      if (first) first.dueAt = dueFrom(run.submittedAt, first);
       data().runs.push(run);
       version.status = "IN_REVIEW";
       policy.updatedAt = run.submittedAt;
@@ -534,10 +555,18 @@ export const workflowResolvers: Resolvers = {
           })),
         ),
         stageNames: run.stages.map((stage) => stage.name),
+        stageProgress: run.stages.map((stage) => ({
+          ...individualProgress(stage),
+          dueAt: stage.dueAt ?? null,
+          quorum: stage.quorum,
+          quorumN: stage.quorum === "nofm" ? (stage.quorumN ?? 0) : 0,
+        })),
         stageUnitProgress: run.stages.map((stage) =>
           (stage.groups ?? []).map((g) => unitOf(stage, g)),
         ),
         status: run.status,
+        submittedAt: run.submittedAt,
+        submittedBy: run.submittedBy,
       };
     },
   },
