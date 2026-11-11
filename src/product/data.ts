@@ -58,6 +58,7 @@ import {
   type Workflow,
   workflowDefs,
 } from "#product/data/library.ts";
+import { type Notice, notices } from "#product/data/notices.ts";
 import {
   type NotificationPrefs,
   notificationPrefs,
@@ -133,6 +134,8 @@ export interface StewardData extends ProductData {
   magicLinks: Record<string, MagicLink>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
+  /** steward-obligations' in-app notices, for every person, in the order they were made. */
+  notices: Notice[];
   /** steward-obligations' saved notification choices, by person id. */
   notificationPrefs: Record<string, NotificationPrefs>;
   organizations: Organization[];
@@ -193,6 +196,7 @@ export const seed = (): StewardData => {
     links: migrateLinks(links(), policies()),
     magicLinks: {},
     next: {},
+    notices: notices(),
     notificationPrefs: notificationPrefs(),
     organizations: organizations(),
     passwordResets: [],
@@ -290,6 +294,7 @@ export const installSeed = (): StewardData => {
       owners: [],
       rules: category.rules.filter((rule) => rule.subjectKind !== "USER"),
     })),
+    notices: [],
     notificationPrefs: {},
     people: [],
     workflowDefs: base.workflowDefs.map((workflow) => ({

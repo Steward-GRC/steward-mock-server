@@ -355,3 +355,86 @@ type DecidedApproval {
   decision: String!
   decidedAt: String!
 }
+
+# The in-app notification inbox and quiet hours, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/73 (the inbox) and
+# https://github.com/Steward-GRC/steward-gateway/issues/74 (quiet hours). steward-obligations
+# stores the notices. They move to the pinned copy once the gateway ships them. The live
+# subscription that tells an open page a notice arrived is not here yet.
+#
+# Only the caller's own notices are ever returned. A notice carries the kind's category from the
+# notification type catalog; needsAction splits the bell's "Needs action" and "Updates" tabs.
+extend type Query {
+  # Newest first. first defaults to 20 and must be at least 1; after is the endCursor of the
+  # previous page (an unknown cursor is InvalidArgument).
+  myNotifications(filter: NotificationFilter, first: Int, after: String): NotificationPage!
+  # For the bell's badge.
+  myUnreadNotificationCount: Int!
+}
+
+extend type Mutation {
+  # Idempotent: a notice that is already read keeps its first readAt. Someone else's notice, or
+  # an unknown id, is NotFound.
+  markNotificationRead(id: ID!): Notification!
+  # How many notices it marked.
+  markAllNotificationsRead: Int!
+  # Both start and end null clears the window; one without the other is NOTIFY_PREF_INVALID, so
+  # is an hour outside [0,23], start equal to end, or a timezone that is not an IANA name.
+  # timezone defaults to UTC.
+  setQuietHours(start: Int, end: Int, timezone: String): NotificationSettings!
+}
+
+# Every field is optional and they combine. needsAction true is the "Needs action" tab, false the
+# "Updates" tab, null both.
+input NotificationFilter {
+  needsAction: Boolean
+  unread: Boolean
+  category: NotifCategory
+}
+
+type NotificationPage {
+  items: [Notification!]!
+  # Null on the last page.
+  endCursor: String
+  hasMore: Boolean!
+}
+
+type Notification {
+  id: ID!
+  kind: String!
+  category: NotifCategory!
+  title: String!
+  line: String!
+  needsAction: Boolean!
+  link: NotificationLink
+  # RFC 3339.
+  createdAt: String!
+  # RFC 3339; null while unread.
+  readAt: String
+}
+
+enum NotificationLinkKind {
+  APPROVAL
+  CASE
+  POLICY
+}
+
+# What the notice opens: a policy number, an approval's policy version id, or a case id.
+type NotificationLink {
+  kind: NotificationLinkKind!
+  ref: String!
+}
+
+# Quiet hours hold email and push for non-mandatory notices; in-app notices and mandatory ones
+# (compliance, security, transactional) are never held, and nothing is delivered late. start is
+# the first hour held and end the first hour not held, both local hours in timezone; end below
+# start is a window across midnight.
+type QuietHours {
+  start: Int!
+  end: Int!
+  timezone: String!
+}
+
+extend type NotificationSettings {
+  quietHours: QuietHours
+}
