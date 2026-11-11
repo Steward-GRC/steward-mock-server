@@ -16,6 +16,7 @@ import {
   policyView,
   readableVersion,
   readEffect,
+  scrambled,
   visible,
 } from "#product/access.ts";
 import { syncAppendices } from "#product/appendices.ts";
@@ -277,15 +278,6 @@ export const publishVersion = (
     policy.currentDraftVersionId = null;
   policy.updatedAt = at;
 };
-
-/** The gateway's scrambleText, for a section title an obfuscated read gets. */
-const SCRAMBLE = "xqzjvbkwflgncmdptrhsyuoaei";
-const scrambled = (value: string) =>
-  value.replaceAll(/[a-zA-Z]/g, (ch) => {
-    const lower = ch.toLowerCase();
-    const swap = SCRAMBLE[(lower.codePointAt(0) ?? 97) - 97] ?? lower;
-    return ch === lower ? swap : swap.toUpperCase();
-  });
 
 /**
  * core's DiffVersions over the "to" version's pinned template sections, keyed as core keys them
