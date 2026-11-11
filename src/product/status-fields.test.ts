@@ -209,3 +209,40 @@ describe("workflowStatus submission and stage fields", () => {
     assert.equal(status.submittedBy, "user-bob");
   });
 });
+
+const typeOf = async (typeName: string, field: string) => {
+  const { body } = await query(
+    base,
+    `query ($n: String!) { __type(name: $n) { fields { name type { name kind ofType { name } } } } }`,
+    await signInAs(base, "user-alice"),
+    { n: typeName },
+  );
+  assert.equal(body.errors, undefined, JSON.stringify(body.errors));
+  const data = body.data as unknown as {
+    __type: {
+      fields: {
+        name: string;
+        type: {
+          kind: string;
+          name: null | string;
+          ofType: { name: string } | null;
+        };
+      }[];
+    };
+  };
+  return data.__type.fields.find((f) => f.name === field)?.type;
+};
+
+// The gateway's schema has no DateTime scalar, so it types these two fields as String (an
+// RFC3339 value); the mock declares the same type (steward-gateway#148).
+describe("status timestamp field types", () => {
+  it("types StageProgress.dueAt as String", async () => {
+    const type = await typeOf("StageProgress", "dueAt");
+    assert.equal(type?.name, "String");
+  });
+
+  it("types WorkflowStatus.submittedAt as String", async () => {
+    const type = await typeOf("WorkflowStatus", "submittedAt");
+    assert.equal(type?.name, "String");
+  });
+});
