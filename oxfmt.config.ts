@@ -17,5 +17,9 @@ export default {
     "src/product/schema-pending.graphql",
     // Byte-exact copies of steward-web's operations; the contract test sends them as they are.
     "src/product/web-operations/**",
+    // A byte-exact copy of the shared access vectors, and the report generated from them.
+    "src/product/access-vectors/decide.json",
+    "src/product/access-vectors/REPORT.md",
+    "src/product/access-vectors/VENDORED.md",
   ],
 };

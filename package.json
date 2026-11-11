@@ -30,6 +30,7 @@
   "scripts": {
     "start": "node bin/steward-mock-server.mjs",
     "test": "node --test --test-timeout=30000 \"src/**/*.test.ts\"",
+    "test:vectors-report": "VECTORS_REPORT=1 node --test --test-timeout=30000 src/product/access-vectors/access-vectors.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint && oxfmt --check",
     "lint:fix": "oxlint --fix",

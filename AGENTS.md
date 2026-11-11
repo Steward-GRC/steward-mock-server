@@ -47,6 +47,7 @@ ahead of it while steward-web moves to the same commit).
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is
   the co-editing relay at `/collab/ws/<draftId>` (the product's `sockets` hook) and the tokens
   `issueCollabToken` mints for it.
+- `src/product/access-vectors/` - the shared access vectors (`decide.json`, vendored; see `VENDORED.md`), an adapter onto the current RACI rules and a report-only test; `npm run test:vectors-report` rewrites `REPORT.md`. It never changes the mock's behaviour.
 - `src/product/web-operations/` - steward-web's operations, byte for byte at the commit its README
   names; `web-operations.test.ts` sends every one of them. Keep the folder out of the formatter.
 - `src/core/server.test.ts` - the core's tests, against a real server on a free port, serving the
