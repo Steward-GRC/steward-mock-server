@@ -436,10 +436,12 @@ const narrowAccess = () => {
   ];
 };
 
+/** The individual seats on a version's first stage (group seats are kept apart). */
 const seatedOn = (versionId: string) =>
   stewardData()
     .runs.find((r) => r.policyVersionId === versionId)
-    ?.stages[0]?.seats.map((s) => s.userId);
+    ?.stages[0]?.seats.filter((s) => !s.groupId)
+    .map((s) => s.userId);
 
 describe("the owner fallback", () => {
   it("seats the category owners when the readers left cannot meet N", async () => {
@@ -489,6 +491,14 @@ describe("the owner fallback", () => {
     assert.equal(sent.code, undefined, sent.message);
     // charlie plus the group make two votes, so no owner joins
     assert.deepEqual(seatedOn(versionId), ["user-charlie"]);
+    // the group's reader holds a group seat, not an individual one
+    assert.deepEqual(
+      stewardData()
+        .runs.find((r) => r.policyVersionId === versionId)
+        ?.stages[0]?.seats.filter((s) => s.groupId === "group-finance")
+        .map((s) => s.userId),
+      ["user-dave"],
+    );
   });
 
   it("applies to every quorum: an empty pool of readers falls back to the owners", async () => {
