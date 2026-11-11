@@ -57,6 +57,22 @@ const audience = (groupId?: null | string): StewardPerson[] =>
       (!groupId || membershipsOf(p).some((m) => m.groupId === groupId)),
   );
 
+/** Case-insensitive first, then exact, so "ops" and "Ops" always fall in the same order. */
+const byName = (a: string, b: string) => {
+  const folded = a.toLowerCase().localeCompare(b.toLowerCase(), "en");
+  if (folded !== 0) return folded;
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+};
+
+/** The platform group names the person belongs to (identity's ListUserGroupNames), sorted. */
+const groupNamesOf = (person: StewardPerson): string[] =>
+  membershipsOf(person)
+    .flatMap(
+      (m) => data().platformGroups.find((g) => g.id === m.groupId)?.name ?? [],
+    )
+    .toSorted(byName);
+
 const entry = (
   p: StewardPerson,
   ackedAt: null | string,
@@ -65,6 +81,7 @@ const entry = (
   ackedAt,
   dueAt,
   email: p.email,
+  groups: groupNamesOf(p),
   userId: p.id,
   userName: p.name,
 });
