@@ -125,15 +125,7 @@ extend type Query {
   reviewThreads(policyVersionId: ID!): [ReviewThread!]!
 }
 
-extend type Query {
-  # What changed in each section of the version since the caller, an approver on its run, last
-  # reviewed it: when they last commented, replied, voted, sent comments or marked it reviewed.
-  versionChangesSinceReview(policyVersionId: ID!): [SectionDiff!]!
-}
-
 extend type Mutation {
-  # The caller, an approver on the version's run, has reviewed the version as it is now.
-  markVersionReviewed(policyVersionId: ID!): Boolean!
   # Starts a thread with its first message. Approvers on the version's run, its authors and site
   # admins only.
   # suggestedText proposes replacement text for the quote; it opens a suggestion on the other
@@ -409,22 +401,4 @@ extend type Mutation {
   # The order given is the order kept.
   setVersionReferences(policyVersionId: ID!, referenceIds: [ID!]!): PolicyVersionLinks!
   setVersionContacts(policyVersionId: ID!, contactBlockIds: [ID!]!): PolicyVersionLinks!
-}
-
-# Why the model provider is failing, as steward-gateway serves it (steward-gateway#110): ai's own
-# reason, passed on beside the one stable `reason`. One of "auth_failed" (the provider refused the
-# credential), "provider_error" (the provider call failed) or "not_configured" (no provider is set
-# up). Set only when reason is "provider_unavailable" and ai gave a reason; null otherwise, never "".
-extend type AIHealth {
-  providerReason: String
-}
-
-# What a seat asked for when it sent comments back, as steward-gateway serves it
-# (steward-gateway#106), read from the seat's history. The latest request wins. Asking for changes
-# is not a decision: the seat stays pending and `comment` stays null. Both are null when no changes
-# were requested, and for a reader who sees the policy obfuscated.
-extend type StageAssignee {
-  changesRequested: String
-  # ISO-8601 time of that request.
-  changesRequestedAt: String
 }
