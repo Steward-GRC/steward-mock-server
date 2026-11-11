@@ -6,11 +6,15 @@
 
 import {
   appendixText,
+  buttonCard,
+  calloutCard,
+  dividerCard,
   fileCard,
   imageCard,
   list,
   rich,
   SEEDED_FILE_IDS,
+  toggleCard,
 } from "#product/data/extras.ts";
 import { document, h1, h2, p, table } from "#product/data/policies.ts";
 
@@ -632,5 +636,37 @@ export const dataClassification = document(
     "Information owners choose the class and review it when the content changes.",
     "All staff label documents and follow the handling rules.",
     "The IT team provides the tools to encrypt and monitor information.",
+  ),
+);
+
+/** Bob's Editor Tour draft: one of each card the editor guide shows. */
+export const editorTour = document(
+  h1("Purpose"),
+  p(
+    "This draft exists to try the editor. It holds one of each block the editor adds from the + button and the / menu.",
+  ),
+  calloutCard(
+    "Keep this draft while you learn the editor. Nothing in it is a real policy.",
+  ),
+  h1("Scope"),
+  p("It applies to anyone who wants to see what each block looks like."),
+  toggleCard(
+    "Why are there so many blocks?",
+    "Each block suits a different kind of content: a note, an answer that stays out of the way, a link that looks like a button.",
+  ),
+  buttonCard("Read the editor guide", "https://example.org/editor-guide"),
+  dividerCard(),
+  h1("Policy statement"),
+  p("Use a block when plain text would not be as clear."),
+  imageCard(
+    SEEDED_FILE_IDS.image,
+    "A screenshot of the booking portal home page",
+    "The booking portal home page",
+  ),
+  fileCard(
+    SEEDED_FILE_IDS.pdf,
+    "editor-tour-checklist.pdf",
+    18_432,
+    "Editor tour checklist",
   ),
 );

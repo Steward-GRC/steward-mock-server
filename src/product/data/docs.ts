@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The docs start state (MOCK_START=docs): a data set designed for the user guide's screenshots. One
 // coherent fictional organisation, "Example Organisation", with the eight placeholder people, a
-// three-level category tree, four workflows, and thirteen documents on believable topics, each in
+// three-level category tree, four workflows, and fourteen documents on believable topics, each in
 // the state one of the guide's screenshots needs. Every id and every document number is fixed, so
 // the guide can name them, and every date is absolute, so a boot always reads the same.
 /* oxlint-disable unicorn-js/prevent-abbreviations -- "docs" is the start state's name */
@@ -785,6 +785,30 @@ const docs = (): Doc[] => {
           createdAt: at("2026-11-02"),
           id: "version-17",
           policyId: "policy-13",
+          status: "DRAFT",
+          templateVersionId: standard,
+        }),
+      ],
+    },
+    {
+      policy: policy({
+        ...std,
+        ackTriggers: "NONE",
+        createdAt: at("2026-11-03"),
+        currentDraftVersionId: "version-18",
+        homeCategoryId: "category-records",
+        id: "policy-14",
+        number: "POL-RECORDS-000003",
+        ownerUserId: BOB,
+        title: "Editor Tour",
+        updatedAt: at("2026-11-08", "08:55:00"),
+      }),
+      versions: [
+        version({
+          contentJson: prose.editorTour,
+          createdAt: at("2026-11-03"),
+          id: "version-18",
+          policyId: "policy-14",
           status: "DRAFT",
           templateVersionId: standard,
         }),
