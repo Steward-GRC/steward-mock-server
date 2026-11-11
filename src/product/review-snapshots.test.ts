@@ -44,8 +44,8 @@ const since = async (user: string): Promise<Diff[]> => {
   assert.equal(answer.refused, undefined, JSON.stringify(answer));
   return answer.data.versionChangesSinceReview as Diff[];
 };
-const changed = (diffs: Diff[]) =>
-  diffs.filter((d) => d.changeType !== "unchanged");
+// The gateway leaves unchanged sections out, so the list is already only the changes.
+const changed = (diffs: Diff[]) => diffs;
 
 const lexical = (...sections: [string, string][]) =>
   JSON.stringify({
@@ -77,6 +77,24 @@ const authorEdits = async () => {
 describe("the changes since an approver last reviewed", () => {
   it("shows nothing before the author edits", async () => {
     assert.deepEqual(changed(await since("user-charlie")), []);
+  });
+
+  it("answers an empty list, never null, when nothing changed", async () => {
+    const answer = await as("user-charlie", "VersionChangesSinceReview", {
+      policyVersionId: VERSION,
+    });
+    assert.deepEqual(answer.data.versionChangesSinceReview, []);
+  });
+
+  it("leaves out the sections that did not change", async () => {
+    await since("user-charlie");
+    await authorEdits();
+    const diffs = await since("user-charlie");
+    assert.ok(diffs.length > 0);
+    assert.ok(
+      diffs.every((d) => d.changeType !== "unchanged"),
+      JSON.stringify(diffs),
+    );
   });
 
   it("shows each approver the edit the author made in review", async () => {
@@ -138,12 +156,21 @@ describe("the changes since an approver last reviewed", () => {
     assert.ok(changed(await since("user-charlie")).length > 0);
   });
 
-  it("is refused for the author and for someone with no seat", async () => {
+  it("is refused with PermissionDenied for the author and for someone with no seat", async () => {
     for (const user of ["user-bob", "user-erin"]) {
       const answer = await as(user, "VersionChangesSinceReview", {
         policyVersionId: VERSION,
       });
-      assert.notEqual(answer.refused, undefined, user);
+      assert.equal(answer.refused, "PermissionDenied", user);
+    }
+  });
+
+  it("refuses markVersionReviewed the same way", async () => {
+    for (const user of ["user-bob", "user-erin"]) {
+      const answer = await as(user, "MarkVersionReviewed", {
+        policyVersionId: VERSION,
+      });
+      assert.equal(answer.refused, "PermissionDenied", user);
     }
   });
 });

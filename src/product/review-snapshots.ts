@@ -49,7 +49,8 @@ const titleOf = (key: string) => {
 };
 
 /**
- * What changed in each section since the approver last reviewed. Sections come from the version's
+ * What changed in each section since the approver last reviewed. As the gateway does, sections that
+ * did not change are left out, so nothing changed is an empty list. Sections come from the version's
  * pinned template; a version with none is read by the sections its text has, so a draft saved
  * without a template version can still be compared.
  */
@@ -69,5 +70,7 @@ export const changesSinceReview = (
           ...(parseContent(version.contentJson)?.keys() ?? []),
         ]),
       ].map((key) => ({ key, title: titleOf(key) }));
-  return diffVersions(before, version.contentJson, defs, false) ?? [];
+  return (diffVersions(before, version.contentJson, defs, false) ?? []).filter(
+    (diff) => diff.changeType !== "unchanged",
+  );
 };
