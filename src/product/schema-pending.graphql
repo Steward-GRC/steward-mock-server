@@ -314,13 +314,13 @@ extend type Mutation {
 extend type WorkflowStatus {
   # The user who submitted the run (the account acted as, during act-as).
   submittedBy: String
-  submittedAt: DateTime
+  submittedAt: String
   stageProgress: [StageProgress!]!
 }
 
 type StageProgress {
   # The earliest due date among the stage's live seats; null until the stage is entered.
-  dueAt: DateTime
+  dueAt: String
   # one, majority, all or nofm.
   quorum: String!
   # The approvals an nofm stage needs; 0 on every other rule.
