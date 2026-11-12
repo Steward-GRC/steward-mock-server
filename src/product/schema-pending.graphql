@@ -6,16 +6,6 @@
 # https://github.com/Steward-GRC/steward-gateway/issues/41 (policy text search), and each part
 # goes once the pinned gateway SDL carries it.
 
-# When the caller's own break-glass grant on a policy ends, in steward-gateway#185 (issue
-# https://github.com/Steward-GRC/steward-gateway/issues/58): an RFC 3339 instant, set whenever the
-# caller holds an unexpired grant on that policy (the latest end if there are several). Null for an
-# ended grant, a non-admin, or a grant on another policy; only the caller's own grant is reported.
-# Lets the reader say "Revealed for you until ..." after a reload. Moves to the pinned copy once
-# the pin carries the gateway change.
-extend type PolicyViewerCan {
-  breakGlassUntil: String
-}
-
 # Moving several documents at once, proposed in
 # https://github.com/Steward-GRC/steward-gateway/issues/82 (steward-core#35). All or nothing; site
 # admins only. The preview changes nothing.
@@ -43,6 +33,16 @@ type MovePolicyItem {
   newNumber: String
   # Why it cannot move; null when it can.
   refusal: String
+}
+
+# When the caller's own break-glass grant on a policy ends, in steward-gateway#185 (issue
+# https://github.com/Steward-GRC/steward-gateway/issues/58): an RFC 3339 instant, set whenever the
+# caller holds an unexpired grant on that policy (the latest end if there are several). Null for an
+# ended grant, a non-admin, or a grant on another policy; only the caller's own grant is reported.
+# Lets the reader say "Revealed for you until ..." after a reload. Moves to the pinned copy once
+# the pin carries the gateway change.
+extend type PolicyViewerCan {
+  breakGlassUntil: String
 }
 
 # What a category holds, proposed in https://github.com/Steward-GRC/steward-gateway/issues/80
