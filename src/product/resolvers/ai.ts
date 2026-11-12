@@ -225,8 +225,9 @@ export const aiResolvers: Resolvers = {
     aiJob: reading((given: { jobId: string }, context) =>
       jobStatus(given.jobId, context),
     ),
-    aiJobResultContent: reading((given: { resultRef: string }, context) =>
-      jobContent(given.resultRef, context),
+    aiJobResultContent: reading(
+      (given: { jobId?: null | string; resultRef: string }, context) =>
+        jobContent(given.resultRef, context, given.jobId),
     ),
     aiRetrievalConfig: settingsRead(() => ({ topK: DEFAULT_TOP_K })),
     authoringAssist: down,

@@ -10,10 +10,14 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { setJobDuration } from "#product/resolvers/ai-jobs.ts";
+import {
+  expireJobContent,
+  setJobDuration,
+} from "#product/resolvers/ai-jobs.ts";
 import {
   control,
   openSocket,
+  query,
   type Signed,
   startForTests,
   startFresh,
@@ -198,5 +202,65 @@ describe("the jobs with the simulation off", () => {
       available: boolean;
     };
     assert.equal(health.available, false);
+  });
+});
+
+const submit = async (signed: Signed) => {
+  const { jobId } = (await review(signed)).data.submitPolicyReview as {
+    jobId: string;
+  };
+  return { jobId, ref: `mock-ai-result:${jobId}` };
+};
+
+describe("aiJobResultContent with a jobId, after the cached content has expired", () => {
+  const CONTENT = `query ContentByJob($resultRef: String!, $jobId: ID) {
+    aiJobResultContent(resultRef: $resultRef, jobId: $jobId) { operation resultJson }
+  }`;
+  const read = async (
+    signed: Signed,
+    resultReference: string,
+    jobId?: string,
+  ): Promise<{ code?: string; operation?: string }> => {
+    const { body } = await query(base, CONTENT, signed, {
+      jobId,
+      resultRef: resultReference,
+    });
+    const data = body.data?.aiJobResultContent as
+      | { operation: string }
+      | undefined;
+    return {
+      code: body.errors?.[0]?.extensions.code,
+      operation: data?.operation,
+    };
+  };
+  it("is not found without a jobId", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref)).code, "NotFound");
+  });
+
+  it("gives the stored result for the submitter's finished job", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref, jobId)).operation, "REVIEW");
+  });
+
+  it("does not find a foreign or unknown job", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(erin, ref, jobId)).code, "NotFound");
+    assert.equal((await read(bob, ref, "ai-job-0")).code, "NotFound");
+  });
+
+  it("still refuses a job that has not finished", async () => {
+    setJobDuration(60_000);
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref, jobId)).code, "NotFound");
+  });
+
+  it("ignores the jobId on a cache hit", async () => {
+    const { ref } = await submit(bob);
+    assert.equal((await read(bob, ref, "ai-job-0")).operation, "REVIEW");
   });
 });

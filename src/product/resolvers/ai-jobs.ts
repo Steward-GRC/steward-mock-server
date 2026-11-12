@@ -20,6 +20,8 @@ export type JobOperation =
   | "SUMMARIZE";
 
 interface Job {
+  /** The cached content has expired, as after the gateway's result cache ages out (about 24 h). */
+  expired?: boolean;
   id: string;
   operation: JobOperation;
   owner: string;
@@ -193,16 +195,29 @@ export const jobStatus = (jobId: string, context: Context) => {
   };
 };
 
-/** aiJobResultContent: what the job produced, once it has succeeded. */
-export const jobContent = (resultReference: string, context: Context) => {
-  const job = [...jobs.values()].find(
+/** Test helper: ages the job's cached content out, as the gateway's result cache does after about 24 h. */
+export const expireJobContent = (jobId: string): void => {
+  const job = jobs.get(jobId);
+  if (job) job.expired = true;
+};
+
+/**
+ * aiJobResultContent: what the job produced, once it has succeeded. A ref whose content has expired
+ * is not found, unless the caller also names the job: then the stored result of the caller's own
+ * finished job is served. A cache hit ignores the jobId.
+ */
+export const jobContent = (
+  resultReference: string,
+  context: Context,
+  jobId?: null | string,
+) => {
+  const owner = caller(context).id;
+  const cached = [...jobs.values()].find(
     (candidate) => referenceOf(candidate) === resultReference,
   );
-  if (
-    !job ||
-    job.owner !== caller(context).id ||
-    phaseOf(job) !== "AI_JOB_PHASE_SUCCEEDED"
-  )
+  const fallback = jobId ? jobs.get(jobId) : undefined;
+  const job = cached && !cached.expired ? cached : fallback;
+  if (!job || job.owner !== owner || phaseOf(job) !== "AI_JOB_PHASE_SUCCEEDED")
     throw notFound("The result");
   return { operation: job.operation, resultJson: job.result };
 };
