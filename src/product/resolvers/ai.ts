@@ -12,7 +12,9 @@
 // its generic message.
 // The settings reads (aiConfig, aiRetrievalConfig) answer a default config for a site admin while
 // the simulation is on; the settings changes are not stored and stay refused as the unreachable
-// service. The reasons aiHealth gives while the service answers: provider_unavailable with ai's
+// service, except setAIMonthlyLimit, which is kept (aiConfig.monthlyLimit reads it back; 0 means no
+// limit). It is a number only: nothing counts usage against it, so reaching it is the ai-limit
+// control's limit_reached. The reasons aiHealth gives while the service answers: provider_unavailable with ai's
 // providerReason (auth_failed, provider_error, not_configured, or jobs_unavailable when ai has no
 // Kubernetes API, which also fails the job submits as a transport fault), and limit_reached when
 // the organisation's monthly limit or the caller's daily limit is hit (the submits then refuse
@@ -85,10 +87,29 @@ const defaultConfig = () => ({
   deployment: "",
   enabled: true,
   model: "",
+  monthlyLimit: data().aiMonthlyLimit,
   provider: null,
   region: "",
   topK: DEFAULT_TOP_K,
 });
+
+/**
+ * setAIMonthlyLimit: site admin only. While simulated the limit is kept and the limit in force is
+ * answered; a negative one is InvalidArgument (the gateway refuses it before ai is asked), 0 clears
+ * it. With the simulation off it is the unreachable service, like the other settings changes.
+ */
+const setMonthlyLimit = (
+  root: unknown,
+  given: { limit: number },
+  context: Context,
+): number => {
+  if (!data().aiSimulated) return adminDown(root, given, context);
+  siteAdmin(context);
+  if (given.limit < 0)
+    throw refuse("BAD_USER_INPUT", "The monthly limit cannot be negative.");
+  data().aiMonthlyLimit = given.limit;
+  return data().aiMonthlyLimit;
+};
 
 /** A settings read: the default config for a site admin while simulated, else the service is down. */
 const settingsRead =
@@ -141,6 +162,7 @@ export const aiResolvers: Resolvers = {
   Mutation: {
     acceptAIDataNotice: adminDown,
     setAIEnabled: adminDown,
+    setAIMonthlyLimit: setMonthlyLimit,
     setAIProviderConfig: adminDown,
     setAIProviderCredential: adminDown,
     setAIRetrievalConfig: adminDown,

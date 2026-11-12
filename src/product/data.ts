@@ -113,6 +113,12 @@ export interface StewardData extends ProductData {
    */
   aiLimitReached: boolean;
   /**
+   * The organisation's monthly limit on provider requests, as aiConfig.monthlyLimit gives it and
+   * setAIMonthlyLimit sets it; 0 means no limit. Nothing counts usage against it: the ai-limit
+   * control is what puts the mock in the limit_reached state.
+   */
+  aiMonthlyLimit: number;
+  /**
    * The model provider's outage while the ai service answers: null when it is healthy, else ai's
    * reason (auth_failed, provider_error, not_configured, jobs_unavailable), or "" for an outage
    * with no reason.
@@ -197,6 +203,7 @@ export const seed = (): StewardData => {
     ackDueDays: defaultAckDueDays(),
     acknowledgements: acknowledgements(),
     aiLimitReached: false,
+    aiMonthlyLimit: 0,
     aiProviderOutage: null,
     aiSimulated: true,
     appendices,
