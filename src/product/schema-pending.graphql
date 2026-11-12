@@ -468,3 +468,37 @@ extend type OverdueEntry {
 extend type Mutation {
   changeMyPassword(currentPassword: String!, newPassword: String!): Boolean!
 }
+
+# The registry of issued magic links, proposed in https://github.com/Steward-GRC/steward-gateway/issues/71
+# (steward-delivery#45 lists and removes them). Site admins only. magicLinks lists newest first;
+# pageSize is 1 to 200 (default 50), pageToken is the opaque cursor from nextPageToken (null on
+# the last page), a bad one answers INVALID_REQUEST with the field page_token. policyVersionIds
+# filters to those versions. status is "active", "revoked" or "expired" (revoked wins over
+# expired). The times are RFC 3339; revokedAt and revokedByUserId are null until revoked.
+# removeMagicLink deletes a revoked or expired link: MAGIC_LINK_ACTIVE for an active one,
+# MAGIC_LINK_NOT_FOUND for an unknown token.
+extend type Query {
+  magicLinks(policyVersionIds: [ID!], pageSize: Int, pageToken: String): MagicLinkPage!
+}
+
+extend type Mutation {
+  removeMagicLink(token: String!): Boolean!
+}
+
+type MagicLinkPage {
+  links: [MagicLinkInfo!]!
+  nextPageToken: String
+}
+
+type MagicLinkInfo {
+  token: String!
+  fingerprint: String!
+  policyVersionId: ID!
+  createdByUserId: ID!
+  sensitive: Boolean!
+  status: String!
+  createdAt: String!
+  expiresAt: String!
+  revokedAt: String
+  revokedByUserId: ID
+}
