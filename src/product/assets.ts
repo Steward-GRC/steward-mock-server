@@ -37,7 +37,7 @@ const IMAGE_TYPES = new Set([
 ]);
 
 export interface AssetSettings {
-  /** Uploads answer 503 "Failed to store image". */
+  /** Uploads answer 503 "Uploads are unavailable right now." with code uploads_unavailable. */
   fail: boolean;
   /** Which size cap is on. */
   limit: "real" | "small";
@@ -250,7 +250,14 @@ const upload = async (request: Request): Promise<Response> => {
   if (file.size > capOf()) return refusal(400, tooLarge);
   const data = new Uint8Array(await file.arrayBuffer());
   // Core is what refuses empty and wrong-type files, so they come after the gateway's checks.
-  if (assetSettings.fail) return refusal(503, "Failed to store image");
+  if (assetSettings.fail)
+    return json(
+      {
+        code: "uploads_unavailable",
+        error: "Uploads are unavailable right now.",
+      },
+      503,
+    );
   if (data.length === 0) return refusal(400, "asset: empty upload");
   const name = file.name.split(/[/\\]/).pop() ?? "";
   const found = detect(data, name);
@@ -337,7 +344,7 @@ const limitSwitch: ProductControl = (body) => {
 export const assetActions: ({ run: ProductControl } & Action)[] = [
   {
     body: { mode: "fail" },
-    hint: "Uploads answer 503 Failed to store image, as when the object store is down.",
+    hint: "Uploads answer 503 uploads_unavailable, as when the object store is down.",
     kind: "asset-upload",
     label: "Uploads fail",
     run: uploadSwitch,
