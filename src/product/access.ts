@@ -64,13 +64,24 @@ export const authorScopes = (person: StewardPerson): string[] =>
     )
     .map((c) => c.name);
 
+/** The latest end of the person's unexpired break-glass grants on the policy, if they hold one. */
+const breakGlassEnd = (
+  person: StewardPerson,
+  policy: Policy,
+): null | number => {
+  const ends = data()
+    .breakGlass.filter(
+      (g) =>
+        g.userId === person.id &&
+        g.policyNumber === policy.number &&
+        g.until > Date.now(),
+    )
+    .map((g) => g.until);
+  return ends.length > 0 ? Math.max(...ends) : null;
+};
+
 const breakGlassActive = (person: StewardPerson, policy: Policy): boolean =>
-  data().breakGlass.some(
-    (g) =>
-      g.userId === person.id &&
-      g.policyNumber === policy.number &&
-      g.until > Date.now(),
-  );
+  breakGlassEnd(person, policy) !== null;
 
 export type ReadEffect = "allow" | "deny" | "obfuscate";
 
@@ -96,6 +107,8 @@ export const ackTriggersOf = (policy: Policy): string =>
 export interface ViewerCan {
   ack: boolean;
   approve: boolean;
+  /** RFC 3339 end of the caller's active break-glass grant on this policy; null when they hold none. */
+  breakGlassUntil: null | string;
   canBreakGlass: boolean;
   contentObfuscated: boolean;
   edit: boolean;
@@ -107,6 +120,7 @@ export const viewerCan = (person: StewardPerson, policy: Policy): ViewerCan => {
   const effect = readEffect(person, policy);
   const edit = effect !== "deny" && canEdit(person, policy);
   const audience = policy.ackAudienceOverride;
+  const glassEnd = isSiteAdmin(person) ? breakGlassEnd(person, policy) : null;
   return {
     ack:
       effect !== "deny" &&
@@ -114,6 +128,8 @@ export const viewerCan = (person: StewardPerson, policy: Policy): ViewerCan => {
       ackTriggersOf(policy) !== "NONE" &&
       (audience === null || audience.includes(person.id)),
     approve: effect !== "deny" && canApproveIn(person, policy.homeCategoryId),
+    breakGlassUntil:
+      glassEnd === null ? null : new Date(glassEnd).toISOString(),
     canBreakGlass: effect === "obfuscate",
     contentObfuscated: effect === "obfuscate",
     edit,
