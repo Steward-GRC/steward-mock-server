@@ -28,6 +28,18 @@ import {
 const OVERDUE_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * steward-obligations' dueAt: the version's publish time plus the configured days, as ISO-8601;
+ * null when due dates are off (0 days) or the version has no publish time.
+ */
+const dueAtOf = (version: { publishedAt: null | string }): null | string => {
+  const days = data().ackDueDays;
+  if (days === 0 || !version.publishedAt) return null;
+  return new Date(
+    Date.parse(version.publishedAt) + days * DAY_MS,
+  ).toISOString();
+};
+
 const versionFor = (id: string) =>
   found(
     data().versions.find((v) => v.id === id),
@@ -45,8 +57,13 @@ const audience = (groupId?: null | string): StewardPerson[] =>
       (!groupId || membershipsOf(p).some((m) => m.groupId === groupId)),
   );
 
-const entry = (p: StewardPerson, ackedAt: null | string) => ({
+const entry = (
+  p: StewardPerson,
+  ackedAt: null | string,
+  dueAt: null | string = null,
+) => ({
   ackedAt,
+  dueAt,
   email: p.email,
   userId: p.id,
   userName: p.name,
@@ -56,12 +73,13 @@ const roster = (policyVersionId: string, groupId?: null | string) => {
   const acks = data().acknowledgements.filter(
     (a) => a.policyVersionId === policyVersionId,
   );
+  const dueAt = dueAtOf(versionFor(policyVersionId));
   const acked = [];
   const pending = [];
   for (const person of audience(groupId)) {
     const ack = acks.find((a) => a.userId === person.id);
     if (ack) acked.push(entry(person, ack.ackedAt));
-    else pending.push(entry(person, null));
+    else pending.push(entry(person, null, dueAt));
   }
   return { acked, pending };
 };
@@ -111,6 +129,7 @@ const obligationsOf = (person: StewardPerson) =>
       return {
         cleared,
         obligation: {
+          dueAt: dueAtOf(published),
           number: policy.number,
           policyId: policy.id,
           policyVersionId: published.id,
@@ -332,7 +351,8 @@ export const complianceResolvers: Resolvers = {
         completionPct:
           total === 0 ? 0 : Math.round((acked.length / total) * 100),
         overdue: overdue
-          ? pending.map(({ email, userId, userName }) => ({
+          ? pending.map(({ dueAt, email, userId, userName }) => ({
+              dueAt,
               email,
               userId,
               userName,

@@ -519,6 +519,13 @@ first or last name sets the name (derived as "first last"), a sent non-empty ema
 email, and a sent username must be non-empty (`InvalidArgument`) and free (`AlreadyExists`). The
 "Erin owes onboarding" button on `/_mock` marks Erin. A reset clears it.
 
+### Acknowledgement due dates
+
+`dueAt` on `myObligations`, the roster's pending entries and every overdue entry of the completion
+report is the version's publish time plus the due days (steward-obligations' `ACK_DUE_DAYS`): 14 by
+default, or the `ACK_DUE_DAYS` environment variable. `ack-due-days` with `days` sets it from the
+controls; 0 turns due dates off, so every `dueAt` is null. A reset brings back the default.
+
 ### Sign-in methods
 
 `/auth/config` answers what steward-gateway's does, and `sign-in-methods` switches each method, so

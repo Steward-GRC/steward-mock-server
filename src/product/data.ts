@@ -101,6 +101,11 @@ export interface SignInMethods {
 }
 
 export interface StewardData extends ProductData {
+  /**
+   * Days after a version is published that its acknowledgement is due (steward-obligations'
+   * ACK_DUE_DAYS): 14 unless ACK_DUE_DAYS or the controls say otherwise; 0 turns due dates off.
+   */
+  ackDueDays: number;
   acknowledgements: Acknowledgement[];
   /**
    * Whether the organisation's monthly AI limit or the caller's daily one is reached: aiHealth
@@ -178,11 +183,18 @@ export interface StewardData extends ProductData {
   workflowDefs: Workflow[];
 }
 
+/** ACK_DUE_DAYS when it is a whole number of 0 or more, else 14 (steward-obligations' default). */
+const defaultAckDueDays = (): number => {
+  const given = process.env.ACK_DUE_DAYS?.trim();
+  return given && /^\d+$/.test(given) ? Number(given) : 14;
+};
+
 export const seed = (): StewardData => {
   const allVersions = [...versions(), ...extraVersions()];
   const appendices = [...migrateAppendices(allVersions), ...travelAppendices()];
   syncAppendices(appendices, allVersions, "policy-3");
   return {
+    ackDueDays: defaultAckDueDays(),
     acknowledgements: acknowledgements(),
     aiLimitReached: false,
     aiProviderOutage: null,

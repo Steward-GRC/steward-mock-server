@@ -89,6 +89,23 @@ const signInMethodActions = [
 ];
 
 /**
+ * POST /_mock/controls {kind: "ack-due-days", days}: the days after publishing that an
+ * acknowledgement is due (steward-obligations' ACK_DUE_DAYS); 0 turns due dates off, so every
+ * dueAt is null. A reset brings back 14 (or the ACK_DUE_DAYS environment variable).
+ */
+const ackDueDays: ProductControl = (body) => {
+  const days = body.days;
+  if (typeof days !== "number" || !Number.isInteger(days) || days < 0)
+    return refuse(
+      400,
+      "invalid_days",
+      "days is a whole number of 0 or more (0 turns due dates off).",
+    );
+  stewardData().ackDueDays = days;
+  return { ackDueDays: days };
+};
+
+/**
  * POST /_mock/controls {kind: "needs-onboarding", personId, needsOnboarding?}: whether that person
  * still owes first-run onboarding (true unless the body says false), so the welcome page shows.
  */
@@ -313,6 +330,22 @@ export const productActions: ({ run: ProductControl } & Action)[] = [
     label: "AI provider: jobs unavailable",
     run: aiProvider,
     section: "AI",
+  },
+  {
+    body: { days: 14 },
+    hint: "Acknowledgements are due 14 days after publishing (the default): dueAt on myObligations, the roster's pending people and the overdue list.",
+    kind: "ack-due-days",
+    label: "Due after 14 days",
+    run: ackDueDays,
+    section: "Acknowledgements",
+  },
+  {
+    body: { days: 0 },
+    hint: "No due dates: every dueAt is null.",
+    kind: "ack-due-days",
+    label: "Due dates off",
+    run: ackDueDays,
+    section: "Acknowledgements",
   },
   {
     body: { reached: true },

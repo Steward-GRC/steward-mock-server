@@ -438,3 +438,21 @@ type QuietHours {
 extend type NotificationSettings {
   quietHours: QuietHours
 }
+
+# When an acknowledgement is due, proposed in https://github.com/Steward-GRC/steward-gateway/issues/55
+# and https://github.com/Steward-GRC/steward-gateway/issues/77 (steward-obligations#52 computes
+# it): the publish time of the version to acknowledge plus ACK_DUE_DAYS (14 by default; 0 turns
+# due dates off). ISO-8601, null when due dates are off or the version has no publish time. On a
+# roster entry it is set for pending people only; on an overdue entry for every entry. These move
+# to the pinned copy once the gateway ships them.
+extend type Obligation {
+  dueAt: String
+}
+
+extend type AckRosterEntry {
+  dueAt: String
+}
+
+extend type OverdueEntry {
+  dueAt: String
+}
