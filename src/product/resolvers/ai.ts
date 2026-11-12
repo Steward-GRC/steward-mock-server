@@ -7,7 +7,8 @@
 // result. Everything else, and all of it with the simulation off, answers the way steward-gateway
 // does when the ai service is unreachable.
 // aiHealth says so; the reads that swallow an ai error (topPolicyQuestions,
-// relatedPolicySuggestions, policyVersionSummary) answer empty; everything else checks the caller as
+// relatedPolicySuggestions, policyVersionSummary) answer empty (policyVersionSummary otherwise serves
+// the summary regenerateVersionSummary stored, see resolvers/ai-summaries.ts); everything else checks the caller as
 // the gateway does, then fails as a transport fault, which the gateway presents as INTERNAL with
 // its generic message.
 // The settings reads (aiConfig, aiRetrievalConfig) answer a default config for a site admin while
@@ -33,6 +34,7 @@ import {
 } from "#product/resolvers/ai-jobs.ts";
 import {
   regenerateVersionSummary,
+  storedVersionSummary,
   summarizeChanges,
   type Summary,
 } from "#product/resolvers/ai-summaries.ts";
@@ -259,9 +261,16 @@ export const aiResolvers: Resolvers = {
     ),
     aiRetrievalConfig: settingsRead(() => ({ topK: DEFAULT_TOP_K })),
     authoringAssist: down,
-    policyVersionSummary: (_root, _given, context: Context) => {
-      signedIn(context);
-      return null;
+    policyVersionSummary: (
+      _root,
+      given: { versionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      // With the ai service unreachable the gateway swallows the error and answers null.
+      return data().aiSimulated
+        ? storedVersionSummary(person, given.versionId)
+        : null;
     },
     relatedPolicySuggestions: (_root, _given, context: Context) => {
       signedIn(context);

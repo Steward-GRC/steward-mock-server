@@ -131,6 +131,11 @@ export interface StewardData extends ProductData {
    * their diff), so a repeat request is answered as cached; nothing else reads them.
    */
   aiSummaries: string[];
+  /**
+   * The stored summary of each version, by version id, as regenerateVersionSummary last made it:
+   * what policyVersionSummary serves. Nothing else writes it.
+   */
+  aiVersionSummaries: Record<string, StoredVersionSummary>;
   /** The appendices of policies and procedures, each with its own version table. */
   appendices: PolicyAppendix[];
   /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
@@ -194,6 +199,12 @@ export interface StewardData extends ProductData {
   workflowDefs: Workflow[];
 }
 
+/** The summary the AI stored for a version (PolicySummaryResult). */
+export interface StoredVersionSummary {
+  generatedAt: string;
+  summaryText: string;
+}
+
 /** ACK_DUE_DAYS when it is a whole number of 0 or more, else 14 (steward-obligations' default). */
 const defaultAckDueDays = (): number => {
   const given = process.env.ACK_DUE_DAYS?.trim();
@@ -212,6 +223,7 @@ export const seed = (): StewardData => {
     aiProviderOutage: null,
     aiSimulated: true,
     aiSummaries: [],
+    aiVersionSummaries: {},
     appendices,
     askedQuestions: [],
     assets: seedAssets(),

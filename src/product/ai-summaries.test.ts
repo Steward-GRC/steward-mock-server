@@ -5,8 +5,10 @@
 // aiJobResultContent as {"scope","bullets"|"summaryText","generatedAt","cached"}. The reader's
 // checks come first: an unreadable version or a draft the caller cannot read is NotFound, an
 // obfuscated read is PermissionDenied, versions with no differences or a version with no text is
-// FailedPrecondition. With AI off or at its limit the submit fails like the other submits. There
-// is no author-only rule.
+// FailedPrecondition. With AI off or at its limit the submit fails like the other submits.
+// Replacing a stored summary (regenerateVersionSummary, summarizeChanges with regenerate) also
+// needs Author on the version's policy (steward-gateway#206); policyVersionSummary then serves
+// the stored version summary to anyone who reads the version in full.
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -92,6 +94,19 @@ const resultOf = async (
   };
 };
 
+/** Erin, given the Author rule on the category that holds Expense Claims (not its owner). */
+const authorOnly = async (): Promise<Signed> => {
+  const policy = stewardData().policies.find((p) => p.id === "policy-1");
+  assert.ok(policy);
+  assert.notEqual(policy.ownerUserId, "user-erin");
+  const category = stewardData().categories.find(
+    (c) => c.id === policy.homeCategoryId,
+  );
+  assert.ok(category);
+  category.authorRule.push("user-erin");
+  return erin;
+};
+
 describe("summarizeChanges", () => {
   it("returns a job whose result lists the changes as bullets", async () => {
     const result = await resultOf(
@@ -135,13 +150,39 @@ describe("summarizeChanges", () => {
     assert.equal(other.cached, false);
   });
 
-  it("is open to a reader who is not the author", async () => {
+  it("is open to a reader who is not the author unless regenerate is true", async () => {
     const result = await resultOf(
       erin,
       await changes(erin, "version-1", "version-10"),
       "summarizeChanges",
     );
     assert.equal(result.scope, "changes");
+    assert.equal(
+      codeOf(await changes(erin, "version-1", "version-10", true)),
+      "PermissionDenied",
+    );
+    assert.equal(
+      codeOf(await changes(erin, "version-1", "version-10", false)),
+      undefined,
+    );
+  });
+
+  it("lets the policy's owner, a category author and root regenerate", async () => {
+    for (const signed of [bob, await authorOnly()]) {
+      const result = await resultOf(
+        signed,
+        await changes(signed, "version-1", "version-10", true),
+        "summarizeChanges",
+      );
+      assert.equal(result.cached, false);
+    }
+  });
+
+  it("checks the read before the author right", async () => {
+    assert.equal(
+      codeOf(await changes(erin, "version-1", "version-4", true)),
+      "NotFound",
+    );
   });
 
   it("refuses a version that does not exist, or a draft the caller cannot read, as NotFound", async () => {
@@ -210,13 +251,28 @@ describe("regenerateVersionSummary", () => {
     }
   });
 
-  it("is open to a reader who is not the author", async () => {
+  it("needs Author: a reader who is not the author is refused, an owner or category author is not", async () => {
+    assert.equal(
+      codeOf(await regenerate(erin, "version-2")),
+      "PermissionDenied",
+    );
+    const author = await authorOnly();
     const result = await resultOf(
-      erin,
-      await regenerate(erin, "version-2"),
+      author,
+      await regenerate(author, "version-2"),
       "regenerateVersionSummary",
     );
     assert.equal(result.scope, "version");
+  });
+
+  it("checks the author right before the version has text", async () => {
+    const empty = stewardData().versions.find((v) => v.id === "version-2");
+    assert.ok(empty);
+    empty.contentJson = "";
+    assert.equal(
+      codeOf(await regenerate(erin, "version-2")),
+      "PermissionDenied",
+    );
   });
 
   it("refuses an unknown version, or a draft the caller cannot read, as NotFound", async () => {
@@ -253,5 +309,112 @@ describe("regenerateVersionSummary", () => {
     await control(base, { kind: "ai-simulation", on: false });
     assert.equal(codeOf(await regenerate(bob, "version-2")), "INTERNAL");
     assert.equal(codeOf(await regenerate(bob, "nowhere")), "NotFound");
+  });
+});
+
+const STORED = `query($id: ID!) { policyVersionSummary(versionId: $id) { summaryText generatedAt } }`;
+const stored = (signed: Signed, id: string) =>
+  query(base, STORED, signed, { id });
+
+describe("policyVersionSummary", () => {
+  it("is null until a summary has been stored", async () => {
+    const answer = await stored(erin, "version-2");
+    assert.equal(codeOf(answer), undefined);
+    assert.equal(answer.body.data?.policyVersionSummary, null);
+  });
+
+  it("serves the summary regenerateVersionSummary stored, to any reader", async () => {
+    const result = await resultOf(
+      bob,
+      await regenerate(bob, "version-2"),
+      "regenerateVersionSummary",
+    );
+    const answer = await stored(erin, "version-2");
+    assert.equal(codeOf(answer), undefined);
+    assert.deepEqual(answer.body.data?.policyVersionSummary, {
+      generatedAt: result.generatedAt,
+      summaryText: result.summaryText,
+    });
+    // another version has none
+    assert.equal(
+      (await stored(erin, "version-1")).body.data?.policyVersionSummary,
+      null,
+    );
+  });
+
+  it("replaces the stored summary on the next regenerate", async () => {
+    await resultOf(
+      bob,
+      await regenerate(bob, "version-2"),
+      "regenerateVersionSummary",
+    );
+    const version = stewardData().versions.find((v) => v.id === "version-2");
+    assert.ok(version);
+    version.contentJson = JSON.stringify({
+      sections: { purpose: "Brand new wording" },
+    });
+    const second = await resultOf(
+      bob,
+      await regenerate(bob, "version-2"),
+      "regenerateVersionSummary",
+    );
+    const answer = await stored(erin, "version-2");
+    assert.equal(
+      (answer.body.data?.policyVersionSummary as { summaryText: string })
+        .summaryText,
+      second.summaryText,
+    );
+  });
+
+  it("is not stored by summarizeChanges, nor by a refused regenerate", async () => {
+    await resultOf(
+      bob,
+      await changes(bob, "version-1", "version-10", true),
+      "summarizeChanges",
+    );
+    await regenerate(erin, "version-2");
+    assert.equal(
+      (await stored(bob, "version-2")).body.data?.policyVersionSummary,
+      null,
+    );
+  });
+
+  it("is null for a version the caller cannot read, or reads obfuscated", async () => {
+    await resultOf(
+      bob,
+      await regenerate(bob, "version-2"),
+      "regenerateVersionSummary",
+    );
+    assert.equal(
+      (await stored(erin, "version-4")).body.data?.policyVersionSummary,
+      null,
+    );
+    assert.equal(
+      (await stored(erin, "nowhere")).body.data?.policyVersionSummary,
+      null,
+    );
+    demoteAlice();
+    assert.equal(
+      (await stored(alice, "version-9")).body.data?.policyVersionSummary,
+      null,
+    );
+  });
+
+  it("answers null while the ai service is unreachable", async () => {
+    await resultOf(
+      bob,
+      await regenerate(bob, "version-2"),
+      "regenerateVersionSummary",
+    );
+    await control(base, { kind: "ai-simulation", on: false });
+    assert.equal(
+      (await stored(bob, "version-2")).body.data?.policyVersionSummary,
+      null,
+    );
+  });
+
+  it("needs a signed-in caller", async () => {
+    const answer = await query(base, STORED, undefined, { id: "version-2" });
+    assert.ok(answer.body.errors?.length);
   });
 });
