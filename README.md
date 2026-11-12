@@ -384,6 +384,16 @@ The admin user screens answer as steward-gateway and steward-identity do:
 - **Password and welcome email:** `resetUserPassword` answers true for a local account and
   replaces its password; `resendWelcomeEmail` answers true and sends
   nothing.
+- **Changing your own password:** `changeMyPassword(currentPassword, newPassword)` (in
+  `schema-pending.graphql` until the gateway carries it, steward-gateway#72) changes the
+  signed-in person's password, as steward-identity's ChangeMyPassword does. The seed password is
+  `<username>-password`, so a wrong current one is testable. Refusals carry the registry symbol
+  as the code: `CURRENT_PASSWORD_WRONG` (checked first), `PASSWORD_TOO_WEAK` (under 8
+  characters, on a short breached list, or equal to the email, its mailbox part or the username),
+  `NO_LOCAL_PASSWORD` (an SSO-only account) and `ACT_AS_FORBIDDEN` (while acting as someone). An
+  attempt is audited as `user.password.changed` or `user.password.change_failed`, never with a
+  password. `PASSWORD_CHANGE_UNAVAILABLE` is not answered. `change-password.test.ts` is the
+  reference.
 - **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
   `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
   last root admin can't lose it.
