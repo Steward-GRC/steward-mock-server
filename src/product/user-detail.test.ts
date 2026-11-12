@@ -330,11 +330,12 @@ describe("root admins", () => {
       },
     });
     assert.deepEqual(ROOT_HOLDERS(), ["user-bob"]);
+    const events = stewardData().audit.filter((a) =>
+      a.action.startsWith("root."),
+    );
     assert.deepEqual(
-      stewardData()
-        .audit.slice(-2)
-        .map((a) => a.action),
-      ["root.revoked", "root.granted"],
+      events.map((a) => [a.action, a.actorUserId, a.subject]),
+      [["root.transferred", "user-alice", "user:user-bob"]],
     );
     // The old holder is no longer root, so the seat can't be moved again from that session.
     await ask(signed, STEP_UP);

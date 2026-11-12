@@ -481,8 +481,7 @@ export const accountResolvers: Resolvers = {
         people().filter((p) => isRoot(p)),
         person,
       );
-      record("root.revoked", actor, userSubject(actor));
-      record("root.granted", actor, userSubject(person));
+      record("root.transferred", actor, userSubject(person));
       return asUser(person);
     },
   },
