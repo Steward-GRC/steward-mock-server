@@ -37,9 +37,13 @@ ahead of it while steward-web moves to the same commit).
   `/auth/sso/start`, the IdP test link, and the `/admin/idp/*` imports
   from invented fixtures), `schema.graphql`, `controls.ts`; `data.ts` builds the seed from
   `data/*.ts` (one module per domain); `resolvers.ts` merges `resolvers/*.ts` (one per domain; `resolvers/accounts.ts` is the admin user screens; `resolvers/raci.ts` is
-  category access and
-  the simulator, a port of steward-authz's Resolve);
-  `access.ts` is the policy read model (who reads, edits and approves what); `delivery.ts` keeps steward-delivery's PDF jobs and magic links and serves the sample PDF
+  category access, the simulator and the approver pool, which only ask `access-rules.ts`);
+  `ordered.ts` is the one access evaluator, a port of go-authz's ordered engine, and
+  `access-rules.ts` maps the categories, owners and people onto it (the root seat, the reasons and
+  codes); `testdata/ordered.json` holds go-authz's shared vectors, which `ordered.test.ts` runs
+  (refresh with `task vectors:refresh`);
+  `access.ts` is the policy read model (who reads, edits, approves and manages what, with the
+  engine for the category rows); `delivery.ts` keeps steward-delivery's PDF jobs and magic links and serves the sample PDF
   (`resolvers/governance.ts` answers the governance fields); `groups.ts` reads who someone is from the people store (the roles field and the `groups`
   person field, live on every request) and announces `user.permissions_changed`; `documents.ts` is the gateway's `/documents/extract` and `/documents/validate-url`;
   `sections.ts` is steward-core's section reading (ExtractSections, the slug rule and

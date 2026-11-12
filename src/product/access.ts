@@ -1,13 +1,18 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Who may read, edit and approve a policy, the way steward-gateway decides it (resolvePolicyReadModel,
-// viewerCanFor, authorizeEffectiveAuthor). Rights come from each category's RACI rules and owners,
-// inherited down the category chain, not from the global author or approver role:
-// - everyone may read, except a SENSITIVE policy, which needs the read-sensitive claim or
-//   ownership; a site admin without either reads it obfuscated and may break glass instead;
-// - the policy's owner, a site admin, a category owner or a category author rule may edit
-//   and submit;
-// - a category approve rule or a category owner may approve;
+// Who may read, edit, approve and manage a policy, the way steward-gateway decides it
+// (resolvePolicyReadModel, meritRACIReadEffect, viewerCanFor, authorizeEffectiveAuthor). Rights
+// come from each category's access rows and owners, inherited down the category chain and decided
+// by the one ordered engine (access-rules.ts), plus the scoped author and approver grants:
+// - the root account always reads, sensitive included, and is never obfuscated; everyone else,
+//   a site admin who is not root too, reads where the rows say so. A site admin the rows exclude
+//   sees the policy obfuscated and may break glass; anyone else is denied. A SENSITIVE policy then
+//   needs the read-sensitive claim or ownership;
+// - the policy's owner, a category author grant or the rows' Author may edit and submit, and root
+//   always can;
+// - a category approver grant or the rows' Approve (an owner included) may approve; root follows
+//   the rows;
+// - Manage, to move and reorder documents, is the rows' Manage, an owner, or root;
 // - a draft is only theirs: the draft pointer is cleared for anyone who can't edit, and a policy
 //   that was never published is hidden from them.
 
@@ -15,7 +20,9 @@ import type { Category } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
 import type { Policy, PolicyVersion } from "#product/data/policies.ts";
 
+import { can } from "#product/access-rules.ts";
 import { stewardData } from "#product/data.ts";
+import { isRoot } from "#product/groups.ts";
 
 const data = () => stewardData();
 
@@ -36,20 +43,27 @@ export const chainOf = (categoryId: string): Category[] => {
   return chain;
 };
 
-/** May `person` author in this category (authorizeCategoryAuthor)? */
+/**
+ * May `person` author in this category (authorizeCategoryAuthor)? The scoped author grant, or the
+ * rows' Author (an owner included), or root. A site admin who is not root follows the rows.
+ */
 export const canAuthorIn = (
   person: StewardPerson,
   categoryId: string,
 ): boolean =>
-  isSiteAdmin(person) ||
-  chainOf(categoryId).some(
-    (c) => c.owners.includes(person.id) || c.authorRule.includes(person.id),
-  );
+  isRoot(person) ||
+  chainOf(categoryId).some((c) => c.authorRule.includes(person.id)) ||
+  can(person, categoryId, "author");
 
 const canApproveIn = (person: StewardPerson, categoryId: string): boolean =>
-  chainOf(categoryId).some(
-    (c) => c.owners.includes(person.id) || c.approverRule.includes(person.id),
-  );
+  chainOf(categoryId).some((c) => c.approverRule.includes(person.id)) ||
+  can(person, categoryId, "approve");
+
+/** May `person` move and reorder documents in this category: Manage, an owner, or root. */
+export const canManageIn = (
+  person: StewardPerson,
+  categoryId: string,
+): boolean => isRoot(person) || can(person, categoryId, "manage");
 
 /** The effective author of a policy (authorizeEffectiveAuthor). */
 export const canEdit = (person: StewardPerson, policy: Policy): boolean =>
@@ -90,11 +104,13 @@ export const readEffect = (
   person: StewardPerson,
   policy: Policy,
 ): ReadEffect => {
+  if (isRoot(person)) return "allow";
+  if (breakGlassActive(person, policy)) return "allow";
+  if (!can(person, policy.homeCategoryId, "read"))
+    return isSiteAdmin(person) ? "obfuscate" : "deny";
   if (policy.sensitivity !== "SENSITIVE") return "allow";
   if (person.readSensitive || policy.ownerUserId === person.id) return "allow";
-  if (isSiteAdmin(person))
-    return breakGlassActive(person, policy) ? "allow" : "obfuscate";
-  return "deny";
+  return isSiteAdmin(person) ? "obfuscate" : "deny";
 };
 
 /** The acknowledgement trigger in force: the policy's own, or the nearest category's. */
@@ -112,6 +128,8 @@ export interface ViewerCan {
   canBreakGlass: boolean;
   contentObfuscated: boolean;
   edit: boolean;
+  /** Manage on the policy's category: move and reorder documents. */
+  manage: boolean;
   read: boolean;
   submit: boolean;
 }
@@ -133,6 +151,7 @@ export const viewerCan = (person: StewardPerson, policy: Policy): ViewerCan => {
     canBreakGlass: effect === "obfuscate",
     contentObfuscated: effect === "obfuscate",
     edit,
+    manage: canManageIn(person, policy.homeCategoryId),
     read: effect !== "deny",
     submit: edit,
   };

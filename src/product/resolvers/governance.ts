@@ -1,7 +1,7 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // Policy governance (steward-web's A11): deletePolicy and retirePolicy at the effective-author
-// tier, setPolicyOwner and movePolicy for site admins (steward-gateway policy_resolver.go over
+// tier, setPolicyOwner for site admins, movePolicy and the bulk move for site admins or those the rules give Manage (steward-gateway policy_resolver.go over
 // steward-core's PolicyHandler), and the PDF export and magic links (steward-gateway
 // delivery_resolver.go over steward-delivery). The refusals, messages and audit entries are
 // theirs.
@@ -11,6 +11,7 @@ import { GraphQLError } from "graphql";
 import type { Category } from "#product/data/library.ts";
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
+import { can } from "#product/access-rules.ts";
 import { policyView, readEffect } from "#product/access.ts";
 import { accepts, refusesType } from "#product/category-types.ts";
 import {
@@ -36,13 +37,41 @@ import {
 import {
   caller,
   data,
+  forbidden,
   found,
+  isSiteAdmin,
   notFound,
   now,
   record,
   refuse,
   siteAdmin,
 } from "#product/resolvers/shared.ts";
+
+/**
+ * steward-gateway's authorizeMove: a site admin may move, and so may anyone the category rules
+ * give Manage in each document's own category and Author in the target (Manage implies Author;
+ * owners and root hold both). The site-admin gate stays beside the new one.
+ */
+const authorizeMove = (
+  context: Context,
+  policyIds: string[],
+  targetId: string,
+) => {
+  const person = caller(context);
+  if (isSiteAdmin(person)) return person;
+  if (
+    policyIds.length === 0 ||
+    targetId === "" ||
+    !can(person, targetId, "author")
+  )
+    throw forbidden();
+  for (const id of policyIds) {
+    const policy = found(policyById(id), "policy");
+    if (!policy.homeCategoryId || !can(person, policy.homeCategoryId, "manage"))
+      throw forbidden();
+  }
+  return person;
+};
 
 /** RFC 3339 to the second, as the gateway formats delivery's times. */
 const rfc3339 = (ms: number) =>
@@ -168,7 +197,11 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyIds: string[] },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      const admin = authorizeMove(
+        context,
+        given.policyIds,
+        given.homeCategoryId,
+      );
       if (given.policyIds.length === 0)
         throw refuse("BAD_USER_INPUT", "Pick at least one document to move.");
       const target = data().categories.find(
@@ -210,7 +243,11 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyId: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      const admin = authorizeMove(
+        context,
+        [given.policyId],
+        given.homeCategoryId,
+      );
       const policy = policyById(given.policyId);
       if (!policy) throw refuse("NOT_FOUND", "policy not found");
       if (policy.homeCategoryId === given.homeCategoryId)
@@ -348,7 +385,7 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyIds: string[] },
       context: Context,
     ) => {
-      siteAdmin(context);
+      authorizeMove(context, given.policyIds, given.homeCategoryId);
       const target = data().categories.find(
         (c) => c.id === given.homeCategoryId,
       );

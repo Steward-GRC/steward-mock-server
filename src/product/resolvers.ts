@@ -37,7 +37,7 @@ import { workflowResolvers } from "#product/resolvers/workflow.ts";
 export { announce, type LiveEvent } from "#product/resolvers/shared.ts";
 export { asUser, permissionsOf } from "#product/resolvers/users.ts";
 
-/** The roles steward-authz grants audit.read, which liveEvents needs. */
+/** The roles the gateway's permission catalog grants audit.read, which liveEvents needs. */
 const AUDIT_READERS = new Set(["compliance-admin", "site-admin"]);
 
 const liveResolvers: Resolvers = {

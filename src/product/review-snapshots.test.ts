@@ -11,7 +11,11 @@ import type { RunningMockServer } from "#core/server.ts";
 
 import { stewardData } from "#product/data.ts";
 import { people } from "#product/resolvers/shared.ts";
-import { startForTests, startFresh } from "#product/test-client.ts";
+import {
+  demoteAlice,
+  startForTests,
+  startFresh,
+} from "#product/test-client.ts";
 import { call, signInAs } from "#product/web-client.ts";
 
 interface Diff {
@@ -197,6 +201,7 @@ describe("the changes since an approver last reviewed", () => {
   });
 
   it("gives a reader who sees the policy obfuscated no word diffs and a scrambled title", async () => {
+    demoteAlice();
     // Alice is a site admin seated on the run; she reads this sensitive policy obfuscated.
     await since("user-alice");
     await authorEdits();

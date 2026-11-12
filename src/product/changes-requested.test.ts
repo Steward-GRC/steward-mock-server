@@ -11,7 +11,12 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { query, startForTests, startFresh } from "#product/test-client.ts";
+import {
+  demoteAlice,
+  query,
+  startForTests,
+  startFresh,
+} from "#product/test-client.ts";
 import { call, signInAs } from "#product/web-client.ts";
 
 interface Seat {
@@ -125,6 +130,7 @@ describe("a seat that asked for changes", () => {
   });
 
   it("is hidden from a reader who sees the policy obfuscated", async () => {
+    demoteAlice();
     await sendComments("user-charlie", "See my comments.");
     const read = await query(
       base,

@@ -36,6 +36,7 @@ import {
   record,
   refuse,
   siteAdmin,
+  withAnyRole,
 } from "#product/resolvers/shared.ts";
 
 const firstAndLast = (name: string) => {
@@ -44,7 +45,7 @@ const firstAndLast = (name: string) => {
 };
 
 /**
- * steward-authz's role grants, as steward-web mirrors them (packages/auth/src/catalog.ts).
+ * The gateway's permission catalog, as steward-web mirrors it (packages/auth/src/catalog.ts).
  * Reader is implicit: everyone who can sign in may read.
  */
 const ALL_PERMISSIONS = [
@@ -412,6 +413,11 @@ const mergePreview = (source: StewardPerson, target: StewardPerson) => {
     warnings: plan.warnings,
   };
 };
+
+/** The group typeahead's limits: two characters, 20 groups unless asked, never more than 50. */
+const SEARCH_GROUPS_MIN_QUERY = 2;
+const SEARCH_GROUPS_DEFAULT_LIMIT = 20;
+const SEARCH_GROUPS_MAX_LIMIT = 50;
 
 export const userResolvers: Resolvers = {
   Mutation: {
@@ -798,6 +804,33 @@ export const userResolvers: Resolvers = {
     ) => {
       siteAdmin(context);
       return deletionPreview(personFor(given.userId));
+    },
+    /**
+     * IdentityReadService.SearchGroups behind the access picker: the groups, at any depth, whose
+     * name contains the query, by name. Open to whoever edits category access (group.manage or
+     * template.manage). The query is trimmed and needs two characters; the limit is 20 unless
+     * asked, never more than 50.
+     */
+    searchPlatformGroups: (
+      _root,
+      given: { limit?: null | number; query: string },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const needle = given.query.trim().toLowerCase();
+      if ([...needle].length < SEARCH_GROUPS_MIN_QUERY)
+        throw refuse(
+          "BAD_USER_INPUT",
+          `type at least ${String(SEARCH_GROUPS_MIN_QUERY)} characters to search groups`,
+        );
+      const limit =
+        given.limit && given.limit > 0
+          ? Math.min(given.limit, SEARCH_GROUPS_MAX_LIMIT)
+          : SEARCH_GROUPS_DEFAULT_LIMIT;
+      return data()
+        .platformGroups.filter((g) => g.name.toLowerCase().includes(needle))
+        .toSorted((a, b) => a.name.localeCompare(b.name))
+        .slice(0, limit);
     },
     searchUsers: (
       _root,
