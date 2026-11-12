@@ -457,6 +457,25 @@ extend type OverdueEntry {
   dueAt: String
 }
 
+# The caller's own acknowledgements, named by their policy: the row of the "Recently acknowledged"
+# card on My work. Proposed in https://github.com/Steward-GRC/steward-gateway/issues/56 (open as
+# steward-gateway#172). Always the signed-in user's, never another person's, newest first. limit
+# missing, zero or negative is 10; at most 100. Nothing acknowledged is []. This goes once the
+# pinned gateway SDL carries it.
+extend type Query {
+  myAcknowledgments(limit: Int): [RecentAcknowledgment!]!
+}
+
+type RecentAcknowledgment {
+  policyId: ID!
+  number: String!
+  title: String!
+  versionNo: Int!
+  policyVersionId: ID!
+  # ISO-8601.
+  ackedAt: String!
+}
+
 # The registry of issued magic links, proposed in https://github.com/Steward-GRC/steward-gateway/issues/71
 # (steward-delivery#45 lists and removes them). Site admins only. magicLinks lists newest first;
 # pageSize is 1 to 200 (default 50), pageToken is the opaque cursor from nextPageToken (null on
