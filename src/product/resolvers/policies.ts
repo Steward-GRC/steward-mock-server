@@ -42,7 +42,11 @@ import {
   record,
   refuse,
 } from "#product/resolvers/shared.ts";
-import { diffVersions } from "#product/sections.ts";
+import {
+  diffBlocks,
+  diffVersions,
+  type SectionDiff,
+} from "#product/sections.ts";
 
 /** How long a break-glass grant lasts. */
 const BREAK_GLASS_MS = 5 * 60 * 1000;
@@ -280,26 +284,39 @@ export const publishVersion = (
 };
 
 /**
- * core's DiffVersions over the "to" version's pinned template sections, keyed as core keys them
- * (src/product/sections.ts). A version with no pinned template has no sections to diff, which
- * core refuses as an internal fault. The gateway drops the word diff and scrambles the titles for
- * an obfuscated read.
+ * core's DiffVersions. When both versions pin a template version, one entry per section of the
+ * "to" version's template (src/product/sections.ts keys them as core does). When either has none
+ * (a freeform version, or a freeform one against a templated one), one entry per content block of
+ * the two texts instead. The gateway drops the word diff and scrambles the titles for an
+ * obfuscated read.
  */
 export const diff = (
   from: PolicyVersion,
   to: PolicyVersion,
   obscured: boolean,
 ) => {
-  const template = data().templateVersions.find(
-    (t) => t.id === to.templateVersionId,
-  );
-  if (!template) throw refuse("INTERNAL", "fetch template version: not found");
-  const diffs = diffVersions(
-    from.contentJson,
-    to.contentJson,
-    template.sections.toSorted((a, b) => a.order - b.order),
-    from.templateVersionId !== to.templateVersionId,
-  );
+  let diffs: SectionDiff[] | undefined;
+  if (from.templateVersionId === "" || to.templateVersionId === "") {
+    const blocks = diffBlocks(from.contentJson, to.contentJson);
+    if ("badSide" in blocks)
+      throw refuse(
+        "INTERNAL",
+        `diff: ${blocks.badSide} content: parse content`,
+      );
+    diffs = blocks.diffs;
+  } else {
+    const template = data().templateVersions.find(
+      (t) => t.id === to.templateVersionId,
+    );
+    if (!template)
+      throw refuse("INTERNAL", "fetch template version: not found");
+    diffs = diffVersions(
+      from.contentJson,
+      to.contentJson,
+      template.sections.toSorted((a, b) => a.order - b.order),
+      from.templateVersionId !== to.templateVersionId,
+    );
+  }
   if (!diffs) throw refuse("INTERNAL", "diff: parse content");
   return diffs.map((d) => ({
     ...d,
