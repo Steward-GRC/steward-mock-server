@@ -140,18 +140,46 @@ const submitBlocked = (): GraphQLError | null => {
   return null;
 };
 
+/** The longest CUSTOM framing wording, in characters (steward-gateway internal/resolvers/framing.go). */
+const MAX_CUSTOM_FRAMING = 500;
+
+/**
+ * The draft and revision submits take a framing and, for CUSTOM, the author's own wording. The
+ * gateway checks it after the category check and before it asks ai for a job: CUSTOM needs
+ * wording that is not blank and at most 500 characters once trimmed; wording sent with another
+ * framing, or none, is dropped. The gateway returns a plain error for a bad one, which it presents
+ * as its generic fault, so the mock refuses with INTERNAL too. The framing changes nothing in the
+ * made-up result.
+ */
+const checkFraming = (input: {
+  customFraming?: null | string;
+  framing?: null | string;
+}): void => {
+  if (input.framing !== "CUSTOM") return;
+  const wording = (input.customFraming ?? "").trim();
+  if (wording === "" || [...wording].length > MAX_CUSTOM_FRAMING)
+    throw unreachable();
+};
+
 /** A job submission: simulated while the simulation is on, and checked the same way either way. */
 const submitting =
   (operation: JobOperation) =>
   (
     root: unknown,
-    given: { input: { categoryId?: null | string } },
+    given: {
+      input: {
+        categoryId?: null | string;
+        customFraming?: null | string;
+        framing?: null | string;
+      };
+    },
     context: Context,
   ) => {
     if (!data().aiSimulated) return submitDown(root, given, context);
     const person = caller(context);
     const categoryId = given.input.categoryId;
     if (categoryId && !canAuthorIn(person, categoryId)) throw forbidden();
+    checkFraming(given.input);
     const blocked = submitBlocked();
     if (blocked) throw blocked;
     return submitJob(operation, given.input, context);
