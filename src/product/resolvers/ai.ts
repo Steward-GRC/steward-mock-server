@@ -31,6 +31,11 @@ import {
   jobStatus,
   submitJob,
 } from "#product/resolvers/ai-jobs.ts";
+import {
+  regenerateVersionSummary,
+  summarizeChanges,
+  type Summary,
+} from "#product/resolvers/ai-summaries.ts";
 import { simulatedAnswer, topQuestions } from "#product/resolvers/ask.ts";
 import {
   caller,
@@ -152,6 +157,21 @@ const submitting =
     return submitJob(operation, given.input, context);
   };
 
+/**
+ * A summary submit: the gateway checks the read first (NotFound, PermissionDenied, then nothing to
+ * summarise), then submits the job, which fails when AI is off or cannot take it.
+ */
+const summarising =
+  <Given>(plan: (person: ReturnType<typeof caller>, given: Given) => Summary) =>
+  (_root: unknown, given: Given, context: Context) => {
+    const summary = plan(caller(context), given);
+    if (!data().aiSimulated) throw unreachable();
+    const blocked = submitBlocked();
+    if (blocked) throw blocked;
+    summary.remember();
+    return submitJob("SUMMARIZE", { result: summary.result }, context);
+  };
+
 /** A read of a job: simulated while the simulation is on. */
 const reading =
   <Given, Result>(read: (given: Given, context: Context) => Result) =>
@@ -161,6 +181,7 @@ const reading =
 export const aiResolvers: Resolvers = {
   Mutation: {
     acceptAIDataNotice: adminDown,
+    regenerateVersionSummary: summarising(regenerateVersionSummary),
     setAIEnabled: adminDown,
     setAIMonthlyLimit: setMonthlyLimit,
     setAIProviderConfig: adminDown,
@@ -171,6 +192,7 @@ export const aiResolvers: Resolvers = {
     submitEnrichmentSuggestions: submitting("SUGGEST_ENRICHMENTS"),
     submitPolicyReview: submitting("REVIEW"),
     submitPolicyRevision: submitting("REVISE"),
+    summarizeChanges: summarising(summarizeChanges),
     testAIProvider: adminDown,
   },
   Query: {
