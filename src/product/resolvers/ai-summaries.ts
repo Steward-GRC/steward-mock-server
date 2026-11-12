@@ -5,7 +5,10 @@
 // with their real content (an unreadable version, or a draft the caller cannot read, is
 // NotFound; an obfuscated read is PermissionDenied, so nothing obfuscated is ever "sent" to the
 // AI), versions with no differences or a version with no text are FailedPrecondition. Whether AI
-// is on is the caller's concern (resolvers/ai.ts). There is no author-only rule. The job result
+// is on is the caller's concern (resolvers/ai.ts). Replacing a stored summary needs Author on the
+// version's policy (steward-gateway#206): regenerateVersionSummary always, summarizeChanges only
+// with regenerate, checked after the read and before the no-differences / no-text checks. The
+// regenerated version summary is stored for policyVersionSummary. The job result
 // is the JSON the gateway documents:
 //   {"scope":"changes","bullets":[...],"generatedAt":"RFC3339","cached":bool}
 //   {"scope":"version","summaryText":"- ...","generatedAt":"RFC3339","cached":bool}
@@ -13,10 +16,11 @@
 // summarizeChanges repeat finds the same pair and diff already summarised (and regenerate is not
 // set); regenerateVersionSummary always makes a new one, so it is always false.
 
+import type { StoredVersionSummary } from "#product/data.ts";
 import type { StewardPerson } from "#product/data/people.ts";
 import type { PolicyVersion } from "#product/data/policies.ts";
 
-import { readEffect } from "#product/access.ts";
+import { canEdit, readEffect } from "#product/access.ts";
 import { diff, readable } from "#product/resolvers/policies.ts";
 import {
   data,
@@ -37,7 +41,10 @@ export interface Summary {
 }
 
 /** The version, readable in full: NotFound when not readable at all, PermissionDenied when obfuscated. */
-const readInFull = (person: StewardPerson, id: string): PolicyVersion => {
+export const readInFull = (
+  person: StewardPerson,
+  id: string,
+): PolicyVersion => {
   const version = readable(person, id);
   const policy = found(
     data().policies.find((p) => p.id === version.policyId),
@@ -45,6 +52,28 @@ const readInFull = (person: StewardPerson, id: string): PolicyVersion => {
   );
   if (readEffect(person, policy) !== "allow") throw forbidden();
   return version;
+};
+
+/** The Author right on the version's policy (authorizeEffectiveAuthor): PermissionDenied without it. */
+const requireAuthor = (person: StewardPerson, version: PolicyVersion) => {
+  const policy = found(
+    data().policies.find((p) => p.id === version.policyId),
+    "policy",
+  );
+  if (!canEdit(person, policy)) throw forbidden();
+};
+
+/** policyVersionSummary: the stored summary of a version the caller reads in full, else null. */
+export const storedVersionSummary = (
+  person: StewardPerson,
+  versionId: string,
+): null | StoredVersionSummary => {
+  try {
+    const version = readInFull(person, versionId);
+    return data().aiVersionSummaries[version.id] ?? null;
+  } catch {
+    return null;
+  }
 };
 
 const snippet = (text: string) =>
@@ -61,6 +90,8 @@ export const summarizeChanges = (
 ): Summary => {
   const from = readInFull(person, given.fromVersionId);
   const to = readInFull(person, given.toVersionId);
+  // Regenerating replaces the stored summary every reader sees, so it needs Author.
+  if (given.regenerate) requireAuthor(person, to);
   const changed = diff(from, to, false).filter(
     (d) => d.changeType !== "unchanged" && d.wordDiffHtml !== null,
   );
@@ -91,6 +122,7 @@ export const regenerateVersionSummary = (
   given: { versionId: string },
 ): Summary => {
   const version = readInFull(person, given.versionId);
+  requireAuthor(person, version);
   const titles = new Map(
     (
       data().templateVersions.find((t) => t.id === version.templateVersionId)
@@ -104,16 +136,20 @@ export const regenerateVersionSummary = (
     );
   if (lines.length === 0)
     throw refuse("FAILED_PRECONDITION", "the version has no text to summarise");
+  const result = {
+    cached: false,
+    generatedAt: now(),
+    scope: "version",
+    summaryText: `- ${NOTE.trim()}\n${lines.join("\n")}`,
+  };
   return {
+    // The new summary replaces the stored one; it is stored once the submit is accepted.
     remember: () => {
-      const key = `version:${version.id}`;
-      if (!data().aiSummaries.includes(key)) data().aiSummaries.push(key);
+      data().aiVersionSummaries[version.id] = {
+        generatedAt: result.generatedAt,
+        summaryText: result.summaryText,
+      };
     },
-    result: {
-      cached: false,
-      generatedAt: now(),
-      scope: "version",
-      summaryText: `- ${NOTE.trim()}\n${lines.join("\n")}`,
-    },
+    result,
   };
 };
