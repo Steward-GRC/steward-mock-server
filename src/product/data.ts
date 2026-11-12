@@ -126,6 +126,11 @@ export interface StewardData extends ProductData {
   aiProviderOutage: null | string;
   /** Whether Ask and the AI health answer from the simulation (the controls switch it). */
   aiSimulated: boolean;
+  /**
+   * The summaries the AI has made and stored, by key (summarizeChanges keys a pair of versions and
+   * their diff), so a repeat request is answered as cached; nothing else reads them.
+   */
+  aiSummaries: string[];
   /** The appendices of policies and procedures, each with its own version table. */
   appendices: PolicyAppendix[];
   /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
@@ -206,6 +211,7 @@ export const seed = (): StewardData => {
     aiMonthlyLimit: 0,
     aiProviderOutage: null,
     aiSimulated: true,
+    aiSummaries: [],
     appendices,
     askedQuestions: [],
     assets: seedAssets(),

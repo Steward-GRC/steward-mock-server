@@ -5,7 +5,7 @@
 // runs for a moment (aiJob reads Pending, then Running, then Succeeded; the aiJobResult
 // subscription delivers the end), and aiJobResultContent returns a made-up result in the shape
 // steward-ai writes: sections for a draft, findings for a review, a change set for a revision,
-// proposals for enrichment. Every text says it is simulated. The simulation control that turns
+// proposals for enrichment, a summary for a changes or version summary. Every text says it is simulated. The simulation control that turns
 // Ask off turns the jobs off with it (resolvers/ai.ts).
 
 import type { Context } from "#core/graphql.ts";
@@ -16,7 +16,8 @@ export type JobOperation =
   | "DRAFT"
   | "REVIEW"
   | "REVISE"
-  | "SUGGEST_ENRICHMENTS";
+  | "SUGGEST_ENRICHMENTS"
+  | "SUMMARIZE";
 
 interface Job {
   id: string;
@@ -135,6 +136,8 @@ const BUILDERS: Record<JobOperation, (input: never) => unknown> = {
   REVIEW: reviewResult,
   REVISE: reviseResult,
   SUGGEST_ENRICHMENTS: enrichResult,
+  // The summary is made by the resolver, which has already checked the read (resolvers/ai-summaries.ts).
+  SUMMARIZE: (input: { result: unknown }) => input.result,
 };
 
 /** Starts a job for the caller and returns its id. */

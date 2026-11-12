@@ -285,7 +285,11 @@ export const publishVersion = (
  * core refuses as an internal fault. The gateway drops the word diff and scrambles the titles for
  * an obfuscated read.
  */
-const diff = (from: PolicyVersion, to: PolicyVersion, obscured: boolean) => {
+export const diff = (
+  from: PolicyVersion,
+  to: PolicyVersion,
+  obscured: boolean,
+) => {
   const template = data().templateVersions.find(
     (t) => t.id === to.templateVersionId,
   );
