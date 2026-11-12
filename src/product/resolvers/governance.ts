@@ -17,8 +17,11 @@ import {
   createMagicLink,
   createPdfJob,
   fingerprint,
+  issuedMagicLinks,
+  magicLinkStatus,
   PDF_LINK_MS,
   pdfJob,
+  removeMagicLink,
   revokeMagicLink,
   signedPdfUrl,
 } from "#product/delivery.ts";
@@ -52,6 +55,21 @@ const delivery = (code: string, message: string) =>
 /** delivery's Required(field): INVALID_REQUEST, "{field} is required." */
 const required = (field: string) =>
   delivery("INVALID_REQUEST", `${field} is required.`);
+
+/** delivery's bad-field refusal: INVALID_REQUEST naming the request field. */
+const invalidField = (field: string, message: string) =>
+  new GraphQLError(message, { extensions: { code: "INVALID_REQUEST", field } });
+
+const DEFAULT_LINK_PAGE = 50;
+const MAX_LINK_PAGE = 200;
+
+/** The opaque page token is the offset into the newest-first list, as a non-negative integer. */
+const linkOffset = (token: null | string | undefined) => {
+  if (!token) return 0;
+  if (!/^\d+$/.test(token))
+    throw invalidField("page_token", "page_token is invalid.");
+  return Number(token);
+};
 
 /** The gateway's read check for delivery: the version must read in full (errObfuscatedContent). */
 const readableInFull = (context: Context, policyVersionId: string) => {
@@ -209,6 +227,23 @@ export const governanceResolvers: Resolvers = {
       record("policy.moved", admin, policySubject(policy));
       return policyView(admin, policy);
     },
+    /** delivery's RemoveMagicLink: a revoked or expired link only; site admins. */
+    removeMagicLink: (_root, given: { token: string }, context: Context) => {
+      siteAdmin(context);
+      if (!given.token) throw required("token");
+      const outcome = removeMagicLink(given.token);
+      if (outcome === "missing")
+        throw delivery(
+          "MAGIC_LINK_NOT_FOUND",
+          "That magic link doesn't exist.",
+        );
+      if (outcome === "active")
+        throw delivery(
+          "MAGIC_LINK_ACTIVE",
+          "Revoke that magic link before removing it.",
+        );
+      return true;
+    },
     requestPDFExport: (
       _root,
       given: { policyVersionId: string },
@@ -232,7 +267,7 @@ export const governanceResolvers: Resolvers = {
     revokeMagicLink: (_root, given: { token: string }, context: Context) => {
       const admin = siteAdmin(context);
       if (!given.token) throw required("token");
-      revokeMagicLink(given.token);
+      revokeMagicLink(given.token, admin.id);
       record("magic_link.revoked", admin, {
         id: fingerprint(given.token),
         kind: "magic_link",
@@ -255,6 +290,44 @@ export const governanceResolvers: Resolvers = {
     },
   },
   Query: {
+    /** delivery's ListMagicLinks: site admins; newest first; optional policy version filter. */
+    magicLinks: (
+      _root,
+      given: {
+        pageSize?: null | number;
+        pageToken?: null | string;
+        policyVersionIds?: null | string[];
+      },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      const size = given.pageSize ?? DEFAULT_LINK_PAGE;
+      if (size < 1 || size > MAX_LINK_PAGE)
+        throw invalidField("page_size", "page_size must be 1 to 200.");
+      const offset = linkOffset(given.pageToken);
+      const wanted = given.policyVersionIds?.length
+        ? new Set(given.policyVersionIds)
+        : undefined;
+      const matching = issuedMagicLinks().filter(
+        ({ link }) => !wanted || wanted.has(link.policyVersionId),
+      );
+      const end = offset + size;
+      return {
+        links: matching.slice(offset, end).map(({ link, token }) => ({
+          createdAt: rfc3339(link.createdAt),
+          createdByUserId: link.createdBy,
+          expiresAt: rfc3339(link.expiresAt),
+          fingerprint: fingerprint(token),
+          policyVersionId: link.policyVersionId,
+          revokedAt: link.revokedAt === null ? null : rfc3339(link.revokedAt),
+          revokedByUserId: link.revokedBy,
+          sensitive: link.sensitive,
+          status: magicLinkStatus(link),
+          token,
+        })),
+        nextPageToken: end < matching.length ? String(end) : null,
+      };
+    },
     /** delivery's GetPDFDownloadLink: the job's sample PDF, signed for PDF_LINK_MS. */
     pdfDownloadLink: (_root, given: { jobId: string }, context: Context) => {
       signedIn(context);

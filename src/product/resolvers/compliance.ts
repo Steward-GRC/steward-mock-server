@@ -24,8 +24,6 @@ import {
   withAnyRole,
 } from "#product/resolvers/shared.ts";
 
-/** A pending acknowledgement counts as overdue this long after publishing. */
-const OVERDUE_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -358,7 +356,6 @@ export const complianceResolvers: Resolvers = {
       const days = acked.map(
         (a) => (Date.parse(a.ackedAt ?? "") - published) / DAY_MS,
       );
-      const overdue = Date.now() - published > OVERDUE_DAYS * DAY_MS;
       return {
         avgDaysToAck:
           days.length === 0
@@ -367,14 +364,14 @@ export const complianceResolvers: Resolvers = {
               10,
         completionPct:
           total === 0 ? 0 : Math.round((acked.length / total) * 100),
-        overdue: overdue
-          ? pending.map(({ dueAt, email, userId, userName }) => ({
-              dueAt,
-              email,
-              userId,
-              userName,
-            }))
-          : [],
+        // As steward-obligations lists it: every audience member without an acknowledgement,
+        // whatever the version's age. The due date, not a mock-side age gate, says who is late.
+        overdue: pending.map(({ dueAt, email, userId, userName }) => ({
+          dueAt,
+          email,
+          userId,
+          userName,
+        })),
         totalAcked: acked.length,
         totalAudience: total,
         viewedNotAckedCount: viewedNotAcked(version.id),
