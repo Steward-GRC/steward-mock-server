@@ -59,11 +59,8 @@ const login = async (request: Request) => {
   if (!username?.trim()) return refuse(400, "invalid_request");
   // The password set for the person in the seed or on /_mock, and nothing else.
   const person = checkCredentials(username, password ?? "");
-  // steward-gateway answers a disabled account exactly as a wrong password.
-  if (person instanceof Response)
-    return person.status === 403
-      ? refuse(401, "invalid_credentials", "The username or password is wrong.")
-      : person;
+  // A disabled account is refused as a wrong password, as steward-gateway does.
+  if (person instanceof Response) return person;
   if (factorsOf(person).length > 0)
     return json({
       factors: factorsOf(person),
