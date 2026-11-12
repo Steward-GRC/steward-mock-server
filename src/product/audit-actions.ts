@@ -131,8 +131,7 @@ export const AUDIT_ACTIONS = {
     // steward-identity/internal/store/roles.go
     "role.granted",
     "role.revoked",
-    "root.granted",
-    "root.revoked",
+    "root.transferred",
     "user.created",
     // steward-identity/internal/store/users.go
     "user.adopted",
