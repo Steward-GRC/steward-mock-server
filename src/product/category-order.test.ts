@@ -306,3 +306,37 @@ describe("a new category and a moved one", () => {
     assert.equal((await make("third")).order, 4);
   });
 });
+
+describe("the rules of a new category", () => {
+  const RULESET = `query ($categoryId: ID!) {
+    categoryRuleset(categoryId: $categoryId) { rules { subjectKind subjectRef read ack approve author } }
+  }`;
+
+  it("start with the single rule Everyone: Read, top level or child", async () => {
+    for (const parentId of [null, FINANCE]) {
+      const slug = parentId ? "default-child" : "default-top";
+      const made = await ask(await admin(), CREATE, {
+        name: slug,
+        parentId,
+        slug,
+      });
+      assert.equal(made.code, undefined, made.message);
+      const id = (made.data.createCategory as Row).id;
+      const got = await ask(await admin(), RULESET, { categoryId: id });
+      assert.equal(got.code, undefined, got.message);
+      assert.deepEqual(
+        (got.data.categoryRuleset as { rules: unknown[] }).rules,
+        [
+          {
+            ack: "BLANK",
+            approve: "BLANK",
+            author: "BLANK",
+            read: "ALLOW",
+            subjectKind: "EVERYONE",
+            subjectRef: "",
+          },
+        ],
+      );
+    }
+  });
+});
