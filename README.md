@@ -139,7 +139,7 @@ Both lists come from `src/product/users-card.ts`, which reads the same table the
   mock publishes this on `liveEvents`, so a signed-in app can refresh them:
   `{"type": "user.permissions_changed", "entityId": "user:<id>", "groupId": null, "actorUserId": null, "at": "<RFC 3339>"}`.
   `liveEvents` needs the audit log's read permission, as on the gateway.
-- Steward's own admin mutations (`grantRole`, `grantRoot`, `addUserToGroup` and the rest) keep the
+- Steward's own admin mutations (`grantRole`, `transferRoot`, `addUserToGroup` and the rest) keep the
   gateway's rules and audit, and write the same roles and groups, so either side's change shows on
   the other.
 
@@ -395,8 +395,9 @@ The admin user screens answer as steward-gateway and steward-identity do:
   password. `PASSWORD_CHANGE_UNAVAILABLE` is not answered. `change-password.test.ts` is the
   reference.
 - **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
-  `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
-  last root admin can't lose it.
+  `000000` and works once; `transferRoot` takes it, from the root admin only. There is exactly one
+  root: the transfer moves the seat to the target (enabled, with site-admin), and the old holder
+  stays a normal site admin with their sessions open.
 - **Acting as someone:** `startImpersonation` makes every request on that admin's session (only
   that one) run as the target for 30 minutes, until `stopImpersonation`. `impersonationStatus`
   reports it, `diagnostics` names the real admin with the target as `actingAs`, the start and stop

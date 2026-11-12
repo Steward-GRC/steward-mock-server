@@ -297,12 +297,6 @@ const cases: Record<string, Case> = {
   ForceRotateSpCertificate: { as: ADMIN },
   GlobalSettings: { as: READER },
   GrantRole: { as: ADMIN, variables: { role: "author", userId: READER } },
-  // Without a step-up code asked for first, identity refuses it; the one-step case can't ask.
-  GrantRoot: {
-    as: ADMIN,
-    refused: "InvalidArgument",
-    variables: { otp: "123456", userId: AUTHOR },
-  },
   GroupMappings: { as: ADMIN, variables: { connectionId: "connection-1" } },
   ImpersonationStatus: { answersNull: true, as: ADMIN },
   IssueCollabToken: {
@@ -698,6 +692,12 @@ const cases: Record<string, Case> = {
   Templates: { as: AUTHOR, variables: {} },
   TemplateVersions: { as: ADMIN, variables: { templateId: "template-1" } },
   TopPolicyQuestions: { as: READER, variables: { limit: 6 } },
+  // Only the root can transfer it, and a one-step case never holds the root seat to try it.
+  TransferRoot: {
+    as: READER,
+    refused: "ROOT_REQUIRED",
+    variables: { otp: "123456", userId: AUTHOR },
+  },
   UpcomingApprovals: { as: ADMIN },
   UpdateAppendix: {
     as: AUTHOR,

@@ -12,7 +12,7 @@ import type { PolicyOverride, StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
-import { setRoot } from "#product/groups.ts";
+import { moveRoot } from "#product/groups.ts";
 import {
   impersonationOf,
   startImpersonating,
@@ -121,7 +121,7 @@ const rootChange = (context: Context, otp: string) => {
   if (!isRoot(actor))
     throw coded(
       "ROOT_REQUIRED",
-      "Only a root administrator can grant the root permission.",
+      "Only a root administrator can transfer the root seat.",
     );
   verifyStepUp(actor, otp);
   return actor;
@@ -243,23 +243,6 @@ export const accountResolvers: Resolvers = {
       record("user.password.changed", person, userSubject(person));
       log.info("password changed by its owner", { personId: person.id });
       return true;
-    },
-    grantRoot: (
-      _root,
-      given: { otp: string; userId: string },
-      context: Context,
-    ) => {
-      const actor = rootChange(context, given.otp);
-      const person = personFor(given.userId);
-      if (person.deletedAt) throw refuse("NOT_FOUND", "user not found");
-      if (!isRoot(person)) {
-        setRoot(person, true);
-        person.disabled = false;
-        if (!person.roles.includes("site-admin"))
-          person.roles.push("site-admin");
-        record("root.granted", actor, userSubject(person));
-      }
-      return asUser(person);
     },
     /**
      * core's ReassignUserPolicies: every policy the first person owns, retired ones too, moves to
@@ -396,24 +379,6 @@ export const accountResolvers: Resolvers = {
       log.debug("password reset by an admin", { personId: person.id });
       return true;
     },
-    revokeRoot: (
-      _root,
-      given: { otp: string; userId: string },
-      context: Context,
-    ) => {
-      const actor = rootChange(context, given.otp);
-      const person = personFor(given.userId);
-      if (!isRoot(person))
-        throw refuse("BAD_USER_INPUT", "the user isn't a root admin");
-      if (people().filter((p) => isRoot(p)).length <= 1)
-        throw refuse(
-          "FAILED_PRECONDITION",
-          "cannot revoke root from the last root admin",
-        );
-      setRoot(person, false);
-      record("root.revoked", actor, userSubject(person));
-      return asUser(person);
-    },
     setUserPolicyOverride: (
       _root,
       given: {
@@ -501,6 +466,24 @@ export const accountResolvers: Resolvers = {
           record("impersonation.stopped", admin, userSubject(target));
       }
       return true;
+    },
+    transferRoot: (
+      _root,
+      given: { otp: string; userId: string },
+      context: Context,
+    ) => {
+      const actor = rootChange(context, given.otp);
+      const person = personFor(given.userId);
+      if (person.deletedAt) throw refuse("NOT_FOUND", "user not found");
+      if (person.id === actor.id)
+        throw refuse("BAD_USER_INPUT", "the user is already the root admin");
+      moveRoot(
+        people().filter((p) => isRoot(p)),
+        person,
+      );
+      record("root.revoked", actor, userSubject(actor));
+      record("root.granted", actor, userSubject(person));
+      return asUser(person);
     },
   },
   Query: {

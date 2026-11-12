@@ -89,7 +89,7 @@ const approverScopes = (person: StewardPerson): string[] =>
     )
     .map((c) => c.name);
 
-/** A root admin; identity makes the first site admin one, and grantRoot others. */
+/** A root admin; identity keeps exactly one, and transferRoot moves the seat. */
 export { isRoot } from "#product/groups.ts";
 
 /** A person as the gateway's User type. */
