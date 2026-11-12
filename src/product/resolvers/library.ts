@@ -18,6 +18,7 @@ import type { StewardPerson } from "#product/data/people.ts";
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
 import { documentCounts, stranded } from "#product/category-types.ts";
+import { raci } from "#product/data/library.ts";
 import { byTitle, usedByPolicies, type VersionLinks } from "#product/links.ts";
 import {
   caller,
@@ -408,7 +409,8 @@ export const libraryResolvers: Resolvers = {
         parentId,
         reviewCadence: "NONE",
         reviewDate: null,
-        rules: [],
+        // Everyone: Read is the default on every new category (core#98).
+        rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
         slug: given.slug,
       };
       data().categories.push(created);
