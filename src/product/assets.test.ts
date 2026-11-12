@@ -194,7 +194,10 @@ describe("the /_mock upload switches", () => {
     await control(base, { kind: "asset-upload", mode: "fail" });
     const failed = await upload(PNG);
     assert.equal(failed.status, 503);
-    assert.deepEqual(failed.body, { error: "Failed to store image" });
+    assert.deepEqual(failed.body, {
+      code: "uploads_unavailable",
+      error: "Uploads are unavailable right now.",
+    });
     await control(base, { kind: "asset-upload", mode: "ok" });
     assert.equal((await upload(PNG)).status, 200);
   });

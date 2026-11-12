@@ -500,7 +500,7 @@ Start fresh forgets them.
 - **Read** serves the bytes with the stored type. A cookie session needs no CSRF token, so an
   `<img src>` loads it. An unknown id answers 404 `Asset not found`.
 - **Controls** (the Image uploads section of `/_mock`): `{"kind":"asset-upload","mode":"fail"}`
-  makes uploads answer 503 `Failed to store image` until `"mode":"ok"`, and
+  makes uploads answer 503 `Uploads are unavailable right now.` with code `uploads_unavailable` until `"mode":"ok"`, and
   `{"kind":"asset-limit","limit":"small"}` lowers the cap to 100 KB so the too-large error shows
   without a huge file (`"limit":"real"` puts 10 MB back).
 
