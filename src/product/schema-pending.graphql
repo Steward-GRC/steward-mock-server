@@ -425,8 +425,10 @@ type NotificationLink {
   ref: String!
 }
 
-# Quiet hours hold email and push for non-mandatory notices; in-app notices and mandatory ones
-# (compliance, security, transactional) are never held, and nothing is delivered late. start is
+# Quiet hours hold email and push; in-app notices are never held. Security and transactional
+# notices, and any critical-severity one (policy-escalation), are not held either. High-severity
+# compliance notices (ack-required, policy-ack-reminder, review-due) are held for email and push.
+# Nothing is delivered late. start is
 # the first hour held and end the first hour not held, both local hours in timezone; end below
 # start is a window across midnight.
 type QuietHours {

@@ -427,7 +427,10 @@ steward-identity and steward-obligations:
   obligations' taxonomy classifies. `setCategoryCadence`, `setTypeCadence`, `setDigestWindow` and
   `setNotificationChannels` save the caller's choices; turning off a compliance, security or
   transactional category or type is refused with `NOTIFY_PREF_MANDATORY_OFF`, and an unknown type
-  or a digest hour or day out of range with `NOTIFY_PREF_INVALID`.
+  or a digest hour or day out of range with `NOTIFY_PREF_INVALID`. Quiet hours hold email and push
+  but never an in-app notice; security and transactional kinds and any critical-severity kind
+  (`policy-escalation`, `otp`, `kratos-recovery`, `break-glass-alert`, `break-glass-read-alert`)
+  go out regardless, while `ack-required`, `policy-ack-reminder` and `review-due` are held.
 
 ### Acknowledgement activity
 
