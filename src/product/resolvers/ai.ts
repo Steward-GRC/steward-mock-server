@@ -149,18 +149,37 @@ const MAX_CUSTOM_FRAMING = 500;
  * The draft and revision submits take a framing and, for CUSTOM, the author's own wording. The
  * gateway checks it after the category check and before it asks ai for a job: CUSTOM needs
  * wording that is not blank and at most 500 characters once trimmed; wording sent with another
- * framing, or none, is dropped. The gateway returns a plain error for a bad one, which it presents
- * as its generic fault, so the mock refuses with INTERNAL too. The framing changes nothing in the
+ * framing, or none, is dropped. A bad one is a coded refusal (steward-gateway#210): code
+ * InvalidArgument, kind business, and a message the client shows. A value outside the list is
+ * refused with the value echoed after trim and upper-casing; the schema's enum stops one before
+ * the resolver runs, so that branch only keeps the rule. The framing changes nothing in the
  * made-up result.
  */
-const checkFraming = (input: {
+export const checkFraming = (input: {
   customFraming?: null | string;
   framing?: null | string;
 }): void => {
-  if (input.framing !== "CUSTOM") return;
-  const wording = (input.customFraming ?? "").trim();
-  if (wording === "" || [...wording].length > MAX_CUSTOM_FRAMING)
-    throw unreachable();
+  if (input.framing == null) return;
+  const framing = input.framing.trim().toUpperCase();
+  if (framing === "CUSTOM") {
+    const wording = (input.customFraming ?? "").trim();
+    if (wording === "")
+      throw refuse(
+        "BAD_USER_INPUT",
+        "Custom framing needs wording.",
+        "business",
+      );
+    const count = [...wording].length;
+    if (count > MAX_CUSTOM_FRAMING)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `Custom wording is ${count} characters; the limit is ${MAX_CUSTOM_FRAMING}.`,
+        "business",
+      );
+    return;
+  }
+  if (!["FORMAL", "PLAIN", "PROFESSIONAL"].includes(framing))
+    throw refuse("BAD_USER_INPUT", `Unknown framing "${framing}".`, "business");
 };
 
 /** A job submission: simulated while the simulation is on, and checked the same way either way. */

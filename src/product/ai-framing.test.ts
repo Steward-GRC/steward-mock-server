@@ -11,6 +11,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { setJobDuration } from "#product/resolvers/ai-jobs.ts";
+import { checkFraming } from "#product/resolvers/ai.ts";
 import {
   control,
   type Signed,
@@ -131,11 +132,24 @@ describe("framing on the job submits", () => {
         }
       });
 
-      for (const [name, wording] of [
-        ["missing", undefined],
-        ["blank", "  \n "],
-        ["over 500 characters", "a".repeat(501)],
-        ["over 500 characters in multi-byte letters", "é".repeat(501)],
+      for (const [name, wording, message] of [
+        ["missing", undefined, "Custom framing needs wording."],
+        ["blank", "  \n ", "Custom framing needs wording."],
+        [
+          "over 500 characters",
+          "a".repeat(501),
+          "Custom wording is 501 characters; the limit is 500.",
+        ],
+        [
+          "over 500 characters in multi-byte letters",
+          "é".repeat(501),
+          "Custom wording is 501 characters; the limit is 500.",
+        ],
+        [
+          "over 500 characters once trimmed",
+          `  ${"a".repeat(600)}  `,
+          "Custom wording is 600 characters; the limit is 500.",
+        ],
       ] as const) {
         it(`refuses CUSTOM with ${name} wording as the gateway does, and starts no job`, async () => {
           const before = (await submit(bob, {})).data[field] as {
@@ -145,8 +159,9 @@ describe("framing on the job submits", () => {
             customFraming: wording,
             framing: "CUSTOM",
           });
-          // the gateway returns a plain error here, which it presents as a fault
-          assert.equal(refused.refused, "INTERNAL");
+          // steward-gateway#210: a coded business refusal the client shows, not the generic fault
+          assert.equal(refused.refused, "InvalidArgument");
+          assert.deepEqual(refused.error, { kind: "business", message });
           const after = (await submit(bob, {})).data[field] as {
             jobId: string;
           };
@@ -169,6 +184,24 @@ describe("framing on the job submits", () => {
       });
     });
   }
+
+  it("words an unknown framing as the gateway does, trimmed and upper-cased", () => {
+    assert.throws(
+      () => checkFraming({ framing: " loud " }),
+      (error: unknown) => {
+        const refused = error as {
+          extensions: Record<string, unknown>;
+          message: string;
+        };
+        assert.equal(refused.message, 'Unknown framing "LOUD".');
+        assert.deepEqual(refused.extensions, {
+          code: "InvalidArgument",
+          kind: "business",
+        });
+        return true;
+      },
+    );
+  });
 
   it("checks the category before the framing", async () => {
     const refused = await draft(

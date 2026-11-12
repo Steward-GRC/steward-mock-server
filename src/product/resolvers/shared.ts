@@ -46,8 +46,14 @@ const GATEWAY_CODES: Record<RefusalCode, string> = {
   NOT_FOUND: "NotFound",
 };
 
-export const refuse = (code: RefusalCode, message: string): GraphQLError =>
-  new GraphQLError(message, { extensions: { code: GATEWAY_CODES[code] } });
+export const refuse = (
+  code: RefusalCode,
+  message: string,
+  kind?: "business",
+): GraphQLError =>
+  new GraphQLError(message, {
+    extensions: { code: GATEWAY_CODES[code], ...(kind ? { kind } : {}) },
+  });
 
 export const forbidden = (): GraphQLError =>
   refuse("FORBIDDEN", "You don't have permission to do that.");
