@@ -11,6 +11,7 @@ import type { RunningMockServer } from "#core/server.ts";
 
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
 import {
+  demoteAlice,
   query,
   type Signed,
   signIn,
@@ -170,6 +171,7 @@ describe("searchPolicies", () => {
   });
 
   it("matches an obfuscated viewer on title and number only, with no snippet", async () => {
+    demoteAlice();
     const admin = await signIn(base, "alice");
     const byTitle = await search(admin, { query: "archive" });
     assert.deepEqual(titles(byTitle), ["Archive Access Policy"]);

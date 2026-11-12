@@ -17,6 +17,7 @@ import { stewardData } from "#product/data.ts";
 import { setJobDuration } from "#product/resolvers/ai-jobs.ts";
 import {
   control,
+  demoteAlice,
   query,
   type Signed,
   startForTests,
@@ -155,6 +156,7 @@ describe("summarizeChanges", () => {
   });
 
   it("refuses an obfuscated read as PermissionDenied", async () => {
+    demoteAlice();
     // Alice is a site admin without the sensitive-read right: version-9 reads obfuscated.
     assert.equal(
       codeOf(await changes(alice, "version-9", "version-9")),
@@ -223,6 +225,7 @@ describe("regenerateVersionSummary", () => {
   });
 
   it("refuses an obfuscated read as PermissionDenied", async () => {
+    demoteAlice();
     assert.equal(
       codeOf(await regenerate(alice, "version-9")),
       "PermissionDenied",

@@ -12,6 +12,7 @@ import type { RunningMockServer } from "#core/server.ts";
 import { EXPENSE_CLAIMS_NUMBER } from "#product/data/policies.ts";
 import {
   control,
+  demoteAlice,
   query,
   startForTests,
   startFresh,
@@ -117,6 +118,7 @@ describe("the policy read model", () => {
   });
 
   it("obfuscates a sensitive policy for a site admin until they break glass", async () => {
+    demoteAlice();
     const admin = await as("user-alice");
     const policy = await call(base, admin, "PolicyByNumber", {
       number: "POL-RECORDS-000002",

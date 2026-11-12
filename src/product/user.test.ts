@@ -73,7 +73,7 @@ describe("me", () => {
     });
   });
 
-  it("grants permissions the way steward-authz does for each role", async () => {
+  it("grants permissions the way the gateway's permission catalog does for each role", async () => {
     assert.deepEqual((await meOf("erin")).permissions, ["policy.read"]);
     // The privacy officer has to enrol a factor first, so the controls sign them in.
     const officer = await control(base, {

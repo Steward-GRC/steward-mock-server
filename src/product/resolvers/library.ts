@@ -28,6 +28,7 @@ import {
   isSiteAdmin,
   newId,
   now,
+  people,
   record,
   refuse,
   siteAdmin,
@@ -357,6 +358,27 @@ const librarySubject = (kind: string, id: string, label: string) => ({
   kind,
   label,
 });
+
+/**
+ * steward-gateway's validateCategoryOwners: every owner is a person, a user id the directory
+ * knows. A group, Everyone or any other subject (anything shaped like "kind:name") is refused, and
+ * so is an id with no user; a repeated id counts once.
+ */
+const validatedOwners = (owners: string[]): string[] => {
+  const seen = new Set<string>();
+  for (const owner of owners) {
+    if (seen.has(owner)) continue;
+    seen.add(owner);
+    if (owner === "" || owner.includes(":"))
+      throw refuse(
+        "BAD_USER_INPUT",
+        "category owners must be people: a group or Everyone cannot own a category",
+      );
+    if (!people().some((p) => p.id === owner))
+      throw refuse("BAD_USER_INPUT", `category owner ${owner} is not a user`);
+  }
+  return [...seen];
+};
 
 export const libraryResolvers: Resolvers = {
   Mutation: {
@@ -807,11 +829,12 @@ export const libraryResolvers: Resolvers = {
     ) => {
       const admin = siteAdmin(context);
       const category = categoryFor(given.id);
+      const owners = validatedOwners(given.owners);
       Object.assign(category, {
         ackTriggers: given.ackTriggers,
         exclusionGroupIds: given.exclusionGroupIds ?? null,
         idpGroupIds: given.idpGroupIds ?? null,
-        owners: [...given.owners],
+        owners,
         reviewCadence: given.reviewCadence,
         reviewDate: given.reviewDate ?? null,
       });

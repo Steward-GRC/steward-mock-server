@@ -508,21 +508,53 @@ Start fresh forgets them.
 
 Each category keeps its own access rules (`categoryRuleset`, `setCategoryRuleset`), as
 steward-core stores them; the admin console shows an ancestor's rules by reading that category's.
+A rule is a row: a subject (a user, a group by its exact, case-sensitive name, or Everyone) and a
+cell, blank, allow or deny, for each of Read, Author, Approve, Manage and Ack. The mock decides
+them the way steward-gateway does, with the ordered engine of go-authz (`src/product/ordered.ts`,
+the one evaluator; `src/product/access-rules.ts` maps the categories onto it):
+
+- Each action is decided on its own, top-down: the first row that matches the person and has a
+  non-blank cell for that action wins, the category's own rows first and then each parent's.
+- Owners (people only, inherited, several allowed) always hold Read, Author, Approve and Manage,
+  whatever a row says, and not Ack. `setCategoryGovernance` refuses an owner that is a group,
+  Everyone or an unknown id (`InvalidArgument`).
+- Manage lets a person move and reorder documents; it implies Read and Author only. An allowed
+  Author, Approve or Manage gives Read even over a Read deny, and Ack needs Read.
+- The root account (the one with the root flag) always holds Read, Author and Manage, sensitive
+  documents included, and is never obfuscated. A deny against root on those three is saved and
+  the simulator lists it in `configuredBlock`, but it never applies. Approve and Ack follow the
+  rows for root. A site admin who is not root follows the rows like everyone, so a deny blocks
+  them (a policy the rows exclude reaches them obfuscated, with break glass on offer).
+- A new category starts with the rule Everyone: Read; so do the seed's top-level categories.
+- `simulateCategory` answers each action with a flag, a reason ("allowed by group Facilities team
+  in Facilities", "allowed: owner of the category or a parent", "denied: requires read", "denied:
+  no rule decides") and a code (`ENTRY`, `DEFAULT_DENY`, `OWNER`, `ROOT`, `REQUIRES`); an empty
+  `userId` is the baseline for no one in particular. `categoryApprovers` lists the approver pool
+  (owners first, then everyone whose Approve allows) and `viewerIsApprover` asks whether the
+  caller holds Approve anywhere.
+- `searchPlatformGroups(query, limit)` is the group typeahead of the access picker: groups at any
+  depth whose name contains the query (case aside), by name, for group.manage or template.manage.
+  The query is trimmed and needs two characters (`InvalidArgument`); the limit is 20 by default
+  and 50 at most.
+- Policies follow the same rows: `viewerCan.manage`, the read gate, edit and approve (together
+  with the scoped author and approver grants) all come from the engine. Moving documents
+  (`movePolicy`, `movePolicies`, `previewMovePolicies`) needs a site admin, or Manage on each
+  document's category and Author on the target.
+- `src/product/testdata/ordered.json` is go-authz's shared vector file, run through the engine by
+  `ordered.test.ts`; `ordered.SOURCE` names its commit, and `task vectors:refresh` refreshes it.
+
 The seed follows the design's A5 frame:
 
 - **Workplace:** Everyone may read.
-- **Workplace › Facilities:** the Facilities team may do everything; All staff may read and
-  acknowledge, and may not author.
+- **Workplace › Facilities:** the Facilities team may do everything, Manage included; All staff
+  may read and acknowledge, and may not author.
 - **Finance:** Everyone may read. Alice owns it.
-- **Finance › Expenses:** the Finance team may do everything; Erin may not approve or author; All
-  staff may read.
+- **Finance › Expenses:** the Finance team may do everything, Manage included; Erin may not
+  approve or author; All staff may read.
+- **People** and **Information:** Everyone may read. Charlie owns Information.
 
 Group rules match a person's IdP groups: Bob is in All staff, Charlie in the Finance team and All
-staff, and Erin in All staff and the Facilities team. `simulateCategory` evaluates the chain as
-steward-authz does, with its reasons ("rule #2 deny group All staff", "↳ Workplace #1 allow
-everyone", "owner (auto read/approve/author)", "no rule → default deny"); an empty `userId` is the
-baseline for no one in particular. The rules drive the simulator only: who reads, approves and
-authors elsewhere in the mock still follows each category's owners and approve and author lists.
+staff, and Erin in All staff and the Facilities team. Alice is the root account.
 
 ### Onboarding
 
