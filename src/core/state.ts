@@ -27,7 +27,7 @@ export interface MaintenanceWindow {
 
 /** Someone who can sign in. The product's seed data lists them. */
 export interface Person {
-  /** Can't sign in: the gateway answers account_disabled. */
+  /** Can't sign in: a password sign-in answers 401 invalid_credentials, as for a wrong password. */
   disabled?: boolean;
   email: string;
   id: string;

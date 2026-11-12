@@ -84,14 +84,32 @@ describe("sign-in", () => {
       ((await unknown.json()) as Record<string, string>).error,
       "invalid_credentials",
     );
-    const disabled = await post(base, "/auth/login", {
-      password: "dot-password",
-      username: "dot",
+  });
+
+  it("answers a disabled account exactly as a wrong password, by username or email", async () => {
+    const wrong = await post(base, "/auth/login", {
+      password: "nope",
+      username: "ben",
     });
-    assert.equal(disabled.status, 403);
-    assert.deepEqual(await disabled.json(), {
-      error: "account_disabled",
-      message: "This account is disabled.",
+    assert.equal(wrong.status, 401);
+    const wrongText = await wrong.text();
+    for (const [username, password] of [
+      ["dot", "dot-password"],
+      ["dot@example.org", "dot-password"],
+      ["dot", "nope"],
+      ["dot@example.org", "nope"],
+    ] as const) {
+      const disabled = await post(base, "/auth/login", { password, username });
+      assert.equal(disabled.status, 401);
+      assert.equal(
+        disabled.headers.get("content-type"),
+        wrong.headers.get("content-type"),
+      );
+      assert.equal(await disabled.text(), wrongText);
+    }
+    assert.deepEqual(JSON.parse(wrongText), {
+      error: "invalid_credentials",
+      message: "The username or password is wrong.",
     });
   });
 
@@ -510,7 +528,7 @@ describe("sign-in users", () => {
       (updated.result as Record<string, unknown>).name,
       "Cy Renamed",
     );
-    assert.equal((await login("cy", "cy-password")).status, 403);
+    assert.equal((await login("cy", "cy-password")).status, 401);
   });
 
   it("removes a user, ends their sessions, and refuses their sign-in", async () => {
@@ -551,10 +569,10 @@ describe("sign-in users", () => {
       personId: "person-dot",
     });
     assert.equal(quick.status, 403);
-    assert.equal(
-      ((await quick.json()) as Record<string, string>).message,
-      "This account is disabled.",
-    );
+    assert.deepEqual(await quick.json(), {
+      error: "account_disabled",
+      message: "This account is disabled.",
+    });
   });
 
   it("keeps a product's own person fields, edited like the core's", async () => {
@@ -662,6 +680,14 @@ describe("sign-in users", () => {
     const refused = checkCredentials("cy", "nope");
     assert.ok(refused instanceof Response);
     assert.equal(refused.status, 401);
+    const disabled = checkCredentials("dot", "dot-password");
+    assert.ok(disabled instanceof Response);
+    assert.equal(disabled.status, 401);
+    const revealed = checkCredentials("dot", "dot-password", {
+      revealDisabled: true,
+    });
+    assert.ok(revealed instanceof Response);
+    assert.equal(revealed.status, 403);
   });
 
   it("masks the password in the Users form, with a show and hide toggle", async () => {
