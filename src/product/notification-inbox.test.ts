@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The in-app notification inbox and per-user quiet hours, as steward-gateway will carry them
 // (steward-gateway#73 and #74). steward-obligations owns the notices; quiet hours hold only email
-// and push, never an in-app notice and never a mandatory one.
+// and push, never an in-app notice and never a security, transactional or critical-severity one.
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -10,6 +10,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import type { RunningMockServer } from "#core/server.ts";
 
 import { deliveryAt, inQuietHours } from "#product/notification-delivery.ts";
+import { classOf } from "#product/resolvers/notifications.ts";
 import {
   query,
   type Signed,
@@ -291,6 +292,8 @@ describe("quiet hours", () => {
   });
 });
 
+const severityOf = (kind: string) => classOf(kind)?.severity;
+
 describe("what quiet hours hold", () => {
   const night = { end: 7, start: 22, timezone: "UTC" };
 
@@ -339,12 +342,62 @@ describe("what quiet hours hold", () => {
     );
   });
 
-  it("never holds a mandatory notice", () => {
-    for (const kind of ["ack-required", "otp", "welcome-account"]) {
+  const heldChannels = { email: false, inApp: true, push: false };
+  const inWindow = at("2026-11-11T23:00:00Z");
+
+  it("holds email and push for high-severity compliance notices, and keeps the in-app notice", () => {
+    for (const kind of ["ack-required", "policy-ack-reminder", "review-due"]) {
       assert.deepEqual(
-        deliveryAt(kind, allOn, night, at("2026-11-11T23:00:00Z")),
-        allOn,
+        deliveryAt(kind, allOn, night, inWindow),
+        heldChannels,
+        kind,
       );
+    }
+  });
+
+  it("lets security and transactional kinds through quiet hours", () => {
+    for (const kind of [
+      "welcome-account",
+      "sso-account-welcome",
+      "email-verification",
+      "domain-verification-instructions",
+      "domain-verified",
+      "mfa-setup",
+      "sp-cert-rotated",
+    ]) {
+      assert.deepEqual(deliveryAt(kind, allOn, night, inWindow), allOn, kind);
+    }
+  });
+
+  it("lets each critical-severity kind through quiet hours", () => {
+    for (const kind of [
+      "policy-escalation",
+      "otp",
+      "kratos-recovery",
+      "break-glass-alert",
+      "break-glass-read-alert",
+    ]) {
+      assert.equal(severityOf(kind), "critical", kind);
+      assert.deepEqual(deliveryAt(kind, allOn, night, inWindow), allOn, kind);
+    }
+  });
+
+  it("only exempts a kind by category or critical severity, and always lands in-app", () => {
+    for (const kind of ["idp-test-failed", "workflow-assigned"]) {
+      assert.equal(severityOf(kind), "high", kind);
+      assert.deepEqual(
+        deliveryAt(kind, allOn, night, inWindow),
+        heldChannels,
+        kind,
+      );
+    }
+    for (const kind of [
+      "ack-required",
+      "policy-escalation",
+      "otp",
+      "workflow-denied",
+    ]) {
+      assert.equal(deliveryAt(kind, allOn, night, inWindow).inApp, true, kind);
     }
   });
 
