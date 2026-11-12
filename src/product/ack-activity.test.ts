@@ -12,6 +12,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
+import { stewardData } from "#product/data.ts";
 import {
   query,
   type Signed,
@@ -210,5 +211,66 @@ describe("completionReport's viewed, not acknowledged", () => {
       await viewedNotAcked(await signInAs(base, "user-alice"), "version-7"),
       0,
     );
+  });
+});
+
+const OVERDUE = `query ($id: ID!, $groupId: ID) {
+  completionReport(policyVersionId: $id, groupId: $groupId) {
+    totalAudience totalAcked overdue { userId }
+  }
+}`;
+
+const overdueIds = async (signed: Signed, id: string, groupId?: string) => {
+  const { body } = await query(base, OVERDUE, signed, { groupId, id });
+  assert.equal(body.errors, undefined);
+  const report = body.data?.completionReport as {
+    overdue: { userId: string }[];
+    totalAcked: number;
+    totalAudience: number;
+  };
+  return { ...report, ids: report.overdue.map((o) => o.userId).toSorted() };
+};
+
+describe("completionReport's overdue list", () => {
+  it("lists every audience member without an acknowledgement, whatever the version's age", async () => {
+    const admin = await signInAs(base, "user-alice");
+    const version = stewardData().versions.find((v) => v.id === "version-12");
+    assert.ok(version);
+
+    for (const publishedAt of [
+      new Date().toISOString(),
+      new Date(Date.now() - 400 * 86_400_000).toISOString(),
+    ]) {
+      version.publishedAt = publishedAt;
+      const report = await overdueIds(admin, "version-12");
+      assert.ok(report.totalAudience > report.totalAcked);
+      assert.equal(report.ids.length, report.totalAudience - report.totalAcked);
+    }
+  });
+
+  it("drops a person from the list once they acknowledge, on a fresh version", async () => {
+    const admin = await signInAs(base, "user-alice");
+    const version = stewardData().versions.find((v) => v.id === "version-12");
+    assert.ok(version);
+    version.publishedAt = new Date().toISOString();
+
+    const before = await overdueIds(admin, "version-12");
+    assert.ok(before.ids.includes("user-erin"));
+    await query(
+      base,
+      'mutation { recordAck(policyVersionId: "version-12") { id } }',
+      await signInAs(base, "user-erin"),
+    );
+    const after = await overdueIds(admin, "version-12");
+    assert.ok(!after.ids.includes("user-erin"));
+    assert.equal(after.ids.length, before.ids.length - 1);
+  });
+
+  it("limits the list to the group's members", async () => {
+    const admin = await signInAs(base, "user-alice");
+    const all = await overdueIds(admin, "version-12");
+    const group = await overdueIds(admin, "version-12", "group-2");
+    assert.ok(group.ids.length <= all.ids.length);
+    assert.equal(group.ids.length, group.totalAudience - group.totalAcked);
   });
 });
