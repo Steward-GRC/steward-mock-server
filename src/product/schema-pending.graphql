@@ -457,6 +457,14 @@ extend type OverdueEntry {
   dueAt: String
 }
 
+# The platform group names of each person on the acknowledgement roster, for the "Approvers ·
+# Finance team" column. Proposed in https://github.com/Steward-GRC/steward-gateway/issues/77 (open
+# as steward-gateway#174). Sorted case-insensitively, then exactly; [] when the person has none.
+# This goes once the pinned gateway SDL carries it.
+extend type AckRosterEntry {
+  groups: [String!]!
+}
+
 # The caller's own acknowledgements, named by their policy: the row of the "Recently acknowledged"
 # card on My work. Proposed in https://github.com/Steward-GRC/steward-gateway/issues/56 (open as
 # steward-gateway#172). Always the signed-in user's, never another person's, newest first. limit
