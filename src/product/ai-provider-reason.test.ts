@@ -279,3 +279,69 @@ describe("aiConfig and aiRetrievalConfig with the simulation on (#167)", () => {
     assert.equal(body.errors?.[0]?.extensions.code, "INTERNAL");
   });
 });
+
+describe("aiConfig.monthlyLimit and setAIMonthlyLimit (steward-gateway#85)", () => {
+  const LIMIT = `{ aiConfig { monthlyLimit } }`;
+  const SET = `mutation($limit: Int!) { setAIMonthlyLimit(limit: $limit) }`;
+
+  const limitFor = async (who: Signed) => {
+    const { body } = await query(base, LIMIT, who);
+    assert.equal(body.errors, undefined, JSON.stringify(body.errors));
+    return (body.data?.aiConfig as { monthlyLimit: number }).monthlyLimit;
+  };
+
+  it("the default config has no limit", async () => {
+    const alice = await signInAs(base, "user-alice");
+    assert.equal(await limitFor(alice), 0);
+  });
+
+  it("a site admin sets the limit, aiConfig reads it back and the mutation answers the limit in force", async () => {
+    const alice = await signInAs(base, "user-alice");
+    const set = await query(base, SET, alice, { limit: 500 });
+    assert.equal(set.body.errors, undefined, JSON.stringify(set.body.errors));
+    assert.equal(set.body.data?.setAIMonthlyLimit, 500);
+    assert.equal(await limitFor(alice), 500);
+  });
+
+  it("0 clears the limit", async () => {
+    const alice = await signInAs(base, "user-alice");
+    await query(base, SET, alice, { limit: 500 });
+    const cleared = await query(base, SET, alice, { limit: 0 });
+    assert.equal(cleared.body.data?.setAIMonthlyLimit, 0);
+    assert.equal(await limitFor(alice), 0);
+  });
+
+  it("a negative limit is InvalidArgument and changes nothing", async () => {
+    const alice = await signInAs(base, "user-alice");
+    await query(base, SET, alice, { limit: 40 });
+    const { body } = await query(base, SET, alice, { limit: -1 });
+    assert.equal(body.errors?.[0]?.extensions.code, "InvalidArgument");
+    assert.equal(await limitFor(alice), 40);
+  });
+
+  it("a non-admin is refused and changes nothing", async () => {
+    const { body } = await query(base, SET, bob, { limit: 10 });
+    assert.equal(body.errors?.[0]?.extensions.code, "PermissionDenied");
+    const alice = await signInAs(base, "user-alice");
+    assert.equal(await limitFor(alice), 0);
+  });
+
+  it("with the simulation off both answer INTERNAL, and the check on who is calling still comes first", async () => {
+    const alice = await signInAs(base, "user-alice");
+    await control(base, { kind: "ai-simulation", on: false });
+    const set = await query(base, SET, alice, { limit: 10 });
+    assert.equal(set.body.errors?.[0]?.extensions.code, "INTERNAL");
+    const read = await query(base, LIMIT, alice);
+    assert.equal(read.body.errors?.[0]?.extensions.code, "INTERNAL");
+    const refused = await query(base, SET, bob, { limit: 10 });
+    assert.equal(refused.body.errors?.[0]?.extensions.code, "PermissionDenied");
+  });
+
+  it("is a start-fresh reset", async () => {
+    const alice = await signInAs(base, "user-alice");
+    await query(base, SET, alice, { limit: 25 });
+    startFresh();
+    const again = await signInAs(base, "user-alice");
+    assert.equal(await limitFor(again), 0);
+  });
+});

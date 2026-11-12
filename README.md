@@ -148,7 +148,7 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
 published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
-**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The **AI provider** buttons simulate the model provider failing while the service answers: `aiHealth` says `provider_unavailable` and `providerReason` is `auth_failed`, `provider_error`, `not_configured`, `jobs_unavailable` (the ai service has no Kubernetes API, so the job submits fail too) or null (no reason); `providerReason` is null in every other state. **AI limit reached** simulates the organisation's monthly or the person's daily limit: `aiHealth` says `limit_reached` and the submits are refused with `FailedPrecondition`; a provider outage or the service being down is reported in its place. With the simulation on, `aiConfig` and `aiRetrievalConfig` answer a default config for a site admin (the settings changes still fail as the unreachable service). The AI jobs are
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The **AI provider** buttons simulate the model provider failing while the service answers: `aiHealth` says `provider_unavailable` and `providerReason` is `auth_failed`, `provider_error`, `not_configured`, `jobs_unavailable` (the ai service has no Kubernetes API, so the job submits fail too) or null (no reason); `providerReason` is null in every other state. **AI limit reached** simulates the organisation's monthly or the person's daily limit: `aiHealth` says `limit_reached` and the submits are refused with `FailedPrecondition`; a provider outage or the service being down is reported in its place. With the simulation on, `aiConfig` and `aiRetrievalConfig` answer a default config for a site admin (`monthlyLimit` 0, no limit; `setAIMonthlyLimit(limit)` keeps a limit for a site admin, refuses a negative one with `InvalidArgument` and answers the limit in force, and nothing counts usage against it; the other settings changes still fail as the unreachable service). The AI jobs are
 simulated too (generate a draft, review, revise, enrichment suggestions): a submit returns a job id, the job runs for about
 2.5 seconds (`MOCK_AI_JOB_MS` changes it), `aiJob` and the `aiJobResult` subscription report it, and `aiJobResultContent` returns a
 made-up result marked as simulated: sections, review findings, a change set. With the simulation off they fail as the gateway does while the ai
@@ -384,6 +384,16 @@ The admin user screens answer as steward-gateway and steward-identity do:
 - **Password and welcome email:** `resetUserPassword` answers true for a local account and
   replaces its password; `resendWelcomeEmail` answers true and sends
   nothing.
+- **Changing your own password:** `changeMyPassword(currentPassword, newPassword)` (in
+  `schema-pending.graphql` until the gateway carries it, steward-gateway#72) changes the
+  signed-in person's password, as steward-identity's ChangeMyPassword does. The seed password is
+  `<username>-password`, so a wrong current one is testable. Refusals carry the registry symbol
+  as the code: `CURRENT_PASSWORD_WRONG` (checked first), `PASSWORD_TOO_WEAK` (under 8
+  characters, on a short breached list, or equal to the email, its mailbox part or the username),
+  `NO_LOCAL_PASSWORD` (an SSO-only account) and `ACT_AS_FORBIDDEN` (while acting as someone). An
+  attempt is audited as `user.password.changed` or `user.password.change_failed`, never with a
+  password. `PASSWORD_CHANGE_UNAVAILABLE` is not answered. `change-password.test.ts` is the
+  reference.
 - **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
   `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
   last root admin can't lose it.

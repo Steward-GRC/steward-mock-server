@@ -458,3 +458,90 @@ extend type AckRosterEntry {
 extend type OverdueEntry {
   dueAt: String
 }
+
+# The organisation's monthly limit on AI provider requests, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/85 and built in the gateway's
+# feat/85-ai-settings-limit-notice branch. 0 means no limit. setAIMonthlyLimit is site admin only,
+# like the other ai settings; a negative limit is InvalidArgument, 0 clears it, and it answers the
+# limit now in force. Both move to the pinned copy (schema.graphql) once that gateway PR merges.
+extend type AIConfig {
+  "Provider requests allowed per calendar month (UTC); 0 means no limit."
+  monthlyLimit: Int!
+}
+
+extend type Mutation {
+  setAIMonthlyLimit(limit: Int!): Int!
+}
+
+# The signed-in person changes their own password, proposed in
+# https://github.com/Steward-GRC/steward-gateway/issues/72 and answered by steward-identity's
+# ChangeMyPassword (steward-identity#66). It acts for the caller only (refused while acting as
+# someone) and checks the current password first. Refusals carry these codes in extensions.code:
+# CURRENT_PASSWORD_WRONG, PASSWORD_TOO_WEAK (too short, breached or too like the identifier),
+# NO_LOCAL_PASSWORD (an account that signs in through SSO) and PASSWORD_CHANGE_UNAVAILABLE (the
+# sign-in service is down; the mock never answers it). This goes once the pinned gateway SDL
+# carries it.
+extend type Mutation {
+  changeMyPassword(currentPassword: String!, newPassword: String!): Boolean!
+}
+
+# The platform group names of each person on the acknowledgement roster, for the "Approvers ·
+# Finance team" column. Proposed in https://github.com/Steward-GRC/steward-gateway/issues/77 (open
+# as steward-gateway#174). Sorted case-insensitively, then exactly; [] when the person has none.
+# This goes once the pinned gateway SDL carries it.
+extend type AckRosterEntry {
+  groups: [String!]!
+}
+
+# The caller's own acknowledgements, named by their policy: the row of the "Recently acknowledged"
+# card on My work. Proposed in https://github.com/Steward-GRC/steward-gateway/issues/56 (open as
+# steward-gateway#172). Always the signed-in user's, never another person's, newest first. limit
+# missing, zero or negative is 10; at most 100. Nothing acknowledged is []. This goes once the
+# pinned gateway SDL carries it.
+extend type Query {
+  myAcknowledgments(limit: Int): [RecentAcknowledgment!]!
+}
+
+type RecentAcknowledgment {
+  policyId: ID!
+  number: String!
+  title: String!
+  versionNo: Int!
+  policyVersionId: ID!
+  # ISO-8601.
+  ackedAt: String!
+}
+
+# The registry of issued magic links, proposed in https://github.com/Steward-GRC/steward-gateway/issues/71
+# (steward-delivery#45 lists and removes them). Site admins only. magicLinks lists newest first;
+# pageSize is 1 to 200 (default 50), pageToken is the opaque cursor from nextPageToken (null on
+# the last page), a bad one answers INVALID_REQUEST with the field page_token. policyVersionIds
+# filters to those versions. status is "active", "revoked" or "expired" (revoked wins over
+# expired). The times are RFC 3339; revokedAt and revokedByUserId are null until revoked.
+# removeMagicLink deletes a revoked or expired link: MAGIC_LINK_ACTIVE for an active one,
+# MAGIC_LINK_NOT_FOUND for an unknown token.
+extend type Query {
+  magicLinks(policyVersionIds: [ID!], pageSize: Int, pageToken: String): MagicLinkPage!
+}
+
+extend type Mutation {
+  removeMagicLink(token: String!): Boolean!
+}
+
+type MagicLinkPage {
+  links: [MagicLinkInfo!]!
+  nextPageToken: String
+}
+
+type MagicLinkInfo {
+  token: String!
+  fingerprint: String!
+  policyVersionId: ID!
+  createdByUserId: ID!
+  sensitive: Boolean!
+  status: String!
+  createdAt: String!
+  expiresAt: String!
+  revokedAt: String
+  revokedByUserId: ID
+}

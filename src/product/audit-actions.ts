@@ -87,6 +87,9 @@ export const AUDIT_ACTIONS = {
     // steward-identity/internal/handlers/admin_delete.go
     "user.category_rules_purged",
     "user.credential_revoked",
+    // steward-identity/internal/handlers/change_password.go
+    "user.password.change_failed",
+    "user.password.changed",
     // steward-identity/internal/handlers/admin_sso.go
     "security.break_glass.login",
     // steward-identity/internal/server/callers.go
