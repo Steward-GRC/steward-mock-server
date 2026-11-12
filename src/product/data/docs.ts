@@ -1251,6 +1251,7 @@ export const docsSeed = (): StewardData => {
     ...base,
     acknowledgements: docsAcknowledgements(),
     aiLimitReached: false,
+    aiMonthlyLimit: 0,
     aiProviderOutage: null,
     aiSimulated: true,
     appendices,
