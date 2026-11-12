@@ -4,6 +4,7 @@
 // sessions, deletion and merging, and diagnostics. The people are the core's sign-in records, so
 // disabling, deleting or changing roles here changes who can sign in and what they may do.
 
+import { GraphQLError } from "graphql";
 import { createHash } from "node:crypto";
 
 import type { AuditAction } from "#product/audit-actions.ts";
@@ -29,6 +30,7 @@ import {
   found,
   isSiteAdmin,
   newId,
+  notFound,
   people,
   realCaller,
   record,
@@ -128,6 +130,34 @@ const personFor = (userId: string): StewardPerson =>
     people().find((p) => p.id === userId),
     "user",
   );
+
+/** gateway: language[-Script][-REGION], e.g. en, en-US, zh-Hant-TW, es-419. */
+const LOCALE_TAG =
+  /^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|\d{3}))?$/;
+
+/** The locale as the gateway stores it: trimmed and cased, "" for blank, PROFILE_LOCALE_INVALID if malformed. */
+const normalizedLocale = (input: string): string => {
+  const tag = input.trim();
+  if (!tag) return "";
+  if (!LOCALE_TAG.test(tag))
+    throw new GraphQLError("The language isn't a valid locale tag.", {
+      extensions: {
+        code: "PROFILE_LOCALE_INVALID",
+        codeNum: 1241,
+        domain: "gateway",
+        kind: "business",
+      },
+    });
+  return tag
+    .split("-")
+    .map((part, index) => {
+      if (index === 0) return part.toLowerCase();
+      if (part.length === 4)
+        return part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase();
+      return part.toUpperCase();
+    })
+    .join("-");
+};
 
 const groupFor = (groupId: string) =>
   found(
@@ -639,6 +669,18 @@ export const userResolvers: Resolvers = {
       person.name = [first, last].filter(Boolean).join(" ") || person.name;
       if (given.locale) person.locale = given.locale;
       audit("user.profile.updated", person, person);
+      return asUser(person);
+    },
+    updateUserPreferences: (
+      _root,
+      given: { locale?: null | string; userId: string },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      const person = personFor(given.userId);
+      if (person.deletedAt) throw notFound("user");
+      // The gateway validates before it forwards, so a malformed tag writes nothing.
+      if (given.locale != null) person.locale = normalizedLocale(given.locale);
       return asUser(person);
     },
     updateUserProfile: (

@@ -6,6 +6,16 @@
 # https://github.com/Steward-GRC/steward-gateway/issues/41 (policy text search), and each part
 # goes once the pinned gateway SDL carries it.
 
+# A site admin sets another person's language, in steward-gateway#183 (issue
+# https://github.com/Steward-GRC/steward-gateway/issues/84). Gated on user.manage like
+# updateUserProfile. locale is a BCP 47 tag in the language[-Script][-REGION] form, trimmed; omitting
+# it leaves the stored value, a blank one clears it, and a malformed one is refused with
+# PROFILE_LOCALE_INVALID (1241). An unknown or deleted user is NOT_FOUND. These move to the pinned
+# copy once the pin carries the gateway change.
+extend type Mutation {
+  updateUserPreferences(userId: ID!, locale: String): User!
+}
+
 # Moving several documents at once, proposed in
 # https://github.com/Steward-GRC/steward-gateway/issues/82 (steward-core#35). All or nothing; site
 # admins only. The preview changes nothing.
