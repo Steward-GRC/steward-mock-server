@@ -60,6 +60,8 @@ export const signInAs = async (
 
 export interface Answer {
   data: Record<string, unknown>;
+  /** The first error's kind and message, when the call was refused. */
+  error?: { kind?: string; message: string };
   /** The first error's code, when the call was refused. */
   refused?: string;
 }
@@ -74,6 +76,12 @@ export const call = async (
   const { body } = await query(base, documentOf(name), signed, variables);
   return {
     data: body.data ?? {},
+    error: body.errors?.[0]
+      ? {
+          kind: body.errors[0].extensions.kind,
+          message: body.errors[0].message,
+        }
+      : undefined,
     refused: body.errors?.[0]?.extensions.code,
   };
 };
