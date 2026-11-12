@@ -73,7 +73,11 @@ with real headings: the Desk Booking Policy is the design's reader frame (Purpos
 desk with its "Changing a booking" sub-section, Responsibilities as a table, and Appendix A: Desk
 zones). Section keys are core's: a slug of each top-level heading (`booking-a-desk`), `-2`, `-3`
 for a repeated heading, and `body` for text before the first one. `diffVersions` answers one entry
-per section of the pinned template, keyed and word-diffed as core does.
+per section of the pinned template, keyed and word-diffed as core does. When either version has no
+template (a freeform version, or one compared with a templated one) it answers one entry per content
+block instead: a heading starts a block, text before the first heading is `body` ("Introduction"),
+a block only the older version has is `removed` right after the block it followed, and none is
+boilerplate.
 
 ### A new install
 

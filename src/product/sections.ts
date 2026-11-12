@@ -59,23 +59,44 @@ const reserve = (base: string, used: Map<string, number>): string => {
   return count === 1 ? key : `${key}-${String(count)}`;
 };
 
-/** core's extractLexicalSections over a document's top-level children. */
-const lexicalSections = (root: LexicalNode): Map<string, string> => {
-  const out = new Map<string, string>();
+/** Go's sort.Strings order for the ASCII keys core makes. */
+const byteOrder = (a: string, b: string) => {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+};
+
+/** One block of a document, as core's ContentBlock: a heading and the text up to the next one. */
+export interface ContentBlock {
+  key: string;
+  text: string;
+  title: string;
+}
+
+/**
+ * core's lexicalBlocks over a document's top-level children. A heading starts a block keyed by a
+ * slug of its text, "section" when empty, "-2", "-3" for repeats by order. Text before the first
+ * heading is the "body" block, titled "Introduction", present only when it has text; "body" is
+ * reserved even when empty, so a heading "Body" is keyed "body-2". A block's text keeps the
+ * heading as its first line.
+ */
+const lexicalBlocks = (root: LexicalNode): ContentBlock[] => {
+  const out: ContentBlock[] = [];
   const used = new Map<string, number>();
   let key = reserve("body", used);
+  let title = "Introduction";
   let buffer = "";
   const flush = () => {
     const text = buffer.trim();
-    if (text) out.set(key, text);
+    if (text) out.push({ key, text, title });
     buffer = "";
   };
   for (const child of root.children ?? []) {
     if (child.type === "heading") {
       flush();
-      const title = nodeText(child).trim();
-      key = reserve(slugify(title), used);
-      buffer = title;
+      const heading = nodeText(child).trim();
+      key = reserve(slugify(heading), used);
+      title = heading || "Untitled section";
+      buffer = heading;
       continue;
     }
     const text = nodeText(child).trim();
@@ -87,18 +108,22 @@ const lexicalSections = (root: LexicalNode): Map<string, string> => {
   return out;
 };
 
-/** core's parseContent: section key to text, or undefined for content that doesn't parse. */
-export const parseContent = (
+/**
+ * core's SplitBlocks: serialized content as ordered blocks, or undefined for content that doesn't
+ * parse. The older {"sections": {...}} envelope has no order or titles, so its entries come back
+ * sorted by key with the key as the title. Empty content has no blocks.
+ */
+export const splitBlocks = (
   contentJson: string,
-): Map<string, string> | undefined => {
-  if (contentJson === "") return new Map();
+): ContentBlock[] | undefined => {
+  if (contentJson === "") return [];
   let parsed: unknown;
   try {
     parsed = JSON.parse(contentJson);
   } catch {
     return undefined;
   }
-  if (parsed === null) return new Map();
+  if (parsed === null) return [];
   // A JSON array, string or number decodes as neither shape, which core treats as an error.
   if (typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
   const { root, sections } = parsed as {
@@ -112,16 +137,20 @@ export const parseContent = (
     !Array.isArray(sections) &&
     Object.values(sections).every((v) => typeof v === "string")
   )
-    return new Map(Object.entries(sections as Record<string, string>));
-  if (root === undefined || root === null) return new Map();
+    return Object.entries(sections as Record<string, string>)
+      .toSorted(([a], [b]) => byteOrder(a, b))
+      .map(([key, text]) => ({ key, text, title: key }));
+  if (root === undefined || root === null) return [];
   if (typeof root !== "object" || Array.isArray(root)) return undefined;
-  return lexicalSections(root as LexicalNode);
+  return lexicalBlocks(root as LexicalNode);
 };
 
-/** Go's sort.Strings order for the ASCII keys core makes. */
-const byteOrder = (a: string, b: string) => {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+/** core's parseContent: section key to text, or undefined for content that doesn't parse. */
+export const parseContent = (
+  contentJson: string,
+): Map<string, string> | undefined => {
+  const blocks = splitBlocks(contentJson);
+  return blocks && new Map(blocks.map((b) => [b.key, b.text]));
 };
 
 export interface ExtractedSection {
@@ -237,4 +266,65 @@ export const diffVersions = (
       wordDiffHtml: html,
     };
   });
+};
+
+/**
+ * core's DiffBlocks, for a pair where either version has no pinned template: both sides are split
+ * with splitBlocks and matched by key. One entry per block on either side, in the "to" order; a
+ * block only the "from" side has (removed) sits right after the nearest earlier "from" block the
+ * "to" side kept, or first when none. Titles come from the "to" side, or the "from" side for a
+ * removed block. Never boilerplate. Content that doesn't parse names its side.
+ */
+export const diffBlocks = (
+  fromJson: string,
+  toJson: string,
+): { badSide: "from" | "to" } | { diffs: SectionDiff[] } => {
+  const from = splitBlocks(fromJson);
+  if (!from) return { badSide: "from" };
+  const to = splitBlocks(toJson);
+  if (!to) return { badSide: "to" };
+  const toKeys = new Set(to.map((b) => b.key));
+  const fromByKey = new Map(from.map((b) => [b.key, b]));
+  // Removed blocks, grouped under the last "from" block before them that "to" kept ("" for none).
+  const removedAfter = new Map<string, ContentBlock[]>();
+  let anchor = "";
+  for (const block of from) {
+    if (toKeys.has(block.key)) {
+      anchor = block.key;
+      continue;
+    }
+    removedAfter.set(anchor, [...(removedAfter.get(anchor) ?? []), block]);
+  }
+  const removed = (block: ContentBlock): SectionDiff => ({
+    changeType: "removed",
+    isBoilerplate: false,
+    sectionKey: block.key,
+    sectionTitle: block.title,
+    wordDiffHtml: `<del>${block.text}</del>`,
+  });
+  const diffs = (removedAfter.get("") ?? []).map((block) => removed(block));
+  for (const block of to) {
+    const before = fromByKey.get(block.key);
+    let changeType: SectionDiff["changeType"] = "changed";
+    let html = "";
+    if (!before) {
+      changeType = "added";
+      html = `<ins>${block.text}</ins>`;
+    } else if (before.text === block.text) {
+      changeType = "unchanged";
+    } else {
+      html = wordDiffHtml(before.text, block.text);
+    }
+    diffs.push(
+      {
+        changeType,
+        isBoilerplate: false,
+        sectionKey: block.key,
+        sectionTitle: block.title,
+        wordDiffHtml: html,
+      },
+      ...(removedAfter.get(block.key) ?? []).map((gone) => removed(gone)),
+    );
+  }
+  return { diffs };
 };
