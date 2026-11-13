@@ -200,7 +200,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -222,7 +221,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -248,7 +246,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -284,7 +281,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
 ];
 

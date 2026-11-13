@@ -198,7 +198,6 @@ const workflowOf = (stages: Workflow["stages"]): Workflow => ({
   name: "N of m",
   stages,
   version: 1,
-  vetoEnabled: false,
 });
 
 const nofm = (given: Partial<Workflow["stages"][number]>) =>

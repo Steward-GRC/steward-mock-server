@@ -191,10 +191,6 @@ interface StageInput {
   quorumN?: null | number;
   rejectOnSlaBreach?: boolean | null;
   slaDays?: null | number;
-  /** Deprecated, accepted and ignored. */
-  vetoApproverIds?: null | string[];
-  /** Deprecated, accepted and ignored. */
-  vetoGroupIds?: null | string[];
   vetoUserIds?: null | string[];
 }
 
@@ -604,7 +600,6 @@ export const libraryResolvers: Resolvers = {
         name: given.name,
         stages: stagesOf(given.stages),
         version: 1,
-        vetoEnabled: false,
       };
       data().workflowDefs.push(workflow);
       record(
@@ -939,21 +934,6 @@ export const libraryResolvers: Resolvers = {
       );
       return withReferenceUse(reference);
     },
-    setWorkflowVetoEnabled: (
-      _root,
-      given: { enabled: boolean; id: string },
-      context: Context,
-    ) => {
-      const admin = templateAdmin(context);
-      const workflow = workflowFor(given.id);
-      workflow.vetoEnabled = given.enabled;
-      record(
-        "workflow_def.updated",
-        admin,
-        librarySubject("workflow_def", workflow.id, workflow.name),
-      );
-      return workflow;
-    },
     updateContactBlock: (
       _root,
       given: { block: ContactInput; id: string },
@@ -1147,10 +1127,5 @@ export const libraryResolvers: Resolvers = {
       caller(context);
       return data().workflowDefs.filter((w) => !w.archived);
     },
-  },
-  // The old per-stage lists are gone: the pinned schema still declares them, so they answer empty.
-  WorkflowStageDef: {
-    vetoApproverIds: () => [],
-    vetoGroupIds: () => [],
   },
 };
