@@ -105,8 +105,12 @@ const cases: Record<string, Case> = {
   // covered in ai-provider-reason.test.ts); the changes below stay refused as the ai service down
   AiConfig: { as: ADMIN },
   AiHealth: { as: READER },
-  // a job that was never submitted is not found (the submits are covered in ai-jobs.test.ts)
-  AiJob: { as: AUTHOR, refused: "NotFound", variables: { jobId: "ai-job-0" } },
+  // a job that was never submitted is AI_JOB_NOT_FOUND, a result ref nobody holds a plain NotFound (the submits are covered in ai-jobs.test.ts)
+  AiJob: {
+    as: AUTHOR,
+    refused: "AI_JOB_NOT_FOUND",
+    variables: { jobId: "ai-job-0" },
+  },
   AiJobResultContent: {
     as: AUTHOR,
     refused: "NotFound",
@@ -812,7 +816,7 @@ const cases: Record<string, Case> = {
 const SUBSCRIPTIONS: Record<string, Case> = {
   AiJobResult: {
     as: AUTHOR,
-    refused: "NotFound",
+    refused: "AI_JOB_NOT_FOUND",
     variables: { jobId: "ai-job-0" },
   },
   // liveEvents needs the audit log's read permission; a reader is refused at subscribe time.

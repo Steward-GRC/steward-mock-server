@@ -136,6 +136,19 @@ export const workflowDefinitionInUse = (
     { id, override_count: String(overrideCount), run_count: String(runCount) },
   );
 
+/**
+ * steward-ai's refusal for a job id nobody has, or one someone else submitted (3010, user safe),
+ * as the gateway relays it: a business error with ai's symbol, number and message.
+ */
+export const aiJobNotFound = (): GraphQLError =>
+  businessRefusal(
+    "That AI job doesn't exist.",
+    "AI_JOB_NOT_FOUND",
+    3010,
+    "ai",
+    {},
+  );
+
 /** steward-workflow's refusal for an id no workflow has (6014). */
 export const workflowDefinitionNotFound = (id: string): GraphQLError =>
   businessRefusal(
