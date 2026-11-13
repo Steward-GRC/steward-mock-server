@@ -162,7 +162,7 @@ describe("the docs start state's data", () => {
     }
     for (const workflow of data().workflowDefs)
       for (const stage of workflow.stages)
-        for (const id of [...stage.approvers, ...stage.vetoApproverIds])
+        for (const id of [...stage.approvers, ...stage.vetoUserIds])
           who(id, `workflow ${workflow.id}`);
     for (const run of data().runs) {
       assert.ok(
@@ -283,7 +283,7 @@ describe("the states each guide screenshot needs", () => {
     const committee = data().workflowDefs.find(
       (w) => w.name === "Committee with veto",
     );
-    assert.equal(committee?.vetoEnabled, true);
+    assert.deepEqual(committee?.stages[0]?.vetoUserIds, ["user-dave"]);
     assert.equal(committee?.stages[0]?.quorum, "majority");
   });
 

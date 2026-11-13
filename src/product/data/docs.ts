@@ -238,7 +238,7 @@ const docsWorkflows = (): Workflow[] => [
         quorum: "majority",
         rejectOnSlaBreach: false,
         slaDays: 7,
-        vetoApproverIds: [DAVE],
+        vetoUserIds: [DAVE],
       }),
       stage({
         approvers: [ALICE],
@@ -248,7 +248,7 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: true,
+    vetoEnabled: false,
   },
   {
     archived: false,

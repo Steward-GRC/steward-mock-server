@@ -1,9 +1,11 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// A veto approver (steward-web#256, steward-workflow#26, steward-mock-server#112): a workflow can
-// opt in, off by default, to marking an approver (a user, or the members of a group seat) as one
-// whose single reject ends the version as rejected, even inside a quorum and below its threshold.
-// Without the opt-in, or for anyone not marked, a reject is only a vote.
+// A veto holder (steward-mock-server#112, #223): a stage names people, in vetoUserIds, whose single
+// reject ends the version as rejected, even inside a quorum and below its threshold. A vetoer must
+// be one of the stage's approvers (no veto-only seats, and site admin or root does not count); a
+// vetoer who is not seated holds no veto. There is no workflow-wide switch. Anyone not named
+// casts only a vote. The old vetoApproverIds, vetoGroupIds and vetoEnabled are accepted and
+// ignored.
 
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -61,7 +63,7 @@ const SET_ENABLED = `mutation ($id: ID!, $enabled: Boolean!) {
 const UPDATE = `mutation ($id: ID!, $name: String!, $stages: [WorkflowStageInput!]!) {
   updateWorkflowDef(id: $id, name: $name, stages: $stages) {
     id
-    stages { name vetoApproverIds vetoGroupIds }
+    stages { name vetoUserIds vetoApproverIds vetoGroupIds }
   }
 }`;
 const SUBMIT = `mutation ($policyVersionId: ID!, $policyId: ID!, $categoryId: ID!) {
@@ -177,44 +179,47 @@ describe("a reject by anyone else", () => {
   });
 });
 
-const submitWithVeto = async (enabled: boolean) => {
-  startFresh();
-  const admin = await as("grace");
-  await ask(admin, UPDATE, {
+const stageInput = (
+  extra: Record<string, unknown> = {},
+  name = "Finance sign-off",
+) => ({
+  approvers: ["user-charlie", "user-dave"],
+  name,
+  quorum: "one",
+  ...extra,
+});
+
+const save = async (stages: Record<string, unknown>[]) =>
+  ask(await as("grace"), UPDATE, {
     id: "workflow-1",
     name: "Finance sign-off",
-    stages: [
+    stages,
+  });
+
+const CONTENT = JSON.stringify({
+  root: {
+    children: [
       {
-        approvers: ["user-charlie"],
-        name: "Finance sign-off",
-        quorum: "one",
-        vetoApproverIds: ["user-charlie"],
+        children: [{ text: "Words.", type: "text", version: 1 }],
+        type: "paragraph",
+        version: 1,
       },
     ],
-  });
-  if (enabled)
-    await ask(admin, SET_ENABLED, { enabled: true, id: "workflow-1" });
+    direction: null,
+    format: "",
+    indent: 0,
+    type: "root",
+    version: 1,
+  },
+});
+
+/** Submit policy-1 (category Expenses, workflow-1) and answer its stage assignees. */
+const submitted = async () => {
   const author = await as("bob");
-  const content = JSON.stringify({
-    root: {
-      children: [
-        {
-          children: [{ text: "Words.", type: "text", version: 1 }],
-          type: "paragraph",
-          version: 1,
-        },
-      ],
-      direction: null,
-      format: "",
-      indent: 0,
-      type: "root",
-      version: 1,
-    },
-  });
   const draft = await ask(
     author,
     `mutation ($policyId: ID!, $contentJson: String!) { saveDraft(policyId: $policyId, contentJson: $contentJson) { id } }`,
-    { contentJson: content, policyId: "policy-1" },
+    { contentJson: CONTENT, policyId: "policy-1" },
   );
   assert.equal(draft.code, undefined, draft.message);
   const versionId = (draft.data.saveDraft as { id: string }).id;
@@ -225,65 +230,244 @@ const submitWithVeto = async (enabled: boolean) => {
   });
   assert.equal(sent.code, undefined, sent.message);
   const answer = await ask(author, STATUS, { policyVersionId: versionId });
-  return (
-    answer.data.workflowStatus as { stageAssignees: { veto: boolean }[][] }
-  ).stageAssignees[0]?.[0]?.veto;
+  const status = answer.data.workflowStatus as {
+    stageAssignees: { userId: string; veto: boolean }[][];
+    status: string;
+  };
+  return {
+    holders: status.stageAssignees.map((seats) =>
+      seats.filter((s) => s.veto).map((s) => s.userId),
+    ),
+    status,
+    versionId,
+  };
 };
 
-describe("opting a workflow in", () => {
-  it("is off by default and set by a template admin", async () => {
-    const workflow = stewardData().workflowDefs.find(
-      (w) => w.id === "workflow-2",
-    );
-    assert.equal(workflow?.vetoEnabled, false);
-    const refused = await ask(await as("bob"), SET_ENABLED, {
-      enabled: true,
-      id: "workflow-2",
-    });
-    assert.equal(refused.code, "PermissionDenied");
-    const done = await ask(await as("grace"), SET_ENABLED, {
-      enabled: true,
-      id: "workflow-2",
-    });
-    assert.equal(done.code, undefined, done.message);
-    assert.equal(
-      (done.data.setWorkflowVetoEnabled as { vetoEnabled: boolean })
-        .vetoEnabled,
-      true,
+/** A seated person decides on the open run of a version. */
+const decide = async (
+  user: string,
+  versionId: string,
+  signal: "SIGNAL_TYPE_APPROVE" | "SIGNAL_TYPE_REJECT",
+) => {
+  const run = stewardData().runs.find((r) => r.policyVersionId === versionId)!;
+  const seat = run.stages[run.currentStageIdx]!.seats.find(
+    (s) => s.userId === `user-${user}`,
+  )!;
+  return ask(await as(user), SIGNAL, {
+    comment: "Decided.",
+    policyVersionId: versionId,
+    runId: run.id,
+    signal,
+    taskId: seat.taskId,
+  });
+};
+
+describe("naming veto people on a stage", () => {
+  it("stores a list of people per stage and answers it", async () => {
+    const answer = await save([
+      stageInput({ vetoUserIds: ["user-charlie", "user-dave"] }),
+      stageInput({ vetoUserIds: ["user-dave"] }, "Second"),
+      stageInput({}, "Third"),
+    ]);
+    assert.equal(answer.code, undefined, answer.message);
+    const stages = (
+      answer.data.updateWorkflowDef as {
+        stages: { vetoUserIds: string[] }[];
+      }
+    ).stages;
+    assert.deepEqual(
+      stages.map((s) => s.vetoUserIds),
+      [["user-charlie", "user-dave"], ["user-dave"], []],
     );
   });
 
-  it("marks users and group seats on a stage", async () => {
-    const answer = await ask(await as("grace"), UPDATE, {
-      id: "workflow-1",
-      name: "Finance sign-off",
-      stages: [
-        {
-          approvers: ["user-charlie"],
-          name: "Finance sign-off",
-          quorum: "one",
-          vetoApproverIds: ["user-charlie"],
-          vetoGroupIds: ["group-finance"],
-        },
-      ],
-    });
+  it("refuses a person who is not one of the stage's approvers", async () => {
+    const answer = await save([stageInput({ vetoUserIds: ["user-bob"] })]);
+    assert.equal(answer.code, "InvalidArgument");
+    assert.match(answer.message ?? "", /veto/);
+    assert.match(answer.message ?? "", /approver/);
+  });
+
+  it("refuses site admin and root unless they are an approver", async () => {
+    const refused = await save([stageInput({ vetoUserIds: ["user-alice"] })]);
+    assert.equal(refused.code, "InvalidArgument");
+    const named = await save([
+      stageInput({
+        approvers: ["user-charlie", "user-alice"],
+        vetoUserIds: ["user-alice"],
+      }),
+    ]);
+    assert.equal(named.code, undefined, named.message);
+  });
+
+  it("accepts a person only the category or group lists name", async () => {
+    const answer = await save([
+      stageInput({
+        approversByCategory: [
+          { approverIds: ["user-erin"], categoryId: "category-people" },
+        ],
+        groupUnits: [
+          {
+            groupId: "group-finance",
+            internalQuorum: "one",
+            memberUserIds: ["user-frank"],
+          },
+        ],
+        vetoUserIds: ["user-erin", "user-frank"],
+      }),
+    ]);
     assert.equal(answer.code, undefined, answer.message);
+  });
+
+  it("creates a workflow with the list, and refuses a stranger there too", async () => {
+    const CREATE = `mutation ($name: String!, $stages: [WorkflowStageInput!]!) {
+      createWorkflowDef(name: $name, stages: $stages) { stages { vetoUserIds } }
+    }`;
+    const admin = await as("grace");
+    const refused = await ask(admin, CREATE, {
+      name: "New",
+      stages: [stageInput({ vetoUserIds: ["user-bob"] })],
+    });
+    assert.equal(refused.code, "InvalidArgument");
+    const made = await ask(admin, CREATE, {
+      name: "New",
+      stages: [stageInput({ vetoUserIds: ["user-dave"] })],
+    });
+    assert.equal(made.code, undefined, made.message);
+    assert.deepEqual(
+      (made.data.createWorkflowDef as { stages: { vetoUserIds: string[] }[] })
+        .stages[0]?.vetoUserIds,
+      ["user-dave"],
+    );
+  });
+});
+
+describe("a run's veto holders", () => {
+  it("are the stage's named people who are seated, stage by stage", async () => {
+    const saved = await save([
+      stageInput({ vetoUserIds: ["user-dave"] }, "First"),
+      stageInput({ vetoUserIds: ["user-charlie"] }, "Second"),
+      stageInput({}, "Third"),
+    ]);
+    assert.equal(saved.code, undefined, saved.message);
+    const { holders } = await submitted();
+    assert.deepEqual(holders, [["user-dave"], ["user-charlie"], []]);
+  });
+
+  it("apply without any workflow switch", async () => {
+    await save([stageInput({ vetoUserIds: ["user-dave"] })]);
+    assert.equal(
+      stewardData().workflowDefs.find((w) => w.id === "workflow-1")
+        ?.vetoEnabled,
+      false,
+    );
+    assert.deepEqual((await submitted()).holders, [["user-dave"]]);
+  });
+
+  it("do not include a named person who is not in the pool at seating", async () => {
+    // the stage lists Erin only for another category, so on this lineage she is not seated
+    await save([
+      stageInput({
+        approversByCategory: [
+          { approverIds: ["user-erin"], categoryId: "category-people" },
+        ],
+        vetoUserIds: ["user-erin", "user-dave"],
+      }),
+    ]);
+    assert.deepEqual((await submitted()).holders, [["user-dave"]]);
+  });
+
+  it("never include site admin or root who is not in the pool", async () => {
+    await save([stageInput({ vetoUserIds: ["user-dave"] })]);
+    // reach past the save check, as an older definition could
+    const stage = stewardData().workflowDefs.find((w) => w.id === "workflow-1")!
+      .stages[0]!;
+    stage.vetoUserIds = ["user-alice", "user-dave"];
+    const { holders } = await submitted();
+    assert.deepEqual(holders, [["user-dave"]]);
+  });
+
+  it("are empty for a stage without veto people", async () => {
+    await save([stageInput()]);
+    assert.deepEqual((await submitted()).holders, [[]]);
+  });
+});
+
+const twoVetoers = async () => {
+  await save([
+    stageInput({
+      approvers: ["user-charlie", "user-dave", "user-alice"],
+      vetoUserIds: ["user-charlie", "user-dave"],
+    }),
+  ]);
+  return submitted();
+};
+
+describe("two veto people at one stage", () => {
+  it("end the version when either rejects", async () => {
+    for (const who of ["charlie", "dave"]) {
+      startFresh();
+      const { holders, versionId } = await twoVetoers();
+      assert.deepEqual(holders, [["user-charlie", "user-dave"]]);
+      const answer = await decide(who, versionId, "SIGNAL_TYPE_REJECT");
+      assert.equal(answer.code, undefined, answer.message);
+      assert.equal(
+        stewardData().versions.find((v) => v.id === versionId)?.status,
+        "REJECTED",
+      );
+    }
+  });
+
+  it("leave a reject by a seat that holds none as a vote", async () => {
+    const { versionId } = await twoVetoers();
+    await decide("alice", versionId, "SIGNAL_TYPE_REJECT");
+    assert.notEqual(
+      stewardData().versions.find((v) => v.id === versionId)?.status,
+      "REJECTED",
+    );
+  });
+});
+
+describe("the old switch and lists", () => {
+  it("are accepted and ignored on a stage", async () => {
+    const saved = await save([
+      stageInput({
+        vetoApproverIds: ["user-charlie"],
+        vetoGroupIds: ["group-finance"],
+      }),
+    ]);
+    assert.equal(saved.code, undefined, saved.message);
     assert.deepEqual(
       (
-        answer.data.updateWorkflowDef as {
-          stages: { vetoApproverIds: string[]; vetoGroupIds: string[] }[];
+        saved.data.updateWorkflowDef as {
+          stages: Record<string, unknown>[];
         }
       ).stages[0],
       {
         name: "Finance sign-off",
-        vetoApproverIds: ["user-charlie"],
-        vetoGroupIds: ["group-finance"],
+        vetoApproverIds: [],
+        vetoGroupIds: [],
+        vetoUserIds: [],
       },
     );
   });
 
-  it("carries the marks into a run only when the workflow has opted in", async () => {
-    assert.equal(await submitWithVeto(true), true);
-    assert.equal(await submitWithVeto(false), false);
+  it("never activate a veto, switch on or off", async () => {
+    await save([stageInput({ vetoApproverIds: ["user-charlie"] })]);
+    const admin = await as("grace");
+    const on = await ask(admin, SET_ENABLED, {
+      enabled: true,
+      id: "workflow-1",
+    });
+    assert.equal(on.code, undefined, on.message);
+    assert.deepEqual((await submitted()).holders, [[]]);
+  });
+
+  it("setter still needs a template admin", async () => {
+    const done = await ask(await as("bob"), SET_ENABLED, {
+      enabled: true,
+      id: "workflow-2",
+    });
+    assert.equal(done.code, "PermissionDenied");
   });
 });

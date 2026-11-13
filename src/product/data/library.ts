@@ -137,7 +137,7 @@ export interface Workflow {
   name: string;
   stages: WorkflowStage[];
   version: number;
-  /** Opted in: a veto approver's single reject ends the version. Off by default. */
+  /** Deprecated and inert until the cleanup: it gates nothing, a stage's vetoUserIds apply alone. */
   vetoEnabled: boolean;
 }
 
@@ -158,10 +158,11 @@ export interface WorkflowStage {
   quorumN: number;
   rejectOnSlaBreach: boolean;
   slaDays: null | number;
-  /** Users who hold a veto on this stage. */
-  vetoApproverIds: string[];
-  /** Group seats (by the unit's groupId) whose members hold a veto on this stage. */
-  vetoGroupIds: string[];
+  /**
+   * People whose single reject ends the run, each one of the stage's approvers. At submit only
+   * those who are seated hold the veto.
+   */
+  vetoUserIds: string[];
 }
 
 export const category = (
@@ -440,8 +441,7 @@ export const stage = (
   quorumN: 0,
   rejectOnSlaBreach: false,
   slaDays: null,
-  vetoApproverIds: [],
-  vetoGroupIds: [],
+  vetoUserIds: [],
   ...given,
 });
 

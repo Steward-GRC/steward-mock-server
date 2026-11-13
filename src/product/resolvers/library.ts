@@ -190,8 +190,11 @@ interface StageInput {
   quorumN?: null | number;
   rejectOnSlaBreach?: boolean | null;
   slaDays?: null | number;
+  /** Deprecated, accepted and ignored. */
   vetoApproverIds?: null | string[];
+  /** Deprecated, accepted and ignored. */
   vetoGroupIds?: null | string[];
+  vetoUserIds?: null | string[];
 }
 
 /**
@@ -218,8 +221,32 @@ const checkQuorum = (s: StageInput) => {
     );
 };
 
+/**
+ * A stage's veto people must be among its approvers (steward-mock-server#223): a vetoer holds a
+ * seat of the stage's pool, there are no veto-only seats, and site admin or root does not count.
+ * The save can check the explicit lists only: the stage's approvers, those named per category and
+ * the members of its group units. Whether a named person is seated for a given policy is decided
+ * at submit, where an unseated vetoer simply holds no veto.
+ */
+const checkVetoPeople = (s: StageInput) => {
+  const named = new Set([
+    ...s.approvers,
+    ...(s.approversByCategory ?? []).flatMap((c) => c.approverIds),
+    ...(s.groupUnits ?? []).flatMap((g) => g.memberUserIds),
+  ]);
+  const strangers = (s.vetoUserIds ?? []).filter((id) => !named.has(id));
+  if (strangers.length > 0)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": a veto person must be one of the stage's approvers (${strangers.join(", ")})`,
+    );
+};
+
 const stagesOf = (input: StageInput[]): WorkflowStage[] => {
-  for (const s of input) checkQuorum(s);
+  for (const s of input) {
+    checkQuorum(s);
+    checkVetoPeople(s);
+  }
   return input.map((s) => ({
     approvers: [...s.approvers],
     approversByCategory: (s.approversByCategory ?? []).map((c) => ({
@@ -237,8 +264,7 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] => {
     quorumN: s.quorumN ?? 0,
     rejectOnSlaBreach: s.rejectOnSlaBreach ?? false,
     slaDays: s.slaDays ?? null,
-    vetoApproverIds: [...(s.vetoApproverIds ?? [])],
-    vetoGroupIds: [...(s.vetoGroupIds ?? [])],
+    vetoUserIds: [...new Set(s.vetoUserIds)],
   }));
 };
 
@@ -1109,5 +1135,10 @@ export const libraryResolvers: Resolvers = {
       caller(context);
       return data().workflowDefs.filter((w) => !w.archived);
     },
+  },
+  // The old per-stage lists are gone: the pinned schema still declares them, so they answer empty.
+  WorkflowStageDef: {
+    vetoApproverIds: () => [],
+    vetoGroupIds: () => [],
   },
 };

@@ -82,7 +82,7 @@ describe("Start as a new install", () => {
     }
     for (const workflow of data.workflowDefs)
       for (const stage of workflow.stages)
-        for (const id of [...stage.approvers, ...stage.vetoApproverIds])
+        for (const id of [...stage.approvers, ...stage.vetoUserIds])
           people.add(id);
     assert.deepEqual(
       [...people],

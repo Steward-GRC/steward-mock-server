@@ -100,7 +100,7 @@ export interface RunStage {
   seats: Seat[];
   /** The workflow stage's SLA in days, kept to fix `dueAt` when the stage is entered. */
   slaDays?: null | number;
-  /** Seat holders whose single reject ends the run (the workflow opted in to vetoes). */
+  /** Seat holders whose single reject ends the run (the stage's veto people who are seated). */
   vetoUserIds?: string[];
 }
 
