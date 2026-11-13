@@ -194,10 +194,11 @@ describe("framing on the job submits", () => {
           message: string;
         };
         assert.equal(refused.message, 'Unknown framing "LOUD".');
-        assert.deepEqual(refused.extensions, {
-          code: "InvalidArgument",
-          kind: "business",
-        });
+        assert.equal(refused.extensions.code, "InvalidArgument");
+        assert.equal(refused.extensions.kind, "business");
+        // Every gateway error carries the two ids too.
+        assert.equal(typeof refused.extensions.requestId, "string");
+        assert.equal(typeof refused.extensions.traceId, "string");
         return true;
       },
     );
