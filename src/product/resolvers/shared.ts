@@ -55,6 +55,20 @@ export const refuse = (
     extensions: { code: GATEWAY_CODES[code], ...(kind ? { kind } : {}) },
   });
 
+/**
+ * Core's refusal of a bad site work calendar, as the gateway relays it: a business error with
+ * core's symbol and number and its message "The work calendar is not valid: {reason}."
+ */
+export const invalidWorkCalendar = (reason: string): GraphQLError =>
+  new GraphQLError(`The work calendar is not valid: ${reason}.`, {
+    extensions: {
+      code: "INVALID_WORK_CALENDAR",
+      codeNum: 4009,
+      domain: "core",
+      kind: "business",
+    },
+  });
+
 export const forbidden = (): GraphQLError =>
   refuse("FORBIDDEN", "You don't have permission to do that.");
 

@@ -52,11 +52,15 @@ const ask = async (
 ) => {
   const { body } = await query(base, text, signed, variables);
   const error = body.errors?.[0] as
-    | { extensions: { code: string }; message: string }
+    | {
+        extensions: { code: string } & Record<string, unknown>;
+        message: string;
+      }
     | undefined;
   return {
     code: error?.extensions.code,
     data: body.data ?? {},
+    extensions: error?.extensions,
     message: error?.message,
   };
 };
@@ -228,12 +232,19 @@ describe("the site work calendar setting", () => {
     ],
   ];
   for (const [name, calendar] of bad)
-    it(`refuses ${name} with InvalidArgument and saves nothing`, async () => {
+    it(`refuses ${name} with INVALID_WORK_CALENDAR and saves nothing`, async () => {
       const admin = await as("alice");
       const refused = await save(admin, calendar, {
         announcement: { enabled: true, level: "info", message: "Not saved." },
       });
-      assert.equal(refused.code, "InvalidArgument", refused.message);
+      assert.equal(refused.code, "INVALID_WORK_CALENDAR", refused.message);
+      assert.equal(refused.extensions?.codeNum, 4009);
+      assert.equal(refused.extensions?.domain, "core");
+      assert.equal(refused.extensions?.kind, "business");
+      assert.match(
+        refused.message ?? "",
+        /^The work calendar is not valid: .+\.$/,
+      );
       const now = (await ask(admin, READ)).data.globalSettings as {
         announcement: { enabled: boolean };
         workCalendar: Calendar;
@@ -267,7 +278,7 @@ describe("the site work calendar setting", () => {
     );
     assert.equal(
       (await at(String.fromCodePoint(128_512).repeat(81))).code,
-      "InvalidArgument",
+      "INVALID_WORK_CALENDAR",
     );
   });
 
@@ -309,7 +320,7 @@ describe("the site work calendar setting", () => {
     // A refused change is not audited either.
     assert.equal(
       (await save(admin, { ...MON_FRI, weekdays: [] })).code,
-      "InvalidArgument",
+      "INVALID_WORK_CALENDAR",
     );
     assert.equal(
       (await auditActions(admin)).filter((a) =>

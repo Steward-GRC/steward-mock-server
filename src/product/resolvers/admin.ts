@@ -22,6 +22,7 @@ import { spCertificate } from "#product/data/admin.ts";
 import {
   data,
   found,
+  invalidWorkCalendar,
   newId,
   record,
   refuse,
@@ -48,7 +49,7 @@ const windowMessage = (window: MaintenanceWindow): string => {
     : "Steward is down for maintenance.";
 };
 
-/** The calendar in the setting's shape: refuse it like core, with InvalidArgument and the reason. */
+/** The calendar in the setting's shape: refuse it like core, with INVALID_WORK_CALENDAR and the reason. */
 const checkCalendar = (calendar: GlobalSettings["workCalendar"]): void => {
   try {
     validateCalendar({
@@ -59,15 +60,12 @@ const checkCalendar = (calendar: GlobalSettings["workCalendar"]): void => {
   } catch (error) {
     if (!(error instanceof WorkcalError)) throw error;
     log.debug("work calendar refused", { code: error.code });
-    throw refuse("BAD_USER_INPUT", `Work calendar: ${error.message}.`);
+    throw invalidWorkCalendar(error.message);
   }
   for (const holiday of calendar.holidays) {
     // The label may be empty; the cap is 80 characters (code points), not bytes.
     if ([...holiday.label].length > 80)
-      throw refuse(
-        "BAD_USER_INPUT",
-        "Work calendar: a holiday label is at most 80 characters.",
-      );
+      throw invalidWorkCalendar("a holiday label is at most 80 characters");
   }
 };
 
