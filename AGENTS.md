@@ -51,6 +51,9 @@ ahead of it while steward-web moves to the same commit).
   engine for the category rows); `delivery.ts` keeps steward-delivery's PDF jobs and magic links and serves the sample PDF
   (`resolvers/governance.ts` answers the governance fields); `groups.ts` reads who someone is from the people store (the roles field and the `groups`
   person field, live on every request) and announces `user.permissions_changed`; `documents.ts` is the gateway's `/documents/extract` and `/documents/validate-url`;
+  `semver.ts` and `version-numbers.ts` are steward-core's semantic versions and change types (the
+  classifier, the author's pick, the first stage's agreement, the number written at publish;
+  `resolvers/versions.ts` answers the fields),
   `sections.ts` is steward-core's section reading (ExtractSections, the slug rule and
   DiffVersions), where every section key comes from; `audit-actions.ts`
   lists the audit action names the services write, the only ones `record` takes; `collab.ts` is

@@ -8,6 +8,7 @@
 // withdrawn draft, a published procedure and a rejected one.
 
 import type { SiteWorkCalendar } from "#product/data/admin.ts";
+import type { ChangeState, Semver } from "#product/semver.ts";
 export interface Acknowledgement {
   ackedAt: string;
   policyVersionId: string;
@@ -54,11 +55,19 @@ export interface PolicyLinks {
 
 export interface PolicyVersion {
   appendices: Appendix[];
+  /**
+   * The change type: suggested at submit, the author's pick, who agreed to a lowering (steward-core
+   * ChangeState). Absent before a submit, and for a first version, which takes none. A published
+   * version's is final (version-numbers.ts).
+   */
+  change?: ChangeState;
   contentJson: string;
   createdAt: string;
   id: string;
   policyId: string;
   publishedAt: null | string;
+  /** MAJOR.MINOR.FIX, written when the version is published; versionNo stays the ordinal. */
+  semver?: Semver;
   /** DRAFT, IN_REVIEW, APPROVED, PUBLISHED, SUPERSEDED, REJECTED or WITHDRAWN. */
   status: string;
   templateVersionId: string;

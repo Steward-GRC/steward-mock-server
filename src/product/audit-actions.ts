@@ -208,6 +208,8 @@ export const AUDIT_ACTIONS = {
     "workflow.assignment.swapped.out_of_eligibility",
     "workflow.bulk.approved",
     "workflow.bulk.rejected",
+    "workflow.change_type.agreed",
+    "workflow.change_type.requested",
     "workflow.decision.approved",
     "workflow.decision.rejected",
     "workflow.gc.failed",

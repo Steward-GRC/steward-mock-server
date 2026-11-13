@@ -33,6 +33,7 @@ import {
   refuse,
 } from "#product/resolvers/shared.ts";
 import { userResolvers } from "#product/resolvers/users.ts";
+import { versionResolvers } from "#product/resolvers/versions.ts";
 import { workflowResolvers } from "#product/resolvers/workflow.ts";
 
 export { announce, type LiveEvent } from "#product/resolvers/shared.ts";
@@ -92,6 +93,7 @@ const domains: Resolvers[] = [
   reviewThreadResolvers,
   searchResolvers,
   userResolvers,
+  versionResolvers,
   workflowResolvers,
 ];
 

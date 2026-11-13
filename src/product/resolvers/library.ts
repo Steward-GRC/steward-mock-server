@@ -34,6 +34,7 @@ import {
   siteAdmin,
   withAnyRole,
 } from "#product/resolvers/shared.ts";
+import { numberTemplateForPublish } from "#product/version-numbers.ts";
 import { MAX_WORKING_DAYS } from "#product/workcal.ts";
 
 /** The deepest the category tree goes, a root being depth 1 (steward-core's guard). */
@@ -569,6 +570,7 @@ export const libraryResolvers: Resolvers = {
             .map((v) => v.versionNo),
         ) + 1;
       const version = {
+        createdAt: now(),
         id: newId("template-version"),
         sections: sectionsOf(given.sections),
         status: "draft",
@@ -718,7 +720,10 @@ export const libraryResolvers: Resolvers = {
     ) => {
       const admin = templateAdmin(context);
       const version = draftOnly(given.id);
+      // numbered against the highest published version before it, then published
+      numberTemplateForPublish(version);
       version.status = "published";
+      version.publishedAt = now();
       const template = templateFor(version.templateId);
       record(
         "template_version.published",
@@ -752,6 +757,7 @@ export const libraryResolvers: Resolvers = {
       const admin = templateAdmin(context);
       const template = templateFor(given.id);
       template.name = given.name;
+      template.renamedAt = now();
       record(
         "template.renamed",
         admin,

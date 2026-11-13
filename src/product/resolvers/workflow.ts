@@ -41,6 +41,8 @@ import {
   refuse,
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
+import { isChangeType } from "#product/semver.ts";
+import { agreeLowering, changeForSubmit } from "#product/version-numbers.ts";
 import { addWorkingDays } from "#product/workcal.ts";
 
 const log = createLogger("steward-workflow");
@@ -332,6 +334,19 @@ const advance = (run: Run, person: StewardPerson) => {
   const stage = run.stages[run.currentStageIdx];
   if (!stage) return;
   if (!stageMet(stage)) return;
+  // the first stage reviews the change itself: its quorum is what agrees to a lowered change type
+  if (run.currentStageIdx === 0) {
+    const { policy, version } = partsOf(run);
+    const agreedBy = stage.seats
+      .filter((s) => s.state === "approved")
+      .map((s) => s.userId);
+    if (agreeLowering(version, agreedBy))
+      record(
+        "workflow.change_type.agreed",
+        person,
+        versionSubject(policy, version.id),
+      );
+  }
   closePending([stage]);
   if (run.currentStageIdx < run.stages.length - 1) {
     run.currentStageIdx += 1;
@@ -470,7 +485,12 @@ export const workflowResolvers: Resolvers = {
     },
     submitWorkflow: (
       _root,
-      given: { policyId: string; policyVersionId: string },
+      given: {
+        changeType?: null | string;
+        changeTypeReason?: null | string;
+        policyId: string;
+        policyVersionId: string;
+      },
       context: Context,
     ) => {
       const person = caller(context);
@@ -519,7 +539,17 @@ export const workflowResolvers: Resolvers = {
             `stage ${String(index)}: quorum_n=${String(s.quorumN)} exceeds pool size ${String(votes)}`,
           );
       }
+      // the author's pick of the change type: refused before anything changes when it is below the
+      // suggestion with no reason, so the version stays a draft
+      const change = changeForSubmit(
+        version,
+        isChangeType(given.changeType) ? given.changeType : null,
+        given.changeTypeReason ?? "",
+        person.id,
+      );
       cancelRuns(version.id);
+      if (change) version.change = change;
+      else delete version.change;
       const run: Run = {
         currentStageIdx: 0,
         id: newId("run"),
@@ -544,6 +574,12 @@ export const workflowResolvers: Resolvers = {
       version.status = "IN_REVIEW";
       policy.updatedAt = run.submittedAt;
       record("workflow.submitted", person, versionSubject(policy, version.id));
+      if (change?.requested)
+        record(
+          "workflow.change_type.requested",
+          person,
+          versionSubject(policy, version.id),
+        );
       return { runId: run.id };
     },
   },
