@@ -183,6 +183,14 @@ export const extractSections = (
   return out;
 };
 
+/**
+ * core's escapeDiffText: author text made safe for the diff HTML, so only the <ins> and <del>
+ * the diff writes are markup. Quotes stay as they are (the text sits between tags). Words are
+ * compared raw; this runs only when the HTML is built. The web decodes these entities.
+ */
+const escapeDiffText = (text: string): string =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
 /** core's wordDiffHTML: an LCS word diff with <del> and <ins> around changed words. */
 export const wordDiffHtml = (from: string, to: string): string => {
   const a = from.split(/\s+/).filter(Boolean);
@@ -204,17 +212,17 @@ export const wordDiffHtml = (from: string, to: string): string => {
   let right = b.length;
   while (left > 0 || right > 0) {
     if (left > 0 && right > 0 && a[left - 1] === b[right - 1]) {
-      ops.push(`${a[left - 1] ?? ""} `);
+      ops.push(`${escapeDiffText(a[left - 1] ?? "")} `);
       left--;
       right--;
     } else if (
       right > 0 &&
       (left === 0 || at(left, right - 1) >= at(left - 1, right))
     ) {
-      ops.push(`<ins>${b[right - 1] ?? ""}</ins> `);
+      ops.push(`<ins>${escapeDiffText(b[right - 1] ?? "")}</ins> `);
       right--;
     } else {
-      ops.push(`<del>${a[left - 1] ?? ""}</del> `);
+      ops.push(`<del>${escapeDiffText(a[left - 1] ?? "")}</del> `);
       left--;
     }
   }
@@ -249,10 +257,10 @@ export const diffVersions = (
     let html = "";
     if (before === "" && after !== "") {
       changeType = "added";
-      html = `<ins>${after}</ins>`;
+      html = `<ins>${escapeDiffText(after)}</ins>`;
     } else if (before !== "" && after === "") {
       changeType = "removed";
-      html = `<del>${before}</del>`;
+      html = `<del>${escapeDiffText(before)}</del>`;
     } else if (before === after) {
       changeType = "unchanged";
     } else {
@@ -300,7 +308,7 @@ export const diffBlocks = (
     isBoilerplate: false,
     sectionKey: block.key,
     sectionTitle: block.title,
-    wordDiffHtml: `<del>${block.text}</del>`,
+    wordDiffHtml: `<del>${escapeDiffText(block.text)}</del>`,
   });
   const diffs = (removedAfter.get("") ?? []).map((block) => removed(block));
   for (const block of to) {
@@ -309,7 +317,7 @@ export const diffBlocks = (
     let html = "";
     if (!before) {
       changeType = "added";
-      html = `<ins>${block.text}</ins>`;
+      html = `<ins>${escapeDiffText(block.text)}</ins>`;
     } else if (before.text === block.text) {
       changeType = "unchanged";
     } else {
