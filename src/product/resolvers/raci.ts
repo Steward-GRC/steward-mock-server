@@ -196,5 +196,42 @@ export const raciResolvers: Resolvers = {
         (c) => decideCategory(personOf(person), c.id).approve.allowed,
       );
     },
+    /**
+     * Who the workflow editor may offer as an approver (steward-gateway#215): the union of the
+     * approver pools of the categories that use the workflow as their default, each person once.
+     * A workflow no category uses has no chart to say who may approve, so it answers attached
+     * false with nobody, not a global list.
+     */
+    workflowApproverCandidates: (
+      _root,
+      given: { workflowId: string },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      found(
+        data().workflowDefs.find(
+          (w) => w.id === given.workflowId && !w.archived,
+        ),
+        "workflow",
+      );
+      const attached = data().categories.filter(
+        (c) => c.defaultWorkflowId === given.workflowId,
+      );
+      const candidates = people().filter((p) => !p.deletedAt);
+      const users = new Map<string, ReturnType<typeof asUser>>();
+      for (const category of attached)
+        for (const entry of poolOf(candidates, category.id, "approve"))
+          if (!users.has(entry.person))
+            users.set(
+              entry.person,
+              asUser(candidates.find((p) => p.id === entry.person)!),
+            );
+      return {
+        attached: attached.length > 0,
+        categoryIds: attached.map((c) => c.id),
+        users: [...users.values()],
+        workflowId: given.workflowId,
+      };
+    },
   },
 };
