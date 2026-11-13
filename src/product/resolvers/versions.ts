@@ -10,8 +10,9 @@ import type { Policy, PolicyVersion } from "#product/data/policies.ts";
 
 import { type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
+import { ackTriggersOf } from "#product/access.ts";
 import { data } from "#product/resolvers/shared.ts";
-import { semverText } from "#product/semver.ts";
+import { type ChangeType, semverText } from "#product/semver.ts";
 import {
   numbersOf,
   SEEDED_AT,
@@ -57,6 +58,46 @@ const currentSemanticVersionOf = (policy: Policy): null | string => {
   return text;
 };
 
+/**
+ * PolicyVersion.reacknowledge (steward-gateway#232): whether publishing the version asks readers
+ * to acknowledge it again. True only for a POLICY whose trigger in force is ON_CHANGE and whose
+ * change type is MAJOR. The type is the author's pick (the argument) when given, else the
+ * version's own, else its suggestion; none known is false, as is a procedure.
+ */
+const reacknowledgeOf = (
+  version: PolicyVersion,
+  pick: ChangeType | null | undefined,
+): boolean => {
+  const policy = data().policies.find((p) => p.id === version.policyId);
+  if (!policy) {
+    log.debug("reacknowledge: policy not found", { version: version.id });
+    return false;
+  }
+  if (policy.documentType !== "POLICY") {
+    log.debug("reacknowledge: a procedure has no acknowledgements", {
+      policy: policy.id,
+    });
+    return false;
+  }
+  const trigger = ackTriggersOf(policy);
+  if (trigger !== "ON_CHANGE") {
+    log.debug("reacknowledge: trigger is not ON_CHANGE", {
+      policy: policy.id,
+      trigger,
+    });
+    return false;
+  }
+  const numbers = numbersOf(version);
+  const effective = pick ?? numbers.changeType ?? numbers.suggested;
+  log.debug("reacknowledge worked out", {
+    effective,
+    picked: pick != null,
+    policy: policy.id,
+    version: version.id,
+  });
+  return effective === "MAJOR";
+};
+
 export const versionResolvers: Resolvers = {
   Policy: {
     currentSemanticVersion: (p) => currentSemanticVersionOf(p as Policy),
@@ -66,6 +107,8 @@ export const versionResolvers: Resolvers = {
     changeTypeAgreedByUserIds: (v) => numbersOf(v as PolicyVersion).agreedBy,
     changeTypeReason: (v) => numbersOf(v as PolicyVersion).reason,
     changeTypeSetByUserId: (v) => numbersOf(v as PolicyVersion).setBy,
+    reacknowledge: (v, parameters) =>
+      reacknowledgeOf(v as PolicyVersion, parameters.changeType),
     requestedChangeType: (v) => numbersOf(v as PolicyVersion).requested,
     semanticVersion: (v) => numbersOf(v as PolicyVersion).semanticVersion,
     suggestedChangeType: (v) => numbersOf(v as PolicyVersion).suggested,
