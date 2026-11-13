@@ -310,6 +310,8 @@ An approver who sends comments back (`REQUEST_CHANGES`) keeps the seat pending w
 
 `workflowStatus` also says what the run publishes, as steward-gateway does (steward-gateway#240): `targetSemanticVersion` and `targetChangeType` are the semantic version and change type of the policy version the run is on (the same values as that version's `semanticVersion` and `changeType`), and null when there is no run or no change type is known, as on a first version. The seeded Travel Booking Procedure is in review as its third edition, so its run shows 3.0.0 and MAJOR. `target-version.test.ts` is the reference.
 
+Each `stageAssignees` seat also says why the person holds it, as steward-gateway does (steward-gateway#242): `roleLabel` is "Approver" for a seat the workflow names (an individual approver or a member of a group unit), "Category owner" for a seat the home category's owner took through the quorum backstop, and null when the seat does not record where it came from. The seeded Travel Booking Procedure's run in review shows both: Charlie is an Approver and Alice, Travel's owner, a Category owner. `role-label.test.ts` is the reference.
+
 While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
 are accepted) and its status stays In review. Each approver is shown what changed since the text they
 last reviewed: `versionChangesSinceReview` returns the sections that changed (an empty list when none did), and the snapshot moves forward
