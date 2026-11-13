@@ -194,8 +194,6 @@ describe("refusals", () => {
     ["user-bob", "CreateTemplate", { name: "Mine" }],
     ["user-bob", "AckRoster", { policyVersionId: "version-2" }],
     ["user-erin", "AuditLog", {}],
-    // A site admin isn't a privacy officer: the case queue is the officers' alone.
-    ["user-alice", "ReportCases", {}],
     ["user-bob", "BreakGlassReveal", { policyId: "policy-8", reason: "x" }],
   ];
   for (const [personId, operation, variables] of refusals)
@@ -203,6 +201,13 @@ describe("refusals", () => {
       const answer = await call(base, await as(personId), operation, variables);
       assert.equal(answer.refused, "PermissionDenied");
     });
+
+  // A site admin isn't a privacy officer: the case queue is the officers' alone, and reporting
+  // refuses anyone else with its own code, not the generic PermissionDenied.
+  it("refuses ReportCases to a site admin with CASE_ACCESS_DENIED", async () => {
+    const answer = await call(base, await as("user-alice"), "ReportCases", {});
+    assert.equal(answer.refused, "CASE_ACCESS_DENIED");
+  });
 
   it("signs a disabled account out at once", async () => {
     const admin = await as("user-alice");

@@ -181,6 +181,17 @@ describe("the Compliance module switch", () => {
     );
   });
 
+  it("refuses a case call from anyone but a privacy officer with CASE_ACCESS_DENIED, as reporting does", async () => {
+    for (const who of [bob, alice]) {
+      const answer = await ask(who, CASES);
+      assert.equal(answer.code, "CASE_ACCESS_DENIED");
+      assert.equal(answer.extensions?.codeNum, 8105);
+      assert.equal(answer.extensions?.domain, "reporting");
+      assert.equal(answer.extensions?.kind, "business");
+      assert.equal(answer.message, "Only privacy officers can open cases.");
+    }
+  });
+
   it("records the switch in the audit trail", async () => {
     await setModule(dave, false);
     await setModule(dave, true);
