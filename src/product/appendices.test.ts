@@ -300,11 +300,25 @@ describe("who may", () => {
 
   it("refuses an author deleting for good, which is the site admin's", async () => {
     const made = await create();
+    await ask(await as("bob"), RETIRE, { id: made.id });
     const refused = await ask(await as("bob"), DELETE, { id: made.id });
     assert.equal(refused.code, "PermissionDenied");
+    assert.ok((await listed("alice", true)).some((r) => r.id === made.id));
     const allowed = await ask(await as("alice"), DELETE, { id: made.id });
     assert.equal(allowed.code, undefined, allowed.message);
     assert.ok(!(await listed("alice", true)).some((r) => r.id === made.id));
+  });
+
+  it("refuses a site admin deleting an appendix that is not retired", async () => {
+    const made = await create();
+    const refused = await ask(await as("alice"), DELETE, { id: made.id });
+    assert.equal(refused.code, "FailedPrecondition");
+    assert.ok((await listed("alice", true)).some((r) => r.id === made.id));
+  });
+
+  it("answers not found for an unknown appendix id on a delete for good", async () => {
+    const answer = await ask(await as("alice"), DELETE, { id: "no-such" });
+    assert.equal(answer.code, "NotFound");
   });
 });
 

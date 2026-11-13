@@ -217,7 +217,8 @@ An appendix belongs to a policy or procedure, never to one of its versions, and 
 own: `createPolicyAppendix` makes a draft, `saveAppendixDraft` autosaves into it, `publishAppendix`
 (authors and above) makes it the version readers see, and a later edit is a new draft beside the
 published row. `retireAppendix` keeps it (hidden from readers, restorable with `restoreAppendix`);
-only a site admin deletes one for good (`deleteAppendixForever`). Every version of a policy shows
+only a site admin deletes a retired one for good (`deleteAppendixForever`; a live one answers a failed
+precondition). Every version of a policy shows
 the latest published appendices as its `appendices`. `appendixDiff` (draft against published) is for
 authors, site admins and compliance only. Appendices take no part in an approval and nobody
 comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
