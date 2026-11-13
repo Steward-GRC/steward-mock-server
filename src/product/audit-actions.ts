@@ -230,6 +230,7 @@ export const AUDIT_ACTIONS = {
     // steward-workflow/internal/grpcsvc/workflow_def.go
     "workflow_def.archived",
     "workflow_def.created",
+    "workflow_def.deleted",
     "workflow_def.updated",
     // steward-workflow/internal/outage/reconciler.go
     "workflow.run.paused",

@@ -16,6 +16,7 @@ import type {
 import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { createLogger } from "#core/log.ts";
 import { canAuthorIn } from "#product/access.ts";
 import { documentCounts, stranded } from "#product/category-types.ts";
 import { raci } from "#product/data/library.ts";
@@ -33,9 +34,14 @@ import {
   refuse,
   siteAdmin,
   withAnyRole,
+  workflowDefinitionInUse,
+  workflowDefinitionInUseByCategory,
+  workflowDefinitionNotFound,
 } from "#product/resolvers/shared.ts";
 import { numberTemplateForPublish } from "#product/version-numbers.ts";
 import { MAX_WORKING_DAYS } from "#product/workcal.ts";
+
+const log = createLogger("steward-library");
 
 /** The deepest the category tree goes, a root being depth 1 (steward-core's guard). */
 const MAX_DEPTH = 3;
@@ -710,6 +716,49 @@ export const libraryResolvers: Resolvers = {
         admin,
         librarySubject("template", template.id, template.name),
       );
+      return true;
+    },
+    deleteWorkflowDef: (_root, given: { id: string }, context: Context) => {
+      const admin = templateAdmin(context);
+      const store = data();
+      log.debug("deleteWorkflowDef: start", { id: given.id });
+      // The gateway checks core's category defaults before it asks the workflow service.
+      const categoryCount = store.categories.filter(
+        (c) => c.defaultWorkflowId === given.id,
+      ).length;
+      if (categoryCount > 0) {
+        log.info("deleteWorkflowDef refused: category default", {
+          categoryCount,
+          id: given.id,
+        });
+        throw workflowDefinitionInUseByCategory(given.id, categoryCount);
+      }
+      if (!store.workflowDefs.some((w) => w.id === given.id)) {
+        log.info("deleteWorkflowDef refused: not found", { id: given.id });
+        throw workflowDefinitionNotFound(given.id);
+      }
+      const runCount = store.runs.filter(
+        (r) => r.workflowDefId === given.id,
+      ).length;
+      const overrideCount = store.policies.filter(
+        (p) => p.workflowDefId === given.id,
+      ).length;
+      if (runCount > 0 || overrideCount > 0) {
+        log.info("deleteWorkflowDef refused: in use", {
+          id: given.id,
+          overrideCount,
+          runCount,
+        });
+        throw workflowDefinitionInUse(given.id, runCount, overrideCount);
+      }
+      // The mock keeps one record per definition, so this removes every version with it.
+      store.workflowDefs = store.workflowDefs.filter((w) => w.id !== given.id);
+      record(
+        "workflow_def.deleted",
+        admin,
+        librarySubject("workflow_def", given.id, given.id),
+      );
+      log.info("deleteWorkflowDef: deleted", { id: given.id });
       return true;
     },
     discardTemplateVersion: (
