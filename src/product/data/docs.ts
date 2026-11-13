@@ -231,10 +231,12 @@ const docsWorkflows = (): Workflow[] => [
     stages: [
       stage({
         approvers: [CHARLIE, ALICE, DAVE],
+        escalateAfterDays: 2,
         id: "workflow-stage-4",
         name: "Committee review",
         quorum: "majority",
         rejectOnSlaBreach: false,
+        remindEveryDays: 1,
         slaDays: 7,
         vetoUserIds: [DAVE],
       }),
