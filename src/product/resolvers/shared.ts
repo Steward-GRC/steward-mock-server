@@ -69,6 +69,24 @@ export const invalidWorkCalendar = (reason: string): GraphQLError =>
     },
   });
 
+/**
+ * A steward-reporting refusal, as the gateway relays it: a business error with reporting's symbol
+ * and number (internal/errcodes) and the message the gateway shows the user.
+ */
+export const reportingRefusal = (
+  symbol: string,
+  codeNumber: number,
+  message: string,
+): GraphQLError =>
+  new GraphQLError(message, {
+    extensions: {
+      code: symbol,
+      codeNum: codeNumber,
+      domain: "reporting",
+      kind: "business",
+    },
+  });
+
 export const forbidden = (): GraphQLError =>
   refuse("FORBIDDEN", "You don't have permission to do that.");
 

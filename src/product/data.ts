@@ -9,6 +9,7 @@ import type { Person } from "#core/state.ts";
 import type { PolicyAppendix } from "#product/appendices.ts";
 import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
+import type { HardResetRow } from "#product/resolvers/module.ts";
 import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
@@ -153,10 +154,14 @@ export interface StewardData extends ProductData {
   categories: Category[];
   /** A draft's last co-editing checkpoint: its Yjs state (base64), which starts the next room. */
   collabStates: Record<string, string>;
+  /** The Compliance module switch (steward-reporting's settings); off refuses every case call. */
+  complianceModuleEnabled: boolean;
   contactBlocks: ContactBlock[];
   definitions: Definition[];
   emailServiceConfig: EmailServiceConfig;
   groupMappings: GroupMapping[];
+  /** identity's four-eyes hard reset requests, oldest first. */
+  hardResets: HardResetRow[];
   /** Whether the next IdP test passes or fails (the controls set it). */
   idpTestOutcome: "fail" | "pass";
   /** What each policy version links to in the libraries, by version id. */
@@ -236,10 +241,12 @@ export const seed = (): StewardData => {
     breakGlass: [],
     categories: categories(),
     collabStates: {},
+    complianceModuleEnabled: true,
     contactBlocks: contactBlocks(),
     definitions: definitions(),
     emailServiceConfig: emailServiceConfig(),
     groupMappings: groupMappings(),
+    hardResets: [],
     idpTestOutcome: "pass",
     links: migrateLinks(links(), policies()),
     magicLinks: {},

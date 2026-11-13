@@ -21,6 +21,7 @@ import { factorResolvers } from "#product/resolvers/factors.ts";
 import { governanceResolvers } from "#product/resolvers/governance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
 import { linkResolvers } from "#product/resolvers/links.ts";
+import { moduleResolvers } from "#product/resolvers/module.ts";
 import { notificationResolvers } from "#product/resolvers/notifications.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
 import { raciResolvers } from "#product/resolvers/raci.ts";
@@ -84,6 +85,7 @@ const domains: Resolvers[] = [
   libraryResolvers,
   linkResolvers,
   liveResolvers,
+  moduleResolvers,
   notificationResolvers,
   policyResolvers,
   raciResolvers,

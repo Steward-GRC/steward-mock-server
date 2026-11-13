@@ -187,6 +187,12 @@ export const AUDIT_ACTIONS = {
     "report.replied",
     "report.submitted",
     "report.viewed",
+    // steward-reporting/internal/grpcsvc/module.go
+    "module.access_refused",
+    "module.disabled",
+    "module.enabled",
+    "module.hard_reset",
+    "module.hard_reset_refused",
     // steward-reporting/internal/grpcsvc/settings.go
     "settings.access_refused",
     "settings.read",

@@ -45,6 +45,8 @@ export interface ReportCase {
   discoveredOn: null | string;
   id: string;
   kind: "ANONYMOUS" | "NAMED";
+  /** Whether the case is under a legal hold; a hard reset refuses while any case is. */
+  legalHold: boolean;
   notes: CaseNote[];
   notices: CaseNotice[];
   outcome: null | string;
@@ -84,6 +86,7 @@ const blank = () => ({
   closedAt: null,
   correctiveActions: [],
   discoveredOn: null,
+  legalHold: false,
   notes: [],
   notices: [],
   outcome: null,
