@@ -183,13 +183,14 @@ const matches = (person: StewardPerson, needle: string) =>
   );
 
 /** A session the core holds, as the admin console lists it. Its id is never the cookie value. */
-const liveSessions = (userId: string) =>
+const liveSessions = (userId: string, currentSessionId?: string) =>
   [...mockState.sessions.values()]
     .filter((s) => s.personId === userId)
     .map((s) => ({
       active: true,
       authenticatedAt: new Date(s.startedAt).toISOString(),
       clientIp: null,
+      current: s.id === currentSessionId,
       expiresAt: new Date(s.startedAt + 8 * 60 * 60 * 1000).toISOString(),
       issuedAt: new Date(s.startedAt).toISOString(),
       lastSeenAt: null,
@@ -755,8 +756,11 @@ export const userResolvers: Resolvers = {
       siteAdmin(context);
       const person = personFor(given.userId);
       return [
-        ...liveSessions(person.id),
-        ...data().pastSessions.filter((s) => s.userId === person.id),
+        ...liveSessions(person.id, context.session?.id),
+        // A session that already ended is never the one asking.
+        ...data()
+          .pastSessions.filter((s) => s.userId === person.id)
+          .map((s) => ({ ...s, current: false })),
       ];
     },
     managedGroupMembers: (
