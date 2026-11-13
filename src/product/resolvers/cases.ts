@@ -17,13 +17,13 @@ import { requireModuleOn } from "#product/resolvers/module.ts";
 import {
   caller,
   data,
-  forbidden,
   found,
   newId,
   now,
   personOf,
   record,
   refuse,
+  reportingRefusal,
 } from "#product/resolvers/shared.ts";
 
 const OFFICER = "privacy-officer";
@@ -51,7 +51,12 @@ const NOTICE_DEFAULTS: Record<string, { label: string; method: string }> = {
 const officer = (context: Context) => {
   requireModuleOn("CaseService");
   const person = caller(context);
-  if (!person.roles.includes(OFFICER)) throw forbidden();
+  if (!person.roles.includes(OFFICER))
+    throw reportingRefusal(
+      "CASE_ACCESS_DENIED",
+      8105,
+      "Only privacy officers can open cases.",
+    );
   return person;
 };
 
