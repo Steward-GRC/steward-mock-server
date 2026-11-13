@@ -625,7 +625,10 @@ export const userResolvers: Resolvers = {
       const membership = membershipsOf(person).find(
         (m: Membership) => m.groupId === given.groupId,
       );
-      if (membership?.source === "idp-sync" && !isSiteAdmin(actor))
+      // identity's Store.RemoveUserFromGroup is idempotent: a missing membership (a group that
+      // does not exist, or one the person is not in) is a no-op that returns the user, unaudited.
+      if (!membership) return asUser(person);
+      if (membership.source === "idp-sync" && !isSiteAdmin(actor))
         throw refuse(
           "FAILED_PRECONDITION",
           "A membership synced from the identity provider can't be removed here.",
