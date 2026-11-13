@@ -6,9 +6,10 @@
 // state around them in version-numbers.ts.
 
 import type { Template, TemplateVersion } from "#product/data/library.ts";
-import type { PolicyVersion } from "#product/data/policies.ts";
+import type { Policy, PolicyVersion } from "#product/data/policies.ts";
 
 import { type Resolvers } from "#core/graphql.ts";
+import { createLogger } from "#core/log.ts";
 import { data } from "#product/resolvers/shared.ts";
 import { semverText } from "#product/semver.ts";
 import {
@@ -34,7 +35,32 @@ const updatedAtOf = (template: Template): string => {
   return latest;
 };
 
+const log = createLogger("policy-semver");
+
+/**
+ * The number of the policy's current version (steward-gateway#230): the latest published
+ * version's. A policy with only a draft, or none, has no released number and answers null.
+ */
+const currentSemanticVersionOf = (policy: Policy): null | string => {
+  const published = data().versions.find(
+    (v) => v.id === policy.currentPublishedVersionId,
+  );
+  if (!published) {
+    log.trace("policy has no published version", { policy: policy.id });
+    return null;
+  }
+  const text = numbersOf(published).semanticVersion;
+  log.trace("policy current semantic version", {
+    policy: policy.id,
+    version: published.id,
+  });
+  return text;
+};
+
 export const versionResolvers: Resolvers = {
+  Policy: {
+    currentSemanticVersion: (p) => currentSemanticVersionOf(p as Policy),
+  },
   PolicyVersion: {
     changeType: (v) => numbersOf(v as PolicyVersion).changeType,
     changeTypeAgreedByUserIds: (v) => numbersOf(v as PolicyVersion).agreedBy,
