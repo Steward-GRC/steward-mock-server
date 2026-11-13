@@ -33,3 +33,11 @@ extend input WorkflowStageInput {
   remindEveryDays: Int
   escalateAfterDays: Int
 }
+
+# Deletes a workflow definition and its versions (steward-gateway#236, steward-mock-server#247).
+# Refused, in order: a category that defaults to it (WORKFLOW_DEF_IN_USE_BY_CATEGORY, 1247), then a
+# run that ever pinned it or a policy override pointing at it (WORKFLOW_DEF_IN_USE, 6013); an
+# unknown id is WORKFLOW_DEF_NOT_FOUND (6014). Not on the pinned gateway schema yet.
+extend type Mutation {
+  deleteWorkflowDef(id: ID!): Boolean!
+}
