@@ -10,7 +10,12 @@
 
 import type { Context } from "#core/graphql.ts";
 
-import { caller, notFound, now } from "#product/resolvers/shared.ts";
+import {
+  aiJobNotFound,
+  caller,
+  notFound,
+  now,
+} from "#product/resolvers/shared.ts";
 
 export type JobOperation =
   | "DRAFT"
@@ -163,7 +168,7 @@ export const submitJob = (
 
 const jobOf = (jobId: string, context: Context): Job => {
   const job = jobs.get(jobId);
-  if (!job || job.owner !== caller(context).id) throw notFound("The job");
+  if (!job || job.owner !== caller(context).id) throw aiJobNotFound();
   return job;
 };
 
@@ -202,9 +207,11 @@ export const expireJobContent = (jobId: string): void => {
 };
 
 /**
- * aiJobResultContent: what the job produced, once it has succeeded. A ref whose content has expired
- * is not found, unless the caller also names the job: then the stored result of the caller's own
- * finished job is served. A cache hit ignores the jobId.
+ * aiJobResultContent: what the job produced, once it has succeeded. A ref whose content is cached
+ * is served to its own submitter and is a plain NotFound to anyone else (the gateway's one refusal
+ * for a ref that reveals nothing). A ref nobody holds, or whose content has expired, is a plain
+ * NotFound, unless the caller also names the job: then the gateway falls back to the job's stored
+ * result, and a foreign, unknown or unfinished job is AI_JOB_NOT_FOUND.
  */
 export const jobContent = (
   resultReference: string,
@@ -215,11 +222,15 @@ export const jobContent = (
   const cached = [...jobs.values()].find(
     (candidate) => referenceOf(candidate) === resultReference,
   );
-  const fallback = jobId ? jobs.get(jobId) : undefined;
-  const job = cached && !cached.expired ? cached : fallback;
-  if (!job || job.owner !== owner || phaseOf(job) !== "AI_JOB_PHASE_SUCCEEDED")
-    throw notFound("The result");
-  return { operation: job.operation, resultJson: job.result };
+  if (cached && !cached.expired) {
+    if (cached.owner !== owner || phaseOf(cached) !== "AI_JOB_PHASE_SUCCEEDED")
+      throw notFound("The result");
+    return { operation: cached.operation, resultJson: cached.result };
+  }
+  if (!jobId) throw notFound("The result");
+  const stored = jobOf(jobId, context);
+  if (phaseOf(stored) !== "AI_JOB_PHASE_SUCCEEDED") throw aiJobNotFound();
+  return { operation: stored.operation, resultJson: stored.result };
 };
 
 /** The aiJobResult stream: the job's end, sent once it has run. An unknown job is refused at once. */
