@@ -127,11 +127,16 @@ export interface Seat {
   decidedAt: null | string;
   /** The group whose seat this is; absent or null for an individual seat. */
   groupId?: null | string;
+  /** Absent on a seat that does not record it; `roleLabel` is then null. */
+  source?: SeatSource;
   /** pending, approved, rejected, or cancelled once the run ends without them. */
   state: string;
   taskId: string;
   userId: string;
 }
+
+/** Why a person holds a seat: the workflow names them, or the category owner joined for quorum. */
+export type SeatSource = "approver" | "category-owner";
 
 /** steward-core's rendered number for the seeded Expense Claims Policy. */
 export const EXPENSE_CLAIMS_NUMBER = "POL-EXPENSES-000002";
@@ -667,6 +672,9 @@ export const seat = (
   userId,
 });
 
+/** A seat that records why its holder has it (a seat made before that was kept does not). */
+const named = (source: SeatSource, held: Seat): Seat => ({ ...held, source });
+
 export const runs = (): Run[] => [
   {
     currentStageIdx: 0,
@@ -678,12 +686,16 @@ export const runs = (): Run[] => [
         dueAt: "2026-09-25T00:00:00Z",
         name: "Review",
         quorum: "majority",
-        seats: [seat("task-1", "user-charlie"), seat("task-2", "user-alice")],
+        seats: [
+          named("approver", seat("task-1", "user-charlie")),
+          // Travel's owner holds this seat through the owner backstop, not the workflow
+          named("category-owner", seat("task-2", "user-alice")),
+        ],
       },
       {
         name: "Final approval",
         quorum: "one",
-        seats: [seat("task-3", "user-alice")],
+        seats: [named("approver", seat("task-3", "user-alice"))],
       },
     ],
     status: "APPROVAL_STATUS_IN_REVIEW",

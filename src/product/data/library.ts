@@ -371,6 +371,7 @@ export const categories = (): Category[] =>
       code: "TRAVEL",
       id: "category-travel",
       name: "Travel",
+      owners: ["user-alice"],
       parentId: "category-workplace",
       slug: "travel",
     }),

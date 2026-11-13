@@ -16,6 +16,7 @@ import type {
   Run,
   RunGroup,
   RunStage,
+  SeatSource,
 } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
@@ -61,6 +62,12 @@ const EMPTY_STATUS = {
   status: "APPROVAL_STATUS_UNSPECIFIED",
   targetChangeType: null,
   targetSemanticVersion: null,
+};
+
+/** The stepper's text for why a seat is held, as steward-gateway's seatRoleLabel words it. */
+const ROLE_LABELS: Record<SeatSource, string> = {
+  approver: "Approver",
+  "category-owner": "Category owner",
 };
 
 const IN_REVIEW = "APPROVAL_STATUS_IN_REVIEW";
@@ -276,9 +283,10 @@ const requiredOf = (quorum: string, roster: number): number => {
   return 1;
 };
 
-const seatFor = (userId: string, groupId?: string) => ({
+const seatFor = (userId: string, source: SeatSource, groupId?: string) => ({
   comment: null,
   decidedAt: null,
+  source,
   state: "pending",
   taskId: newId("task"),
   userId,
@@ -306,9 +314,18 @@ const runStageOf = (stage: WorkflowStage, seating: StageSeating): RunStage => {
     quorum: stage.quorum,
     quorumN: stage.quorumN,
     seats: [
-      ...seating.individuals.map((userId) => seatFor(userId)),
+      // an owner who joined to meet the quorum holds the seat as the category owner; anyone the
+      // workflow names (or a group unit's member) as an approver
+      ...seating.individuals.map((userId) =>
+        seatFor(
+          userId,
+          seating.approvers.includes(userId) ? "approver" : "category-owner",
+        ),
+      ),
       ...units.flatMap((g) =>
-        membersOf(g.groupId).map((userId) => seatFor(userId, g.groupId)),
+        membersOf(g.groupId).map((userId) =>
+          seatFor(userId, "approver", g.groupId),
+        ),
       ),
     ],
     slaDays: stage.slaDays,
@@ -730,6 +747,7 @@ export const workflowResolvers: Resolvers = {
             decidedAt: s.decidedAt,
             groupId: s.groupId ?? null,
             name: personOf(s.userId)?.name ?? null,
+            roleLabel: s.source ? ROLE_LABELS[s.source] : null,
             state: s.state,
             userId: s.userId,
             veto: stage.vetoUserIds?.includes(s.userId) ?? false,
