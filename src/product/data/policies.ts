@@ -603,6 +603,39 @@ export const versions = (): PolicyVersion[] => [
     templateVersionId: "template-version-1",
     versionNo: 1,
   }),
+  // The travel booking procedure's two earlier editions, both since superseded and none current:
+  // the draft in review (version-4) follows 2.0.0, and a changed number makes each edition a
+  // major change, so its run shows 3.0.0, Major.
+  version({
+    contentJson: lexical(
+      [
+        "Steps",
+        "Book trains, flights and hotels on the travel booking site at least 21 days ahead.",
+      ],
+      ["Afterwards", "Economy fares only."],
+    ),
+    createdAt: "2025-03-03T09:00:00Z",
+    id: "version-travel-1",
+    policyId: "policy-3",
+    publishedAt: "2025-03-17T00:00:00Z",
+    status: "SUPERSEDED",
+    versionNo: 1,
+  }),
+  version({
+    contentJson: lexical(
+      [
+        "Steps",
+        "Book trains, flights and hotels on the travel booking site at least 7 days ahead.",
+      ],
+      ["Afterwards", "Economy fares only."],
+    ),
+    createdAt: "2026-02-02T09:00:00Z",
+    id: "version-travel-2",
+    policyId: "policy-3",
+    publishedAt: "2026-02-16T00:00:00Z",
+    status: "SUPERSEDED",
+    versionNo: 2,
+  }),
 ];
 
 export const links = (): Record<string, PolicyLinks> => ({

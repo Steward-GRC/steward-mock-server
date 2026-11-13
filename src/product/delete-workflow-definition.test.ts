@@ -1,6 +1,6 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
-// Mutation.deleteWorkflowDef, declared in schema-pending.graphql ahead of the gateway
+// Mutation.deleteWorkflowDef, taken from the gateway schema
 // (steward-gateway#236, refs steward-gateway#62): a template admin deletes a workflow definition
 // and its versions. A category default is refused first (WORKFLOW_DEF_IN_USE_BY_CATEGORY, 1247,
 // gateway), then any run that ever pinned it or a policy override pointing at it
