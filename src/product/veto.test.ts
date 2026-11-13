@@ -4,10 +4,12 @@
 // reject ends the version as rejected, even inside a quorum and below its threshold. A vetoer must
 // be one of the stage's approvers (no veto-only seats, and site admin or root does not count); a
 // vetoer who is not seated holds no veto. There is no workflow-wide switch. Anyone not named
-// casts only a vote. The old vetoApproverIds, vetoGroupIds and vetoEnabled are accepted and
-// ignored.
+// casts only a vote. The old vetoApproverIds, vetoGroupIds, vetoEnabled and
+// setWorkflowVetoEnabled are gone from the schema (steward-gateway#224).
 
+import { buildSchema } from "graphql";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
@@ -57,13 +59,10 @@ const STATUS = `query ($policyVersionId: ID!) {
     stageAssignees { userId state veto }
   }
 }`;
-const SET_ENABLED = `mutation ($id: ID!, $enabled: Boolean!) {
-  setWorkflowVetoEnabled(id: $id, enabled: $enabled) { id vetoEnabled }
-}`;
 const UPDATE = `mutation ($id: ID!, $name: String!, $stages: [WorkflowStageInput!]!) {
   updateWorkflowDef(id: $id, name: $name, stages: $stages) {
     id
-    stages { name vetoUserIds vetoApproverIds vetoGroupIds }
+    stages { name vetoUserIds }
   }
 }`;
 const SUBMIT = `mutation ($policyVersionId: ID!, $policyId: ID!, $categoryId: ID!) {
@@ -354,16 +353,6 @@ describe("a run's veto holders", () => {
     assert.deepEqual(holders, [["user-dave"], ["user-charlie"], []]);
   });
 
-  it("apply without any workflow switch", async () => {
-    await save([stageInput({ vetoUserIds: ["user-dave"] })]);
-    assert.equal(
-      stewardData().workflowDefs.find((w) => w.id === "workflow-1")
-        ?.vetoEnabled,
-      false,
-    );
-    assert.deepEqual((await submitted()).holders, [["user-dave"]]);
-  });
-
   it("do not include a named person who is not in the pool at seating", async () => {
     // the stage lists Erin only for another category, so on this lineage she is not seated
     await save([
@@ -428,46 +417,30 @@ describe("two veto people at one stage", () => {
   });
 });
 
-describe("the old switch and lists", () => {
-  it("are accepted and ignored on a stage", async () => {
-    const saved = await save([
-      stageInput({
-        vetoApproverIds: ["user-charlie"],
-        vetoGroupIds: ["group-finance"],
-      }),
-    ]);
-    assert.equal(saved.code, undefined, saved.message);
-    assert.deepEqual(
+describe("the removed switch and lists", () => {
+  const schema = buildSchema(
+    readFileSync(new URL("schema.graphql", import.meta.url), "utf8"),
+  );
+  const fields = (type: string) =>
+    Object.keys(
       (
-        saved.data.updateWorkflowDef as {
-          stages: Record<string, unknown>[];
-        }
-      ).stages[0],
-      {
-        name: "Finance sign-off",
-        vetoApproverIds: [],
-        vetoGroupIds: [],
-        vetoUserIds: [],
-      },
+        schema.getType(type) as
+          | { getFields: () => Record<string, unknown> }
+          | undefined
+      )?.getFields() ?? {},
     );
+
+  it("are not in the schema", () => {
+    assert.ok(!fields("WorkflowDef").includes("vetoEnabled"));
+    assert.ok(!fields("Mutation").includes("setWorkflowVetoEnabled"));
+    for (const type of ["WorkflowStageDef", "WorkflowStageInput"]) {
+      assert.ok(!fields(type).includes("vetoApproverIds"), type);
+      assert.ok(!fields(type).includes("vetoGroupIds"), type);
+      assert.ok(fields(type).includes("vetoUserIds"), type);
+    }
   });
 
-  it("never activate a veto, switch on or off", async () => {
-    await save([stageInput({ vetoApproverIds: ["user-charlie"] })]);
-    const admin = await as("grace");
-    const on = await ask(admin, SET_ENABLED, {
-      enabled: true,
-      id: "workflow-1",
-    });
-    assert.equal(on.code, undefined, on.message);
-    assert.deepEqual((await submitted()).holders, [[]]);
-  });
-
-  it("setter still needs a template admin", async () => {
-    const done = await ask(await as("bob"), SET_ENABLED, {
-      enabled: true,
-      id: "workflow-2",
-    });
-    assert.equal(done.code, "PermissionDenied");
+  it("have no resolver left", () => {
+    assert.equal("vetoEnabled" in (stewardData().workflowDefs[0] ?? {}), false);
   });
 });

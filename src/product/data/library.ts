@@ -137,8 +137,6 @@ export interface Workflow {
   name: string;
   stages: WorkflowStage[];
   version: number;
-  /** Deprecated and inert until the cleanup: it gates nothing, a stage's vetoUserIds apply alone. */
-  vetoEnabled: boolean;
 }
 
 export interface WorkflowStage {
@@ -459,7 +457,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -483,7 +480,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -498,7 +494,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 2,
-    vetoEnabled: false,
   },
 ];
 

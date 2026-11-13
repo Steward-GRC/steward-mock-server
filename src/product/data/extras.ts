@@ -126,7 +126,6 @@ export const extraWorkflows = (): Workflow[] => [
       },
     ],
     version: 1,
-    vetoEnabled: false,
   },
 ];
 

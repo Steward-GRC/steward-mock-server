@@ -110,7 +110,6 @@ const workflowOf = (stages: Workflow["stages"]): Workflow => ({
   name: "Seats",
   stages,
   version: 1,
-  vetoEnabled: false,
 });
 
 const review = (given: Partial<Workflow["stages"][number]>) =>
