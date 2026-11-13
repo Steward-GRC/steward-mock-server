@@ -166,6 +166,64 @@ describe("the seeded versions", () => {
   });
 });
 
+const CURRENT = `query ($id: ID!) {
+  policy(id: $id) { id currentVersionStatus currentSemanticVersion }
+}`;
+
+const currentOf = async (signed: Signed, id: string) => {
+  const { body } = await query(base, CURRENT, signed, { id });
+  assert.equal(body.errors, undefined, JSON.stringify(body.errors));
+  return (
+    body.data as {
+      policy: {
+        currentSemanticVersion: null | string;
+        currentVersionStatus: null | string;
+      };
+    }
+  ).policy;
+};
+
+describe("Policy.currentSemanticVersion", () => {
+  it("is the seeded expenses policy's latest published number", async () => {
+    const reader = await as("user-erin");
+    const policy = await currentOf(reader, "policy-1");
+    assert.equal(policy.currentVersionStatus, "PUBLISHED");
+    const { body } = await query(base, VERSIONS, reader, {
+      policyId: "policy-1",
+    });
+    const versions = (body.data as { policyVersions: Version[] })
+      .policyVersions;
+    assert.equal(policy.currentSemanticVersion, "3.0.0");
+    assert.equal(
+      policy.currentSemanticVersion,
+      versions.at(-1)?.semanticVersion,
+    );
+  });
+
+  it("follows a newly published version and ignores a draft above it", async () => {
+    const author = await as("user-bob");
+    const approver = await as("user-charlie");
+    const id = await saveEdited(author, MINOR_EDIT);
+    assert.equal(
+      (await currentOf(author, "policy-1")).currentSemanticVersion,
+      "3.0.0",
+    );
+    await submit(author, id);
+    await approve(approver, id);
+    assert.equal(
+      (await currentOf(author, "policy-1")).currentSemanticVersion,
+      "3.1.0",
+    );
+  });
+
+  it("is null for a policy with no published version", async () => {
+    const admin = await as("user-alice");
+    const policy = await currentOf(admin, "policy-2");
+    assert.notEqual(policy.currentVersionStatus, "PUBLISHED");
+    assert.equal(policy.currentSemanticVersion, null);
+  });
+});
+
 describe("a draft shows the number a publish would give", () => {
   it("is a Fix for a small wording change", async () => {
     const author = await as("user-bob");
