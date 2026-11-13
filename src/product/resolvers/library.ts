@@ -667,6 +667,20 @@ export const libraryResolvers: Resolvers = {
       record("category.deleted", admin, categorySubject(category));
       return true;
     },
+    /**
+     * core's DeleteContactBlock: deletes the block and the join tables cascade, so every policy
+     * version that linked to it is detached, never refused. No audit entry (core audits none).
+     */
+    deleteContactBlock: (_root, given: { id: string }, context: Context) => {
+      libraryAdmin(context);
+      const block = contactFor(given.id);
+      data().contactBlocks = data().contactBlocks.filter((b) => b !== block);
+      for (const links of Object.values(data().links))
+        links.contactBlockIds = links.contactBlockIds.filter(
+          (id) => id !== block.id,
+        );
+      return true;
+    },
     deleteDefinition: (_root, given: { id: string }, context: Context) => {
       const definition = definitionFor(given.id);
       const person = editorOf(context, definition);
