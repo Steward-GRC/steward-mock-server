@@ -174,6 +174,9 @@ const managerOf = (context: Context, groupId: string): StewardPerson => {
   throw forbidden();
 };
 
+/** The fewest characters the people typeahead searches on. */
+const SEARCH_MIN = 2;
+
 const matches = (person: StewardPerson, needle: string) =>
   [person.email, person.name, person.username].some((field) =>
     field.toLowerCase().includes(needle),
@@ -839,8 +842,20 @@ export const userResolvers: Resolvers = {
     ) => {
       caller(context);
       const needle = given.query.trim().toLowerCase();
-      return people()
-        .filter((p) => !p.deletedAt && p.email.toLowerCase().includes(needle))
+      // Two characters at least, as the picker and the gateway hold the line: a shorter query
+      // would list the whole directory.
+      if (needle.length < SEARCH_MIN) return [];
+      // Name, email and username, as identity matches them. A deleted account is never offered;
+      // a disabled one still is, as in identity.
+      const found = people().filter((p) => !p.deletedAt && matches(p, needle));
+      // Someone whose name or email starts with the words typed comes before one that only
+      // contains them; each group keeps the directory's order.
+      const starts = (p: StewardPerson) =>
+        [p.name, p.email].some((f) => f.toLowerCase().startsWith(needle));
+      return [
+        ...found.filter((p) => starts(p)),
+        ...found.filter((p) => !starts(p)),
+      ]
         .slice(0, given.limit ?? 20)
         .map((p) => ({ email: p.email, id: p.id, name: p.name }));
     },
