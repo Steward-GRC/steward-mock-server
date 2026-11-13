@@ -4,6 +4,7 @@
 // and the audit trail, which every domain change writes to and announces on liveEvents.
 
 import { GraphQLError } from "graphql";
+import { randomBytes } from "node:crypto";
 
 import type { AuditAction } from "#product/audit-actions.ts";
 
@@ -46,13 +47,27 @@ const GATEWAY_CODES: Record<RefusalCode, string> = {
   NOT_FOUND: "NotFound",
 };
 
+/**
+ * The ids the gateway puts on every error it answers (internal/server/errors.go withIDs): a request
+ * id and a trace id, so a report can name the exact call. Random per error here.
+ */
+export const errorIds = (): { requestId: string; traceId: string } => ({
+  requestId: randomBytes(12).toString("hex"),
+  traceId: randomBytes(16).toString("hex"),
+});
+
 export const refuse = (
   code: RefusalCode,
   message: string,
   kind?: "business",
 ): GraphQLError =>
   new GraphQLError(message, {
-    extensions: { code: GATEWAY_CODES[code], ...(kind ? { kind } : {}) },
+    extensions: {
+      code: GATEWAY_CODES[code],
+      // Every gateway error carries a kind: our own faults are reach, anything else is business.
+      kind: kind ?? (code === "INTERNAL" ? "reach" : "business"),
+      ...errorIds(),
+    },
   });
 
 /**
@@ -66,6 +81,7 @@ export const invalidWorkCalendar = (reason: string): GraphQLError =>
       codeNum: 4009,
       domain: "core",
       kind: "business",
+      ...errorIds(),
     },
   });
 
@@ -82,6 +98,7 @@ const businessRefusal = (
       codeNum: codeNumber,
       domain,
       kind: "business",
+      ...errorIds(),
       ...extra,
     },
   });
@@ -144,6 +161,7 @@ export const reportingRefusal = (
       codeNum: codeNumber,
       domain: "reporting",
       kind: "business",
+      ...errorIds(),
     },
   });
 
