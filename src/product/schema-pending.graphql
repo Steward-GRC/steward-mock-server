@@ -7,7 +7,8 @@
 # goes once the pinned gateway SDL carries it.
 
 extend type Mutation {
-  # Site admin only: removes the appendix and its history.
+  # Site admin only: removes a retired appendix and its history. A live appendix is refused
+  # (FAILED_PRECONDITION); retire it first.
   deleteAppendixForever(id: ID!): Boolean!
 }
 
