@@ -6,12 +6,6 @@
 # https://github.com/Steward-GRC/steward-gateway/issues/41 (policy text search), and each part
 # goes once the pinned gateway SDL carries it.
 
-extend type Mutation {
-  # Site admin only: removes a retired appendix and its history. A live appendix is refused
-  # (FAILED_PRECONDITION); retire it first.
-  deleteAppendixForever(id: ID!): Boolean!
-}
-
 # An n-of-m stage quorum, as steward-workflow's builder keeps it: quorum "nofm" with quorumN, the
 # approvals the stage needs. quorumN is zero on every other quorum. Not on steward-workflow's API
 # yet (its stage quorum there is one, majority or all).

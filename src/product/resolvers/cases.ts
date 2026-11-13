@@ -13,6 +13,7 @@ import type {
 } from "#product/data/cases.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { requireModuleOn } from "#product/resolvers/module.ts";
 import {
   caller,
   data,
@@ -46,7 +47,9 @@ const NOTICE_DEFAULTS: Record<string, { label: string; method: string }> = {
   REGULATOR: { label: "Regulator", method: "Letter" },
 };
 
+/** Every case call passes the module switch first, ahead of the role check. */
 const officer = (context: Context) => {
+  requireModuleOn("CaseService");
   const person = caller(context);
   if (!person.roles.includes(OFFICER)) throw forbidden();
   return person;
