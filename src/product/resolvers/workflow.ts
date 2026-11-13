@@ -18,6 +18,7 @@ import type {
 } from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { createLogger } from "#core/log.ts";
 import { canEdit, readEffect } from "#product/access.ts";
 import { hasContent } from "#product/content.ts";
 import {
@@ -38,6 +39,8 @@ import {
   refuse,
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
+
+const log = createLogger("steward-workflow");
 
 const EMPTY_STATUS = {
   currentStageIdx: 0,
@@ -198,6 +201,8 @@ const unstaffedStageOf = (workflow: Workflow, policy: Policy) => {
 
 /** Who a stage seats: individuals, and each group unit's members by group. */
 interface StageSeating {
+  /** The stage's approver pool after the access filter: who a veto can belong to. */
+  approvers: string[];
   individuals: string[];
   members: Map<string, string[]>;
 }
@@ -220,10 +225,15 @@ const seatingOf = (
   );
   const votes =
     seated.length + [...members.values()].filter((m) => m.length > 0).length;
-  if (meetsQuorum(stage, votes)) return { individuals: seated, members };
+  if (meetsQuorum(stage, votes))
+    return { approvers: seated, individuals: seated, members };
   const owners =
     data().categories.find((c) => c.id === categoryId)?.owners ?? [];
-  return { individuals: [...new Set([...seated, ...owners])], members };
+  return {
+    approvers: seated,
+    individuals: [...new Set([...seated, ...owners])],
+    members,
+  };
 };
 
 /** A group's required approvals, as steward-workflow's requiredForQuorum. */
@@ -246,11 +256,7 @@ const groupName = (id: string) =>
   data().platformGroups.find((g) => g.id === id)?.name ?? id;
 
 /** The run's stage: individual seats first, then each group unit with a seated member. */
-const runStageOf = (
-  stage: WorkflowStage,
-  seating: StageSeating,
-  vetoEnabled: boolean,
-): RunStage => {
+const runStageOf = (stage: WorkflowStage, seating: StageSeating): RunStage => {
   const membersOf = (groupId: string) => seating.members.get(groupId) ?? [];
   const units = stage.groupUnits.filter((g) => membersOf(g.groupId).length > 0);
   return {
@@ -273,7 +279,7 @@ const runStageOf = (
       ),
     ],
     slaDays: stage.slaDays,
-    vetoUserIds: vetoEnabled ? vetoHolders(stage) : [],
+    vetoUserIds: vetoHolders(stage, seating),
   };
 };
 
@@ -314,15 +320,26 @@ const advance = (run: Run, person: StewardPerson) => {
   record("policy.status_set", person, versionSubject(policy, version.id));
 };
 
-/** The users who hold a veto on a stage: those named, and the members of the group seats named. */
-const vetoHolders = (stage: WorkflowStage): string[] => [
-  ...new Set([
-    ...stage.vetoApproverIds,
-    ...stage.groupUnits
-      .filter((g) => stage.vetoGroupIds.includes(g.groupId))
-      .flatMap((g) => g.memberUserIds),
-  ]),
-];
+/**
+ * The people who hold a veto on a stage: those it names who are in its approver pool once the
+ * access filter has run (an individual approver, or a member of a group unit that is seated).
+ * Nobody else holds one, whatever their role: not an owner who joined to make up the quorum, not
+ * site admin or root, and not a named person the pool does not seat.
+ */
+const vetoHolders = (stage: WorkflowStage, seating: StageSeating): string[] => {
+  const pool = new Set([
+    ...seating.approvers,
+    ...stage.groupUnits.flatMap((g) => seating.members.get(g.groupId) ?? []),
+  ]);
+  const holders = [...new Set(stage.vetoUserIds)].filter((id) => pool.has(id));
+  const dropped = stage.vetoUserIds.filter((id) => !holders.includes(id));
+  if (dropped.length > 0)
+    log.debug("veto people not seated, so they hold no veto", {
+      count: dropped.length,
+      stage: stage.id,
+    });
+  return holders;
+};
 
 const reject = (run: Run) => {
   closePending(run.stages);
@@ -487,7 +504,6 @@ export const workflowResolvers: Resolvers = {
           runStageOf(
             stage,
             seatingOf(stage, pools[index]!, policy.homeCategoryId),
-            workflow.vetoEnabled,
           ),
         ),
         status: IN_REVIEW,

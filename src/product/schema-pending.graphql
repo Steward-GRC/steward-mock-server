@@ -22,3 +22,25 @@ extend input WorkflowStageInput {
   quorumN: Int
 }
 
+
+# A veto holder: a stage names the people, in vetoUserIds, whose single reject ends the version as
+# rejected even inside a quorum and below its threshold. There is no workflow-wide switch: a stage
+# with a non-empty list applies it. A vetoer must be one of the stage's approvers (the pool after
+# the access filter); there are no veto-only seats, and site admin or root does not count. Saving
+# a stage whose vetoUserIds names someone who is in none of its explicit approver lists
+# (approvers, approversByCategory, group members) is refused with InvalidArgument; for a pool
+# derived from the policy's category or from a group, a vetoer who is not seated at submit holds
+# no veto. StageAssignee.veto marks the seats that hold one. Proposed in the steward-workflow
+# veto model change (steward-mock-server#223).
+#
+# Deprecated, to go once steward-web has moved (the pinned SDL above still declares them):
+# WorkflowStageDef.vetoApproverIds and vetoGroupIds (the mock answers []), the same two on
+# WorkflowStageInput (accepted and ignored), WorkflowDef.vetoEnabled and setWorkflowVetoEnabled
+# (the flag is stored and gates nothing).
+extend type WorkflowStageDef {
+  vetoUserIds: [ID!]!
+}
+
+extend input WorkflowStageInput {
+  vetoUserIds: [ID!]
+}

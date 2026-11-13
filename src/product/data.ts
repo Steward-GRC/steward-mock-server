@@ -346,7 +346,7 @@ export const installSeed = (): StewardData => {
       stages: workflow.stages.map((stage) => ({
         ...stage,
         approvers: [],
-        vetoApproverIds: [],
+        vetoUserIds: [],
       })),
     })),
   };
