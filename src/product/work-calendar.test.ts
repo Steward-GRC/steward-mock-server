@@ -223,10 +223,6 @@ describe("the site work calendar setting", () => {
       },
     ],
     [
-      "empty label",
-      { ...MON_FRI, holidays: [{ date: "2026-12-25", label: " " }] },
-    ],
-    [
       "label over 80 characters",
       { ...MON_FRI, holidays: [{ date: "2026-12-25", label: "x".repeat(81) }] },
     ],
@@ -245,6 +241,35 @@ describe("the site work calendar setting", () => {
       assert.deepEqual(now.workCalendar, MON_FRI);
       assert.equal(now.announcement.enabled, false);
     });
+
+  it("accepts an empty holiday label and returns it as saved", async () => {
+    const calendar = {
+      ...MON_FRI,
+      holidays: [
+        { date: "2026-12-25", label: "" },
+        { date: "2026-12-26", label: "Boxing Day" },
+      ],
+    };
+    const admin = await as("alice");
+    const saved = await save(admin, calendar);
+    assert.equal(saved.code, undefined, saved.message);
+    assert.deepEqual((await calendarNow(admin)).workCalendar, calendar);
+  });
+
+  it("counts the label cap in characters, not bytes", async () => {
+    const admin = await as("alice");
+    const at = (label: string) =>
+      save(admin, { ...MON_FRI, holidays: [{ date: "2026-12-25", label }] });
+    assert.equal((await at("é".repeat(80))).code, undefined);
+    assert.equal(
+      (await at(String.fromCodePoint(128_512).repeat(80))).code,
+      undefined,
+    );
+    assert.equal(
+      (await at(String.fromCodePoint(128_512).repeat(81))).code,
+      "InvalidArgument",
+    );
+  });
 
   it("accepts 366 holidays and an 80 character label", async () => {
     const holidays = Array.from({ length: 366 }, (_, index) => ({

@@ -50,7 +50,7 @@ extend input WorkflowStageInput {
 # workflow stage's slaDays as working days. weekdays are ISO numbers (1 Monday to 7 Sunday, at
 # least one, no repeats); timezone is an IANA name ("UTC" by default; the empty name and "Local"
 # are refused); holidays are strict real, unique YYYY-MM-DD dates (at most 366) with a label of
-# 1 to 80 characters. The default is Monday to Friday, UTC, no holidays. A stage's deadline is the
+# 0 to 80 characters (it may be empty). The default is Monday to Friday, UTC, no holidays. A stage's deadline is the
 # end of the Nth working day after the day of entry (the instant of local midnight that starts the
 # next date), on the calendar pinned when the run was submitted. workCalendar is read with the rest
 # of globalSettings; on setGlobalSettings an absent workCalendar leaves it unchanged, an invalid

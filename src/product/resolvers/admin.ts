@@ -62,11 +62,11 @@ const checkCalendar = (calendar: GlobalSettings["workCalendar"]): void => {
     throw refuse("BAD_USER_INPUT", `Work calendar: ${error.message}.`);
   }
   for (const holiday of calendar.holidays) {
-    const length = [...holiday.label.trim()].length;
-    if (length < 1 || length > 80)
+    // The label may be empty; the cap is 80 characters (code points), not bytes.
+    if ([...holiday.label].length > 80)
       throw refuse(
         "BAD_USER_INPUT",
-        "Work calendar: a holiday label is 1 to 80 characters.",
+        "Work calendar: a holiday label is at most 80 characters.",
       );
   }
 };
