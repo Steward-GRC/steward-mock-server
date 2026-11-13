@@ -34,6 +34,7 @@ import {
   siteAdmin,
   withAnyRole,
 } from "#product/resolvers/shared.ts";
+import { MAX_WORKING_DAYS } from "#product/workcal.ts";
 
 /** The deepest the category tree goes, a root being depth 1 (steward-core's guard). */
 const MAX_DEPTH = 3;
@@ -242,8 +243,19 @@ const checkVetoPeople = (s: StageInput) => {
     );
 };
 
+/** A stage's SLA counts working days (steward-mock-server#227): no more than a year's worth. */
+const checkSla = (s: StageInput) => {
+  const days = s.slaDays ?? 0;
+  if (days < 0 || days > MAX_WORKING_DAYS)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": sla_days must be between 0 and ${String(MAX_WORKING_DAYS)} working days`,
+    );
+};
+
 const stagesOf = (input: StageInput[]): WorkflowStage[] => {
   for (const s of input) {
+    checkSla(s);
     checkQuorum(s);
     checkVetoPeople(s);
   }

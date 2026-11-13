@@ -61,6 +61,7 @@ export const AUDIT_ACTIONS = {
     // steward-core/internal/grpcsvc/settings_handler.go
     "email_service_config.updated",
     "global_settings.updated",
+    "global_settings.work_calendar_updated",
     // steward-core/internal/grpcsvc/template_handler.go
     "template.created",
     "template.deleted",

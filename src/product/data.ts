@@ -79,7 +79,11 @@ import {
 } from "#product/data/policies.ts";
 import { migrateLinks, type VersionLinks } from "#product/links.ts";
 
-export type { Announcement, GlobalSettings } from "#product/data/admin.ts";
+export type {
+  Announcement,
+  GlobalSettings,
+  SiteWorkCalendar,
+} from "#product/data/admin.ts";
 
 /** A break-glass grant: one person may read one sensitive policy's real content until a time. */
 export interface BreakGlassGrant {

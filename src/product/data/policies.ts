@@ -7,6 +7,7 @@
 // policies, a sensitive draft, a draft in review waiting on an approver, a retired policy, a
 // withdrawn draft, a published procedure and a rejected one.
 
+import type { SiteWorkCalendar } from "#product/data/admin.ts";
 export interface Acknowledgement {
   ackedAt: string;
   policyVersionId: string;
@@ -76,6 +77,11 @@ export interface Run {
   status: string;
   submittedAt: string;
   submittedBy: string;
+  /**
+   * The site work calendar as it was when the run was submitted, which counts every stage's SLA
+   * (steward-mock-server#227); absent on a seeded run, which uses the default calendar.
+   */
+  workCalendar?: SiteWorkCalendar;
   workflowDefId: string;
 }
 
