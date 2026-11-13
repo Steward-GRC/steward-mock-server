@@ -21,3 +21,7 @@ tasks:
     desc: Fetch the shared go-authz ordered vectors at the commit named in src/product/testdata/ordered.SOURCE.
     cmds:
       - bash scripts/vectors-copy.sh
+  workcal:refresh:
+    desc: Fetch the shared steward-workflow working-day cases at the commit named in src/product/testdata/workcal.SOURCE.
+    cmds:
+      - bash scripts/workcal-copy.sh

@@ -8,6 +8,7 @@
 // version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
 // and the version; a seat decides once.
 
+import type { SiteWorkCalendar } from "#product/data/admin.ts";
 import type { Workflow, WorkflowStage } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
 import type {
@@ -21,6 +22,7 @@ import { type Context, type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
 import { canEdit, readEffect } from "#product/access.ts";
 import { hasContent } from "#product/content.ts";
+import { globalSettings } from "#product/data/admin.ts";
 import {
   cancelRuns,
   publishVersion,
@@ -39,6 +41,7 @@ import {
   refuse,
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
+import { addWorkingDays } from "#product/workcal.ts";
 
 const log = createLogger("steward-workflow");
 
@@ -128,11 +131,33 @@ const individualProgress = (stage: RunStage) => {
   };
 };
 
-/** A stage's due date from the day it is entered: its SLA in days, none without one. */
-const dueFrom = (entered: string, stage: RunStage): null | string =>
-  stage.slaDays
-    ? new Date(Date.parse(entered) + stage.slaDays * 86_400_000).toISOString()
-    : null;
+/**
+ * A stage's due date from the day it is entered: its SLA in working days on the run's calendar
+ * (the site calendar pinned at submit; the default Monday to Friday UTC without one), none
+ * without an SLA. The end of the Nth working day after the day of entry.
+ */
+const dueFrom = (
+  entered: string,
+  stage: RunStage,
+  calendar: SiteWorkCalendar = globalSettings().workCalendar,
+): null | string => {
+  if (!stage.slaDays) return null;
+  const due = addWorkingDays(
+    {
+      holidays: calendar.holidays.map((h) => h.date),
+      timezone: calendar.timezone,
+      weekdays: calendar.weekdays,
+    },
+    new Date(entered),
+    stage.slaDays,
+  ).toISOString();
+  log.trace("stage due date", {
+    due,
+    slaDays: stage.slaDays,
+    timezone: calendar.timezone,
+  });
+  return due;
+};
 
 /** The stage's own rule applies to its individual seats; each group needs its own quorum. */
 const stageMet = (stage: RunStage): boolean => {
@@ -311,7 +336,7 @@ const advance = (run: Run, person: StewardPerson) => {
   if (run.currentStageIdx < run.stages.length - 1) {
     run.currentStageIdx += 1;
     const entered = run.stages[run.currentStageIdx]!;
-    entered.dueAt = dueFrom(now(), entered);
+    entered.dueAt = dueFrom(now(), entered, run.workCalendar);
     return;
   }
   const { policy, version } = partsOf(run);
@@ -509,10 +534,12 @@ export const workflowResolvers: Resolvers = {
         status: IN_REVIEW,
         submittedAt: now(),
         submittedBy: person.id,
+        workCalendar: structuredClone(data().settings.workCalendar),
         workflowDefId: workflow.id,
       };
       const first = run.stages[0];
-      if (first) first.dueAt = dueFrom(run.submittedAt, first);
+      if (first)
+        first.dueAt = dueFrom(run.submittedAt, first, run.workCalendar);
       data().runs.push(run);
       version.status = "IN_REVIEW";
       policy.updatedAt = run.submittedAt;

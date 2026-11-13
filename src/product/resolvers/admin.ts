@@ -22,11 +22,13 @@ import { spCertificate } from "#product/data/admin.ts";
 import {
   data,
   found,
+  invalidWorkCalendar,
   newId,
   record,
   refuse,
   siteAdmin,
 } from "#product/resolvers/shared.ts";
+import { validateCalendar, WorkcalError } from "#product/workcal.ts";
 
 const organizationFor = (domain: string): Organization =>
   found(
@@ -47,6 +49,26 @@ const windowMessage = (window: MaintenanceWindow): string => {
     : "Steward is down for maintenance.";
 };
 
+/** The calendar in the setting's shape: refuse it like core, with INVALID_WORK_CALENDAR and the reason. */
+const checkCalendar = (calendar: GlobalSettings["workCalendar"]): void => {
+  try {
+    validateCalendar({
+      holidays: calendar.holidays.map((h) => h.date),
+      timezone: calendar.timezone,
+      weekdays: calendar.weekdays,
+    });
+  } catch (error) {
+    if (!(error instanceof WorkcalError)) throw error;
+    log.debug("work calendar refused", { code: error.code });
+    throw invalidWorkCalendar(error.message);
+  }
+  for (const holiday of calendar.holidays) {
+    // The label may be empty; the cap is 80 characters (code points), not bytes.
+    if ([...holiday.label].length > 80)
+      throw invalidWorkCalendar("a holiday label is at most 80 characters");
+  }
+};
+
 /** The saved settings, with the controls' maintenance window in the banner it belongs in. */
 export const globalSettingsNow = (): GlobalSettings => {
   const saved = data().settings;
@@ -61,6 +83,7 @@ export const globalSettingsNow = (): GlobalSettings => {
   const message = window.message ?? windowMessage(window);
   if (window.state === "announced")
     return {
+      ...saved,
       announcement: { enabled: true, level: "warning", message },
       maintenance: { ...saved.maintenance, enabled: false },
     };
@@ -230,18 +253,45 @@ export const adminResolvers: Resolvers = {
     },
     setGlobalSettings: (
       _root,
-      given: { input: GlobalSettings },
+      given: {
+        input: {
+          workCalendar?: GlobalSettings["workCalendar"] | null;
+        } & Omit<GlobalSettings, "workCalendar">;
+      },
       context: Context,
     ) => {
       const admin = siteAdmin(context);
-      const { announcement, maintenance: notice } = given.input;
+      const { announcement, maintenance: notice, workCalendar } = given.input;
+      log.debug("setGlobalSettings", {
+        actor: admin.id,
+        calendarGiven: Boolean(workCalendar),
+      });
       if (announcement.enabled && !announcement.message.trim())
         throw refuse(
           "BAD_USER_INPUT",
           "An enabled announcement needs a message.",
         );
-      data().settings = { announcement, maintenance: notice };
+      // Absent means unchanged; a given calendar is checked before anything is saved.
+      const before = data().settings.workCalendar;
+      if (workCalendar) checkCalendar(workCalendar);
+      const calendar = workCalendar ?? before;
+      const calendarChanged =
+        JSON.stringify(calendar) !== JSON.stringify(before);
+      data().settings = {
+        announcement,
+        maintenance: notice,
+        workCalendar: calendar,
+      };
       record("global_settings.updated", admin, SETTINGS);
+      if (calendarChanged) {
+        log.info("work calendar changed", {
+          actor: admin.id,
+          holidays: calendar.holidays.length,
+          timezone: calendar.timezone,
+          weekdays: calendar.weekdays,
+        });
+        record("global_settings.work_calendar_updated", admin, SETTINGS);
+      }
       // The gateway's maintenance is this setting, so saving it turns the window on or off.
       if (notice.enabled && !maintenanceOn())
         maintenanceControls["maintenance-start"]?.({ message: notice.message });

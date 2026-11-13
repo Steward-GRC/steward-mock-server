@@ -42,6 +42,11 @@ ahead of it while steward-web moves to the same commit).
   `access-rules.ts` maps the categories, owners and people onto it (the root seat, the reasons and
   codes); `testdata/ordered.json` holds go-authz's shared vectors, which `ordered.test.ts` runs
   (refresh with `task vectors:refresh`);
+  `workcal.ts` is the working-day calendar, a port of steward-workflow's `internal/workcal`
+  (the site work calendar in `GlobalSettings.workCalendar`, in the pinned gateway schema; a bad one is refused with core's `INVALID_WORK_CALENDAR`, 4009;
+  stage deadlines in `resolvers/workflow.ts` count `slaDays` on it, pinned on the run at submit);
+  `testdata/workcal_cases.json` holds its shared cases, which `workcal.test.ts` runs (refresh with
+  `task workcal:refresh`);
   `access.ts` is the policy read model (who reads, edits, approves and manages what, with the
   engine for the category rows); `delivery.ts` keeps steward-delivery's PDF jobs and magic links and serves the sample PDF
   (`resolvers/governance.ts` answers the governance fields); `groups.ts` reads who someone is from the people store (the roles field and the `groups`

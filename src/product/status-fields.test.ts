@@ -6,7 +6,15 @@
 // in stageUnitProgress. A stage not yet entered has no due date.
 
 import assert from "node:assert/strict";
-import { after, before, beforeEach, describe, it } from "node:test";
+import {
+  after,
+  afterEach,
+  before,
+  beforeEach,
+  describe,
+  it,
+  mock,
+} from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 import type { Run, Seat } from "#product/data/policies.ts";
@@ -25,6 +33,9 @@ after(async () => {
 });
 beforeEach(() => {
   startFresh();
+});
+afterEach(() => {
+  mock.timers.reset();
 });
 
 const STATUS = `query ($policyVersionId: ID!) {
@@ -191,6 +202,13 @@ describe("workflowStatus submission and stage fields", () => {
       },
     );
     const versionId = (draft.body.data?.saveDraft as { id: string }).id;
+    // Wednesday 2026-11-11: five working days on the default calendar (Monday to Friday, UTC)
+    // are Thursday, Friday, Monday, Tuesday and Wednesday, so the stage is due at the start of
+    // Thursday 2026-11-19. (It used to be five calendar days after the submit time.)
+    mock.timers.enable({
+      apis: ["Date"],
+      now: Date.parse("2026-11-11T09:30:00Z"),
+    });
     const sent = await query(
       base,
       `mutation ($v: ID!, $p: ID!, $c: ID!) { submitWorkflow(policyVersionId: $v, policyId: $p, categoryId: $c, ancestorCategoryIds: []) { runId } }`,
@@ -199,12 +217,9 @@ describe("workflowStatus submission and stage fields", () => {
     );
     assert.equal(sent.body.errors, undefined, JSON.stringify(sent.body.errors));
     const status = await statusOf(versionId);
-    const submitted = Date.parse(status.submittedAt!);
-    // workflow-2's Review stage has a five-day SLA; its Final approval has none
-    assert.equal(
-      Date.parse(status.stageProgress[0]!.dueAt!) - submitted,
-      5 * 24 * 3600 * 1000,
-    );
+    assert.equal(status.submittedAt, "2026-11-11T09:30:00.000Z");
+    // workflow-2's Review stage has a five working day SLA; its Final approval has none
+    assert.equal(status.stageProgress[0]!.dueAt, "2026-11-19T00:00:00.000Z");
     assert.equal(status.stageProgress[1]!.dueAt, null);
     assert.equal(status.submittedBy, "user-bob");
   });
