@@ -154,6 +154,11 @@ export interface Workflow {
 export interface WorkflowStage {
   approvers: string[];
   approversByCategory: { approverIds: string[]; categoryId: string }[];
+  /**
+   * Whole working days after due when the category owners are told once, 0 for off. Needs
+   * slaDays and a stage that does not reject at due (steward-mock-server#245).
+   */
+  escalateAfterDays: number;
   groupUnits: {
     groupId: string;
     internalQuorum: string;
@@ -167,6 +172,11 @@ export interface WorkflowStage {
   /** The approvals an nofm stage needs; zero on every other quorum. */
   quorumN: number;
   rejectOnSlaBreach: boolean;
+  /**
+   * Whole working days between reminders to the approvers still pending once the stage is past
+   * due, 0 for off. Same rules as escalateAfterDays.
+   */
+  remindEveryDays: number;
   slaDays: null | number;
   /**
    * People whose single reject ends the run, each one of the stage's approvers. At submit only
@@ -445,11 +455,13 @@ export const stage = (
     Pick<WorkflowStage, "approvers" | "id" | "name">,
 ): WorkflowStage => ({
   approversByCategory: [],
+  escalateAfterDays: 0,
   groupUnits: [],
   pinnedLast: false,
   quorum: "one",
   quorumN: 0,
   rejectOnSlaBreach: false,
+  remindEveryDays: 0,
   slaDays: null,
   vetoUserIds: [],
   ...given,

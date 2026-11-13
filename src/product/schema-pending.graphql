@@ -16,3 +16,20 @@ extend type WorkflowStageDef {
 extend input WorkflowStageInput {
   quorumN: Int
 }
+
+# A stage's reminder and escalation, whole working days counted on the run's site calendar, 0 or
+# absent for off, 0 to 365 each (steward-mock-server#245, row 53 of the parity work). Once the stage
+# is past due, remindEveryDays reminds each approver still pending at due and then every N working
+# days; escalateAfterDays tells the category owners once, N working days after due. Neither ever
+# approves or rejects. A save refuses (InvalidArgument) a value outside 0..365, either value above 0
+# without slaDays, and either value above 0 on a stage with rejectOnSlaBreach, which rejects at the
+# due date. Not on steward-gateway or steward-workflow's API yet.
+extend type WorkflowStageDef {
+  remindEveryDays: Int!
+  escalateAfterDays: Int!
+}
+
+extend input WorkflowStageInput {
+  remindEveryDays: Int
+  escalateAfterDays: Int
+}

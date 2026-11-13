@@ -182,6 +182,7 @@ const draftOnly = (id: string) => {
 interface StageInput {
   approvers: string[];
   approversByCategory?: { approverIds: string[]; categoryId: string }[] | null;
+  escalateAfterDays?: null | number;
   groupUnits?:
     | { groupId: string; internalQuorum: string; memberUserIds: string[] }[]
     | null;
@@ -191,6 +192,7 @@ interface StageInput {
   quorum: string;
   quorumN?: null | number;
   rejectOnSlaBreach?: boolean | null;
+  remindEveryDays?: null | number;
   slaDays?: null | number;
   vetoUserIds?: null | string[];
 }
@@ -250,9 +252,42 @@ const checkSla = (s: StageInput) => {
     );
 };
 
+/**
+ * The stage's reminder and escalation days (steward-mock-server#245), whole working days: each is
+ * 0 (off) to a year's worth, and either one needs the stage's slaDays (nothing is overdue without
+ * a due date) and a stage that does not reject at due (the run would be rejected before a
+ * reminder could fire). Neither ever approves or rejects.
+ */
+const checkReminders = (s: StageInput) => {
+  const fields = [
+    ["remind_every_days", s.remindEveryDays ?? 0],
+    ["escalate_after_days", s.escalateAfterDays ?? 0],
+  ] as const;
+  for (const [name, days] of fields)
+    if (days < 0 || days > MAX_WORKING_DAYS)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} must be between 0 and ${String(MAX_WORKING_DAYS)} working days`,
+      );
+  for (const [name, days] of fields) {
+    if (days === 0) continue;
+    if ((s.slaDays ?? 0) <= 0)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} needs sla_days to be set`,
+      );
+    if (s.rejectOnSlaBreach)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} cannot be set on a stage with reject_on_sla_breach, which rejects at the due date`,
+      );
+  }
+};
+
 const stagesOf = (input: StageInput[]): WorkflowStage[] => {
   for (const s of input) {
     checkSla(s);
+    checkReminders(s);
     checkQuorum(s);
     checkVetoPeople(s);
   }
@@ -262,6 +297,7 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] => {
       approverIds: [...c.approverIds],
       categoryId: c.categoryId,
     })),
+    escalateAfterDays: s.escalateAfterDays ?? 0,
     groupUnits: (s.groupUnits ?? []).map((g) => ({
       ...g,
       memberUserIds: [...g.memberUserIds],
@@ -272,6 +308,7 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] => {
     quorum: s.quorum,
     quorumN: s.quorumN ?? 0,
     rejectOnSlaBreach: s.rejectOnSlaBreach ?? false,
+    remindEveryDays: s.remindEveryDays ?? 0,
     slaDays: s.slaDays ?? null,
     vetoUserIds: [...new Set(s.vetoUserIds)],
   }));
