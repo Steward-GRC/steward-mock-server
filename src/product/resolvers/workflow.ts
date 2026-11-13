@@ -42,7 +42,11 @@ import {
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
 import { isChangeType } from "#product/semver.ts";
-import { agreeLowering, changeForSubmit } from "#product/version-numbers.ts";
+import {
+  agreeLowering,
+  changeForSubmit,
+  numbersOf,
+} from "#product/version-numbers.ts";
 import { addWorkingDays } from "#product/workcal.ts";
 
 const log = createLogger("steward-workflow");
@@ -55,6 +59,8 @@ const EMPTY_STATUS = {
   stageProgress: [],
   stageUnitProgress: [],
   status: "APPROVAL_STATUS_UNSPECIFIED",
+  targetChangeType: null,
+  targetSemanticVersion: null,
 };
 
 const IN_REVIEW = "APPROVAL_STATUS_IN_REVIEW";
@@ -691,7 +697,21 @@ export const workflowResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const run = runFor(given.policyVersionId);
-      if (!run) return EMPTY_STATUS;
+      if (!run) {
+        log.debug("workflow status without a run, no target", {
+          policyVersionId: given.policyVersionId,
+        });
+        return EMPTY_STATUS;
+      }
+      // what the run publishes: the number and change type of the version it is on, as the
+      // gateway reads them from core's version (steward-gateway#240); null when none is known
+      const version = data().versions.find((v) => v.id === run.policyVersionId);
+      const target = version ? numbersOf(version) : undefined;
+      log.debug("workflow status target mapped", {
+        hasTargetChangeType: Boolean(target?.changeType),
+        hasTargetVersion: Boolean(target?.semanticVersion),
+        policyVersionId: run.policyVersionId,
+      });
       // a free-text comment about the content: a reader who sees the policy obfuscated gets none
       const obfuscatedReader =
         readEffect(person, partsOf(run).policy) === "obfuscate";
@@ -728,6 +748,8 @@ export const workflowResolvers: Resolvers = {
         status: run.status,
         submittedAt: run.submittedAt,
         submittedBy: run.submittedBy,
+        targetChangeType: target?.changeType ?? null,
+        targetSemanticVersion: target?.semanticVersion ?? null,
       };
     },
   },

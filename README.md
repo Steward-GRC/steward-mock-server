@@ -308,6 +308,8 @@ quorum the home category's owners are seated as individuals. `nofm.test.ts` is t
 
 An approver who sends comments back (`REQUEST_CHANGES`) keeps the seat pending with `comment` null, and the seat shows `changesRequested` (the latest comment) and `changesRequestedAt`, which stay after the seat decides and are null for a reader who sees the policy obfuscated. `changes-requested.test.ts` is the reference.
 
+`workflowStatus` also says what the run publishes, as steward-gateway does (steward-gateway#240): `targetSemanticVersion` and `targetChangeType` are the semantic version and change type of the policy version the run is on (the same values as that version's `semanticVersion` and `changeType`), and null when there is no run or no change type is known, as on a first version. The seeded Travel Booking Procedure is in review as its third edition, so its run shows 3.0.0 and MAJOR. `target-version.test.ts` is the reference.
+
 While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
 are accepted) and its status stays In review. Each approver is shown what changed since the text they
 last reviewed: `versionChangesSinceReview` returns the sections that changed (an empty list when none did), and the snapshot moves forward
