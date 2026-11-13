@@ -47,6 +47,7 @@ import {
   diffVersions,
   type SectionDiff,
 } from "#product/sections.ts";
+import { numberForPublish } from "#product/version-numbers.ts";
 
 /** How long a break-glass grant lasts. */
 const BREAK_GLASS_MS = 5 * 60 * 1000;
@@ -268,6 +269,8 @@ export const publishVersion = (
   const at = now();
   const previous = versionById(policy.currentPublishedVersionId);
   if (previous) previous.status = "SUPERSEDED";
+  // numbered against the highest numbered version before it gets its own ordinal
+  numberForPublish(version);
   version.versionNo =
     Math.max(
       0,

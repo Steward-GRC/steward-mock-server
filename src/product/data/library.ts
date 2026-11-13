@@ -3,6 +3,8 @@
 // The policy library's structure: the category tree, templates and their versions, the approval
 // workflows, and the reusable contact, reference and definition libraries.
 
+import type { ChangeType, Semver } from "#product/semver.ts";
+
 export interface Category {
   ackEveryone: boolean;
   ackEveryoneSet: boolean;
@@ -118,12 +120,22 @@ export interface Template {
   id: string;
   name: string;
   ownerCategoryId: null | string;
+  /** When it was last renamed; its updatedAt is the latest of this and its versions' times. */
+  renamedAt?: string;
   retiredAt: null | string;
 }
 
 export interface TemplateVersion {
+  /** What a publish settled on against the published version before; null for the first. */
+  changeType?: ChangeType | null;
+  /** When it was made; a seeded version has none and reads as the seed time. */
+  createdAt?: string;
   id: string;
+  /** When it was published; a seeded one has none and reads as the seed time. */
+  publishedAt?: string;
   sections: Section[];
+  /** MAJOR.MINOR.FIX, written at publish. */
+  semver?: Semver;
   /** "draft" until published, then "published". */
   status: string;
   templateId: string;
