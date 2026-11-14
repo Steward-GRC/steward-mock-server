@@ -148,8 +148,8 @@ describe("a reject by a veto approver", () => {
     assert.deepEqual(
       status.stageAssignees[0]?.map((s) => [s.userId, s.state]),
       [
-        ["user-charlie", "cancelled"],
-        ["user-alice", "cancelled"],
+        ["user-charlie", "superseded"],
+        ["user-alice", "superseded"],
         ["user-dave", "rejected"],
       ],
     );
