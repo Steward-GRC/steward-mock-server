@@ -16,6 +16,7 @@ import type {
   Run,
   RunGroup,
   RunStage,
+  Seat,
   SeatSource,
 } from "#product/data/policies.ts";
 
@@ -40,6 +41,8 @@ import {
   personOf,
   record,
   refuse,
+  withAnyRole,
+  workflowRefusal,
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
 import { isChangeType } from "#product/semver.ts";
@@ -447,6 +450,40 @@ const openRunFor = (policyVersionId: string): Run => {
   return run;
 };
 
+/**
+ * The seat's pool, as steward-workflow's GetStageEligiblePool answers it: the individual approvers
+ * the workflow definition names for the stage, in its order (group units seat by group and are
+ * not swapped here). Empty when the stage names none.
+ */
+const poolFor = (run: Run, stageIndex: number): string[] =>
+  data().workflowDefs.find((w) => w.id === run.workflowDefId)?.stages[
+    stageIndex
+  ]?.approvers ?? [];
+
+/** The run a stage question is about, and the stage in it, or workflow's coded refusal. */
+const stageOf = (policyVersionId: string, stageIndex: number) => {
+  const run = runFor(policyVersionId);
+  if (!run)
+    throw workflowRefusal(
+      "APPROVAL_RUN_NOT_FOUND",
+      6012,
+      "This policy version has no approval run. Refresh and try again.",
+      { policy_version_id: policyVersionId },
+    );
+  const stage = run.stages[stageIndex];
+  if (!stage)
+    throw workflowRefusal(
+      "STAGE_INDEX_OUT_OF_RANGE",
+      6011,
+      `Stage ${String(stageIndex)} isn't part of this workflow. Refresh and try again.`,
+      {
+        stage: String(stageIndex),
+        stage_count: String(run.stages.length),
+      },
+    );
+  return { run, stage };
+};
+
 export const workflowResolvers: Resolvers = {
   Mutation: {
     signalWorkflow: (
@@ -605,6 +642,140 @@ export const workflowResolvers: Resolvers = {
         );
       return { runId: run.id };
     },
+    // steward-gateway's SwapAssigneeResolver, then steward-workflow's SwapAssignee, check for
+    // check and in its order. The gateway's gate is workflow.manage (site admin or template
+    // admin), so the initiator is the seat's own holder (a delegation, which may only pick from
+    // the pool) or an admin (who may go outside it with the acknowledgement).
+    swapAssignee: (
+      _root,
+      given: {
+        input: {
+          currentUserId: string;
+          newUserId: string;
+          outOfEligibilityAck?: boolean | null;
+          policyVersionId: string;
+          reason: string;
+          stageIndex: number;
+        };
+      },
+      context: Context,
+    ) => {
+      const person = withAnyRole(context, "template-admin");
+      const input = given.input;
+      log.debug("swap assignee", {
+        ack: input.outOfEligibilityAck === true,
+        actor: person.id,
+        stage: input.stageIndex,
+        version: input.policyVersionId,
+      });
+      if (input.reason === "")
+        throw workflowRefusal(
+          "SWAP_REASON_REQUIRED",
+          6004,
+          "Give a reason for the reassignment.",
+        );
+      if (input.currentUserId === "" || input.newUserId === "")
+        throw workflowRefusal(
+          "SWAP_USERS_REQUIRED",
+          6005,
+          "Choose both the current approver and the person to reassign to.",
+        );
+      if (input.currentUserId === input.newUserId)
+        throw workflowRefusal(
+          "SWAP_SAME_USER",
+          6006,
+          "That person already holds this approval. Choose someone else.",
+        );
+      const { run, stage } = stageOf(input.policyVersionId, input.stageIndex);
+      const delegating = person.id === input.currentUserId;
+      const outOfEligibility = !poolFor(run, input.stageIndex).includes(
+        input.newUserId,
+      );
+      if (
+        outOfEligibility &&
+        (delegating || input.outOfEligibilityAck !== true)
+      ) {
+        log.debug("swap refused, not in the pool", {
+          delegating,
+          user: input.newUserId,
+        });
+        throw workflowRefusal(
+          "SWAP_ASSIGNEE_NOT_ELIGIBLE",
+          6010,
+          `That person isn't an eligible approver for stage ${String(input.stageIndex)} (${stage.name}).`,
+          {
+            new_user_id: input.newUserId,
+            stage: String(input.stageIndex),
+            stage_name: stage.name,
+          },
+        );
+      }
+      const index = stage.seats.findIndex(
+        (s) => s.userId === input.currentUserId && !s.groupId,
+      );
+      const old = stage.seats[index];
+      if (!old)
+        throw workflowRefusal(
+          "SWAP_ASSIGNMENT_NOT_FOUND",
+          6008,
+          `The person you're replacing isn't assigned to stage ${String(input.stageIndex)} any more. Refresh and try again.`,
+          {
+            current_user_id: input.currentUserId,
+            stage: String(input.stageIndex),
+          },
+        );
+      if (old.state !== "pending")
+        throw workflowRefusal(
+          "SWAP_ASSIGNMENT_NOT_PENDING",
+          6009,
+          `This approval is already ${old.state}, so it can't be reassigned.`,
+          {
+            current_user_id: input.currentUserId,
+            stage: String(input.stageIndex),
+            state: old.state,
+          },
+        );
+      // not in workflow's contract: one person holds one seat on a stage here
+      if (stage.seats.some((s) => s.userId === input.newUserId && !s.groupId))
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "That person already holds a seat on this stage.",
+        );
+      const seat: Seat = seatFor(input.newUserId, "approver");
+      // someone the workflow does not name has no reason on record
+      if (outOfEligibility) delete seat.source;
+      stage.seats[index] = seat;
+      // a veto belongs to the stage's named people: it leaves with the old holder and comes to
+      // the new one only if the stage names them
+      if (stage.vetoUserIds) {
+        const named = data().workflowDefs.find(
+          (w) => w.id === run.workflowDefId,
+        )?.stages[input.stageIndex]?.vetoUserIds;
+        stage.vetoUserIds = stage.vetoUserIds.filter(
+          (id) => id !== input.currentUserId,
+        );
+        if (named?.includes(input.newUserId))
+          stage.vetoUserIds.push(input.newUserId);
+      }
+      const { policy, version } = partsOf(run);
+      record(
+        outOfEligibility
+          ? "workflow.assignment.swapped.out_of_eligibility"
+          : "workflow.assignment.swapped",
+        person,
+        versionSubject(policy, version.id),
+      );
+      log.info("assignee swapped", {
+        actor: person.id,
+        outOfEligibility,
+        stage: input.stageIndex,
+        version: version.id,
+      });
+      return {
+        newAssignmentId: seat.taskId,
+        newSlaDeadlineAt: dueFrom(now(), stage, run.workCalendar) ?? now(),
+      };
+    },
   },
   Query: {
     // The caller's own approved or rejected seats on runs still in review (a request for changes
@@ -688,6 +859,24 @@ export const workflowResolvers: Resolvers = {
             taskId: s.taskId,
           })),
       );
+    },
+    // steward-gateway's StageEligibleAssigneesResolver: the same gate as swapAssignee, workflow's
+    // pool resolved to labels (a person nobody knows keeps their id as the name).
+    stageEligibleAssignees: (
+      _root,
+      given: { policyVersionId: string; stageIndex: number },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const { run, stage } = stageOf(given.policyVersionId, given.stageIndex);
+      return {
+        assignees: poolFor(run, given.stageIndex).map((id) => {
+          const who = personOf(id);
+          return { email: who?.email ?? null, id, name: who?.name ?? id };
+        }),
+        stageIndex: given.stageIndex,
+        stageName: stage.name,
+      };
     },
     upcomingApprovals: (_root, _given, context: Context) => {
       const person = caller(context);

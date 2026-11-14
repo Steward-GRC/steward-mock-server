@@ -149,6 +149,19 @@ export const aiJobNotFound = (): GraphQLError =>
     {},
   );
 
+/**
+ * One of steward-workflow's coded refusals, as the gateway relays it: a business error with the
+ * symbol, number and user-safe message from workflow's internal/errcodes, and each metadata key as
+ * its own extension.
+ */
+export const workflowRefusal = (
+  symbol: string,
+  codeNumber: number,
+  message: string,
+  extra: Record<string, string> = {},
+): GraphQLError =>
+  businessRefusal(message, symbol, codeNumber, "workflow", extra);
+
 /** steward-workflow's refusal for an id no workflow has (6014). */
 export const workflowDefinitionNotFound = (id: string): GraphQLError =>
   businessRefusal(
