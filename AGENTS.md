@@ -45,7 +45,7 @@ ahead of it while steward-web moves to the same commit).
   `workcal.ts` is the working-day calendar, a port of steward-workflow's `internal/workcal`
   (the site work calendar in `GlobalSettings.workCalendar`, in the pinned gateway schema; a bad one is refused with core's `INVALID_WORK_CALENDAR`, 4009;
   stage deadlines in `resolvers/workflow.ts` count `slaDays` on it, pinned on the run at submit; each run seat keeps a `source`, `approver` or `category-owner`, set at
-  submit, and `stageAssignees[].roleLabel` words it as the gateway does, null on a seat without one);
+  submit, and `stageAssignees[].roleLabel` words it as the gateway does, null on a seat without one; `swapAssignee` and `stageEligibleAssignees` follow the gateway and steward-workflow, the pool being the workflow definition's approvers for the stage, as `swap-assignee.test.ts` shows);
   `testdata/workcal_cases.json` holds its shared cases, which `workcal.test.ts` runs (refresh with
   `task workcal:refresh`);
   `access.ts` is the policy read model (who reads, edits, approves and manages what, with the

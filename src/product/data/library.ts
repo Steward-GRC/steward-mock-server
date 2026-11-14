@@ -490,7 +490,7 @@ export const workflowDefs = (): Workflow[] => [
     name: "Standard 2-stage",
     stages: [
       stage({
-        approvers: ["user-charlie", "user-alice"],
+        approvers: ["user-charlie", "user-alice", "user-dave"],
         id: "workflow-stage-2",
         name: "Review",
         quorum: "majority",
