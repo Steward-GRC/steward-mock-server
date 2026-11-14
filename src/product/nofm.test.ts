@@ -354,7 +354,7 @@ describe("the tally of an n-of-m stage", () => {
     assert.equal((await statusOf()).status, "APPROVAL_STATUS_PUBLISHED");
     assert.deepEqual(
       run.stages[0]?.seats.map((s) => s.state),
-      ["approved", "approved", "cancelled"],
+      ["approved", "approved", "superseded"],
     );
   });
 

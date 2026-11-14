@@ -340,7 +340,7 @@ const runStageOf = (stage: WorkflowStage, seating: StageSeating): RunStage => {
 const closePending = (stages: RunStage[]) => {
   for (const stage of stages)
     for (const seat of stage.seats)
-      if (seat.state === "pending") seat.state = "cancelled";
+      if (seat.state === "pending") seat.state = "superseded";
 };
 
 const partsOf = (run: Run) => {

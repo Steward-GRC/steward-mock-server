@@ -129,7 +129,7 @@ export interface Seat {
   groupId?: null | string;
   /** Absent on a seat that does not record it; `roleLabel` is then null. */
   source?: SeatSource;
-  /** pending, approved, rejected, or cancelled once the run ends without them. */
+  /** pending, approved, rejected, superseded (a settled stage no longer needs it) or withdrawn (the run was withdrawn). */
   state: string;
   taskId: string;
   userId: string;

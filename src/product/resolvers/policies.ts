@@ -257,7 +257,7 @@ export const cancelRuns = (versionId: string): void => {
     run.status = "APPROVAL_STATUS_WITHDRAWN";
     for (const stage of run.stages)
       for (const seat of stage.seats)
-        if (seat.state === "pending") seat.state = "cancelled";
+        if (seat.state === "pending") seat.state = "withdrawn";
   }
 };
 
