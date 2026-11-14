@@ -421,6 +421,8 @@ const mergePreview = (source: StewardPerson, target: StewardPerson) => {
 /** The group typeahead's limits: two characters, 20 groups unless asked, never more than 50. */
 const SEARCH_GROUPS_MIN_QUERY = 2;
 const SEARCH_GROUPS_DEFAULT_LIMIT = 20;
+const IDP_GROUP_NAMES_DEFAULT_LIMIT = 50;
+const IDP_GROUP_NAMES_MAX_LIMIT = 200;
 const SEARCH_GROUPS_MAX_LIMIT = 50;
 
 export const userResolvers: Resolvers = {
@@ -755,6 +757,35 @@ export const userResolvers: Resolvers = {
         traceId: newId("trace"),
       };
     },
+    /**
+     * IdentityReadService.SearchGroups behind the access picker: the groups, at any depth, whose
+     * name contains the query, by name. Open to whoever edits category access (group.manage or
+     * template.manage). The query is trimmed and needs two characters; the limit is 20 unless
+     * asked, never more than 50.
+     */
+    /**
+     * The directory (IdP) group names a category group rule can match (steward-gateway
+     * idpGroupNames): the names in people's group claims, byte-sorted, no duplicates, names only.
+     * `prefix` is trimmed and matched case-insensitively; `limit` defaults to 50, capped at 200.
+     */
+    idpGroupNames: (
+      _root,
+      given: { limit?: null | number; prefix?: null | string },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const needle = (given.prefix ?? "").trim().toLowerCase();
+      const limit =
+        given.limit && given.limit > 0
+          ? Math.min(given.limit, IDP_GROUP_NAMES_MAX_LIMIT)
+          : IDP_GROUP_NAMES_DEFAULT_LIMIT;
+      const names = [
+        ...new Set(people().flatMap((person) => idpGroupsOf(person))),
+      ]
+        .filter((name) => name.toLowerCase().startsWith(needle))
+        .toSorted((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+      return { names: names.slice(0, limit), truncated: names.length > limit };
+    },
     listUserSessions: (_root, given: { userId: string }, context: Context) => {
       siteAdmin(context);
       const person = personFor(given.userId);
@@ -815,12 +846,6 @@ export const userResolvers: Resolvers = {
       siteAdmin(context);
       return deletionPreview(personFor(given.userId));
     },
-    /**
-     * IdentityReadService.SearchGroups behind the access picker: the groups, at any depth, whose
-     * name contains the query, by name. Open to whoever edits category access (group.manage or
-     * template.manage). The query is trimmed and needs two characters; the limit is 20 unless
-     * asked, never more than 50.
-     */
     searchPlatformGroups: (
       _root,
       given: { limit?: null | number; query: string },
