@@ -155,9 +155,11 @@ export interface CategoryDecisions {
   ackUngated: boolean;
   approve: Decision;
   author: Decision;
+  leaf: string;
   manage: Decision;
   names: Map<string, string>;
   read: Decision;
+  rules: RuleSet;
 }
 
 /** Every action's decision for the person on the category (the nothing-at-all for an unknown one). */
@@ -175,9 +177,11 @@ export const decideCategory = (
     ackUngated: ask(ackUngatedModel(), "ack").allowed,
     approve: ask(model, "approve"),
     author: ask(model, "author"),
+    leaf: access.leaf,
     manage: ask(model, "manage"),
     names: access.names,
     read: ask(model, "read"),
+    rules: access.rules,
   };
 };
 
@@ -262,6 +266,77 @@ const reasonText = (decision: Decision, names: Map<string, string>) => {
   }
 };
 
+/**
+ * raci_map.go's entryVerdictCode: a rule's own answer, or the higher action's rule that gave this
+ * action by implication.
+ */
+const entryVerdictCode = (decision: Decision, action: AccessAction): string => {
+  const by = decision.decidedBy!.action;
+  if (decision.allowed && by !== action) {
+    if (by === "author" && action === "read") return "AUTHOR_IMPLIES_READ";
+    if (by === "approve" && action === "read") return "APPROVER_IMPLIES_READ";
+    if (by === "manage" && action === "read") return "MANAGE_IMPLIES_READ";
+    if (by === "manage" && action === "author") return "MANAGE_IMPLIES_AUTHOR";
+  }
+  return decision.allowed ? "RULE_ALLOW" : "RULE_DENY";
+};
+
+/** raci_map.go's decidingRule: the rule behind an entry, how far up it lives and its row number. */
+const decidingRule = (decisions: CategoryDecisions, entry: Entry) => {
+  const at = entry.category ?? decisions.leaf;
+  let depth = 0;
+  const seen = new Set<string>();
+  for (let here = decisions.leaf; here !== at && !seen.has(here); depth += 1) {
+    seen.add(here);
+    const parent = decisions.rules.parents[here];
+    if (!parent) break;
+    here = parent;
+  }
+  const subjects: string[] = [];
+  for (const candidate of decisions.rules.categories[at]?.entries ?? [])
+    if (!subjects.includes(candidate.subject)) subjects.push(candidate.subject);
+  const { subjectKind, subjectRef } = ruleSubjectOf(entry.subject);
+  return {
+    action: entry.action.toUpperCase(),
+    categoryId: at,
+    categoryName: decisions.names.get(at) ?? "",
+    depth,
+    ruleNumber: subjects.indexOf(entry.subject) + 1,
+    subjectKind,
+    subjectRef,
+  };
+};
+
+/** raci_map.go's verdict: the structured reason of one action. */
+const verdictOf = (decisions: CategoryDecisions, action: AccessAction) => {
+  const decision = decisions[action];
+  switch (decision.reason) {
+    case "entry": {
+      if (!decision.decidedBy) return { code: "DEFAULT_DENY", rule: null };
+      return {
+        code: entryVerdictCode(decision, action),
+        rule: decidingRule(decisions, decision.decidedBy),
+      };
+    }
+    case "owner": {
+      return { code: "OWNER", rule: null };
+    }
+    case "requires": {
+      return { code: "REQUIRES_READ", rule: null };
+    }
+    case "superuser": {
+      const codes = {
+        author: "SITE_ADMIN_AUTHOR",
+        read: "SITE_ADMIN_READ",
+      } as Record<string, string>;
+      return { code: codes[action] ?? "SITE_ADMIN_MANAGE", rule: null };
+    }
+    default: {
+      return { code: "DEFAULT_DENY", rule: null };
+    }
+  }
+};
+
 /** The RaciDecision the simulator answers. */
 export const raciDecision = (decisions: CategoryDecisions) => {
   const configuredBlock = ACTIONS.flatMap((action) => {
@@ -279,6 +354,7 @@ export const raciDecision = (decisions: CategoryDecisions) => {
   const field = (action: AccessAction) => ({
     [`${action}Code`]: codeOf(decisions[action]),
     [`${action}Reason`]: reasonText(decisions[action], decisions.names),
+    [`${action}Verdict`]: verdictOf(decisions, action),
     [action]: decisions[action].allowed,
   });
   return {

@@ -542,7 +542,14 @@ the one evaluator; `src/product/access-rules.ts` maps the categories onto it):
   no rule decides") and a code (`ENTRY`, `DEFAULT_DENY`, `OWNER`, `ROOT`, `REQUIRES`); an empty
   `userId` is the baseline for no one in particular. `categoryApprovers` lists the approver pool
   (owners first, then everyone whose Approve allows) and `viewerIsApprover` asks whether the
-  caller holds Approve anywhere.
+  caller holds Approve anywhere. Each action also has a structured `readVerdict` (and `ackVerdict`,
+  `approveVerdict`, `authorVerdict`, `manageVerdict`): a `RaciVerdictCode` and, when a row decided,
+  that rule's category, depth, row number, subject and action. `groupName` simulates the members of
+  one directory group (a subject whose only membership is that group); with a `userId` it is
+  `InvalidArgument`.
+- `idpGroupNames(prefix, limit)` lists the directory group names a group rule can match: the names
+  in people's group claims, byte-sorted, no duplicates, prefix matched case-insensitively, 50 by
+  default and 200 at most, with `truncated` when more matched.
 - `searchPlatformGroups(query, limit)` is the group typeahead of the access picker: groups at any
   depth whose name contains the query (case aside), by name, for group.manage or template.manage.
   The query is trimmed and needs two characters (`InvalidArgument`); the limit is 20 by default

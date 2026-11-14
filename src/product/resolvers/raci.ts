@@ -172,6 +172,7 @@ export const raciResolvers: Resolvers = {
       given: {
         categoryId: string;
         draftRules?: null | RaciRule[];
+        groupName?: null | string;
         userId: string;
       },
       context: Context,
@@ -179,6 +180,22 @@ export const raciResolvers: Resolvers = {
       withAnyRole(context, "template-admin");
       found(categoryOf(given.categoryId), "category");
       const draft = given.draftRules ?? undefined;
+      const groupName = (given.groupName ?? "").trim();
+      if (groupName !== "") {
+        if (given.userId !== "")
+          throw refuse(
+            "BAD_USER_INPUT",
+            "give a user or a group to simulate, not both",
+          );
+        // The members of one directory group: a subject whose only membership is that group.
+        return raciDecision(
+          decideCategory(
+            { groups: [groupName], id: "" },
+            given.categoryId,
+            draft,
+          ),
+        );
+      }
       if (given.userId === "")
         return raciDecision(decideCategory(NOBODY, given.categoryId, draft));
       const person = found(
