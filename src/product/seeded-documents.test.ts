@@ -126,6 +126,21 @@ describe("appendices and files", () => {
     }
   });
 
+  it("serves the image as a picture a screenshot can show, 480 by 270 pixels", async () => {
+    const erin = await signInAs(base, "user-erin");
+    const response = await fetch(`${base}/api/assets/asset-seed-2`, {
+      headers: headersFor(erin),
+    });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.readUInt32BE(16), 480, "width");
+    assert.equal(bytes.readUInt32BE(20), 270, "height");
+    assert.equal(
+      bytes.subarray(0, 8).toString("hex"),
+      "89504e470d0a1a0a",
+      "a PNG",
+    );
+  });
+
   it("keeps the files after Start fresh", async () => {
     startFresh();
     const erin = await signInAs(base, "user-erin");

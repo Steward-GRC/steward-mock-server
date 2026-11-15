@@ -76,14 +76,40 @@ export const fileCard = (
     src: `/api/assets/${id}`,
   });
 
-export const imageCard = (id: string, alt: string): Block =>
+export const imageCard = (id: string, alt: string, caption = ""): Block =>
   block("image", "", {
     alt,
-    caption: "",
-    height: 1,
+    caption,
+    height: 270,
     src: `/api/assets/${id}`,
-    width: 1,
+    width: 480,
   });
+
+/** The editor's Callout card, without an emoji. */
+export const calloutCard = (html: string): Block =>
+  block("callout", "", {
+    backgroundColor: "blue",
+    calloutEmoji: "",
+    calloutText: `<p>${html}</p>`,
+  });
+
+/** The editor's Toggle card: a heading that opens onto some text. */
+export const toggleCard = (heading: string, content: string): Block =>
+  block("toggle", "", {
+    content: `<p>${content}</p>`,
+    heading: `<span>${heading}</span>`,
+  });
+
+/** The editor's Button card. */
+export const buttonCard = (label: string, url: string): Block =>
+  block("button", "", {
+    alignment: "center",
+    buttonText: label,
+    buttonUrl: url,
+  });
+
+/** The editor's Divider card, which the editor stores as a horizontal rule. */
+export const dividerCard = (): Block => block("horizontalrule", "");
 
 export const appendixText = (
   title: string,

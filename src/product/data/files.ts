@@ -3,6 +3,8 @@
 // The files the seeded documents attach (bug log 214): a PDF and an image, with
 // real bytes so a download opens. seedAssets() records them in the asset store on every reset.
 
+import { crc32, deflateSync } from "node:zlib";
+
 import type { StoredAsset } from "#product/assets.ts";
 
 import { keepBytes } from "#product/assets.ts";
@@ -34,14 +36,75 @@ const pdf = (line: string): Uint8Array => {
   return encode(body);
 };
 
-/** The zip format's signatures: PK\x03\x04, PK\x01\x02 and PK\x05\x06 as little-endian numbers. */
-/** A one-pixel PNG. */
-const PNG = Uint8Array.from(
-  Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-    "base64",
-  ),
-);
+const WIDTH = 480;
+const HEIGHT = 270;
+
+type Rectangle = [number, number, number, number, string];
+
+/** A flat picture of a booking portal's home screen, drawn from rectangles: [x, y, w, h, RRGGBB]. */
+const SCREEN: Rectangle[] = [
+  [0, 0, WIDTH, HEIGHT, "f3f1ec"],
+  [0, 0, WIDTH, 36, "5b2a5e"],
+  [16, 10, 90, 16, "e9dcea"],
+  [330, 10, 134, 16, "8a5a8d"],
+  [40, 62, 400, 30, "ffffff"],
+  [52, 72, 120, 10, "c9c4bb"],
+  [40, 110, 124, 110, "ffffff"],
+  [40, 110, 124, 8, "3d7f6a"],
+  [52, 134, 60, 10, "2b2b2b"],
+  [52, 154, 100, 8, "c9c4bb"],
+  [52, 170, 90, 8, "c9c4bb"],
+  [178, 110, 124, 110, "ffffff"],
+  [178, 110, 124, 8, "3b6ea5"],
+  [190, 134, 60, 10, "2b2b2b"],
+  [190, 154, 100, 8, "c9c4bb"],
+  [190, 170, 90, 8, "c9c4bb"],
+  [316, 110, 124, 110, "ffffff"],
+  [316, 110, 124, 8, "c7792b"],
+  [328, 134, 60, 10, "2b2b2b"],
+  [328, 154, 100, 8, "c9c4bb"],
+  [328, 170, 90, 8, "c9c4bb"],
+  [340, 190, 88, 22, "5b2a5e"],
+];
+
+const chunk = (type: string, data: Buffer): Buffer => {
+  const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const check = Buffer.alloc(4);
+  check.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, check]);
+};
+
+/** A PNG without metadata: RGB, one filter byte per row, deflated. */
+const png = (rectangles: Rectangle[]): Uint8Array => {
+  const raw = Buffer.alloc((WIDTH * 3 + 1) * HEIGHT);
+  for (let y = 0; y < HEIGHT; y++) {
+    const row = y * (WIDTH * 3 + 1);
+    for (let x = 0; x < WIDTH; x++) {
+      const hit = rectangles.findLast(
+        ([left, top, width, height]) =>
+          x >= left && x < left + width && y >= top && y < top + height,
+      );
+      const colour = hit?.[4] ?? "ffffff";
+      raw.set(Buffer.from(colour, "hex"), row + 1 + x * 3);
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(WIDTH, 0);
+  header.writeUInt32BE(HEIGHT, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return new Uint8Array(
+    Buffer.concat([
+      Buffer.from("89504e470d0a1a0a", "hex"),
+      chunk("IHDR", header),
+      chunk("IDAT", deflateSync(raw)),
+      chunk("IEND", Buffer.alloc(0)),
+    ]),
+  );
+};
+
+const PNG = png(SCREEN);
 
 interface SeedFile {
   bytes: Uint8Array;
