@@ -40,6 +40,7 @@ export interface EmailServiceConfig {
 export interface GlobalSettings {
   announcement: Announcement;
   maintenance: { enabled: boolean; message: string };
+  workCalendar: SiteWorkCalendar;
 }
 
 export interface GroupMapping {
@@ -81,6 +82,13 @@ export interface PlatformGroup {
   id: string;
   name: string;
   parentId: null | string;
+}
+
+/** The site work calendar (steward-mock-server#227): ISO weekdays, an IANA zone, holidays. */
+export interface SiteWorkCalendar {
+  holidays: { date: string; label: string }[];
+  timezone: string;
+  weekdays: number[];
 }
 
 export interface SpCertificate {
@@ -157,6 +165,7 @@ export const spCertificate = (serial = 1): SpCertificate => ({
 export const globalSettings = (): GlobalSettings => ({
   announcement: { enabled: false, level: "info", message: "" },
   maintenance: { enabled: false, message: "" },
+  workCalendar: { holidays: [], timezone: "UTC", weekdays: [1, 2, 3, 4, 5] },
 });
 
 export const emailServiceConfig = (): EmailServiceConfig => ({

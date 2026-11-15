@@ -11,6 +11,7 @@ import type { RunningMockServer } from "#core/server.ts";
 
 import { stewardData } from "#product/data.ts";
 import {
+  demoteAlice,
   query,
   type Signed,
   startForTests,
@@ -50,6 +51,7 @@ const ask = async (
 const alice = () => signInAs(base, "user-alice");
 const bob = () => signInAs(base, "user-bob");
 const erin = () => signInAs(base, "user-erin");
+const grace = () => signInAs(base, "user-grace");
 
 const lastAudit = () => stewardData().audit.at(-1);
 
@@ -139,9 +141,10 @@ describe("retirePolicy", () => {
     );
   });
 
-  it("refuses someone who can't author it", async () => {
+  it("refuses someone the category rules don't let author it", async () => {
+    // Grace is in All staff only, and the Facilities row for All staff denies Author.
     assert.equal(
-      (await ask(await erin(), RETIRE, { id: "policy-10" })).code,
+      (await ask(await grace(), RETIRE, { id: "policy-10" })).code,
       "PermissionDenied",
     );
   });
@@ -251,6 +254,7 @@ describe("the PDF export", () => {
   });
 
   it("refuses an unknown or empty job, and a version the reader can't read in full", async () => {
+    demoteAlice();
     const reader = await erin();
     const unknown = await ask(reader, LINK, { jobId: "pdf-nowhere" });
     assert.equal(unknown.code, "PDF_EXPORT_NOT_FOUND");
@@ -294,6 +298,7 @@ describe("magic links", () => {
   });
 
   it("refuses a non-admin's revoke, an empty token, and an unreadable version", async () => {
+    demoteAlice();
     assert.equal(
       (await ask(await erin(), REVOKE, { token: "x" })).code,
       "PermissionDenied",

@@ -16,8 +16,10 @@ import type {
 import type { StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { createLogger } from "#core/log.ts";
 import { canAuthorIn } from "#product/access.ts";
 import { documentCounts, stranded } from "#product/category-types.ts";
+import { raci } from "#product/data/library.ts";
 import { byTitle, usedByPolicies, type VersionLinks } from "#product/links.ts";
 import {
   caller,
@@ -27,11 +29,19 @@ import {
   isSiteAdmin,
   newId,
   now,
+  people,
   record,
   refuse,
   siteAdmin,
   withAnyRole,
+  workflowDefinitionInUse,
+  workflowDefinitionInUseByCategory,
+  workflowDefinitionNotFound,
 } from "#product/resolvers/shared.ts";
+import { numberTemplateForPublish } from "#product/version-numbers.ts";
+import { MAX_WORKING_DAYS } from "#product/workcal.ts";
+
+const log = createLogger("steward-library");
 
 /** The deepest the category tree goes, a root being depth 1 (steward-core's guard). */
 const MAX_DEPTH = 3;
@@ -67,6 +77,30 @@ const subtreeOf = (id: string): Category[] => {
   }
   return data().categories.filter((c) => ids.has(c.id));
 };
+
+/** The next free place among a parent's children: one past the highest, or zero for the first. */
+const nextOrder = (parentId: null | string, except?: string) =>
+  Math.max(
+    -1,
+    ...data()
+      .categories.filter((c) => c.parentId === parentId && c.id !== except)
+      .map((c) => c.order),
+  ) + 1;
+
+/** A parent's children in their stored order, then by name and id as steward-core breaks ties. */
+const childrenOf = (parentId: null | string): Category[] =>
+  data()
+    .categories.filter((c) => c.parentId === parentId)
+    .toSorted(
+      (a, b) =>
+        a.order - b.order ||
+        a.name.localeCompare(b.name, "en") ||
+        a.id.localeCompare(b.id, "en"),
+    );
+
+/** Categories depth first, each parent's children in order, as the gateway's categoryTree walks them. */
+const walkFrom = (parentId: null | string): Category[] =>
+  childrenOf(parentId).flatMap((c) => [c, ...walkFrom(c.id)]);
 
 const heightOf = (id: string): number => {
   const children = data().categories.filter((c) => c.parentId === id);
@@ -154,6 +188,7 @@ const draftOnly = (id: string) => {
 interface StageInput {
   approvers: string[];
   approversByCategory?: { approverIds: string[]; categoryId: string }[] | null;
+  escalateAfterDays?: null | number;
   groupUnits?:
     | { groupId: string; internalQuorum: string; memberUserIds: string[] }[]
     | null;
@@ -163,9 +198,9 @@ interface StageInput {
   quorum: string;
   quorumN?: null | number;
   rejectOnSlaBreach?: boolean | null;
+  remindEveryDays?: null | number;
   slaDays?: null | number;
-  vetoApproverIds?: null | string[];
-  vetoGroupIds?: null | string[];
+  vetoUserIds?: null | string[];
 }
 
 /**
@@ -192,14 +227,83 @@ const checkQuorum = (s: StageInput) => {
     );
 };
 
+/**
+ * A stage's veto people must be among its approvers (steward-mock-server#223): a vetoer holds a
+ * seat of the stage's pool, there are no veto-only seats, and site admin or root does not count.
+ * The save can check the explicit lists only: the stage's approvers, those named per category and
+ * the members of its group units. Whether a named person is seated for a given policy is decided
+ * at submit, where an unseated vetoer simply holds no veto.
+ */
+const checkVetoPeople = (s: StageInput) => {
+  const named = new Set([
+    ...s.approvers,
+    ...(s.approversByCategory ?? []).flatMap((c) => c.approverIds),
+    ...(s.groupUnits ?? []).flatMap((g) => g.memberUserIds),
+  ]);
+  const strangers = (s.vetoUserIds ?? []).filter((id) => !named.has(id));
+  if (strangers.length > 0)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": a veto person must be one of the stage's approvers (${strangers.join(", ")})`,
+    );
+};
+
+/** A stage's SLA counts working days (steward-mock-server#227): no more than a year's worth. */
+const checkSla = (s: StageInput) => {
+  const days = s.slaDays ?? 0;
+  if (days < 0 || days > MAX_WORKING_DAYS)
+    throw refuse(
+      "BAD_USER_INPUT",
+      `stage "${s.name}": sla_days must be between 0 and ${String(MAX_WORKING_DAYS)} working days`,
+    );
+};
+
+/**
+ * The stage's reminder and escalation days (steward-mock-server#245), whole working days: each is
+ * 0 (off) to a year's worth, and either one needs the stage's slaDays (nothing is overdue without
+ * a due date) and a stage that does not reject at due (the run would be rejected before a
+ * reminder could fire). Neither ever approves or rejects.
+ */
+const checkReminders = (s: StageInput) => {
+  const fields = [
+    ["remind_every_days", s.remindEveryDays ?? 0],
+    ["escalate_after_days", s.escalateAfterDays ?? 0],
+  ] as const;
+  for (const [name, days] of fields)
+    if (days < 0 || days > MAX_WORKING_DAYS)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} must be between 0 and ${String(MAX_WORKING_DAYS)} working days`,
+      );
+  for (const [name, days] of fields) {
+    if (days === 0) continue;
+    if ((s.slaDays ?? 0) <= 0)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} needs sla_days to be set`,
+      );
+    if (s.rejectOnSlaBreach)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `stage "${s.name}": ${name} cannot be set on a stage with reject_on_sla_breach, which rejects at the due date`,
+      );
+  }
+};
+
 const stagesOf = (input: StageInput[]): WorkflowStage[] => {
-  for (const s of input) checkQuorum(s);
+  for (const s of input) {
+    checkSla(s);
+    checkReminders(s);
+    checkQuorum(s);
+    checkVetoPeople(s);
+  }
   return input.map((s) => ({
     approvers: [...s.approvers],
     approversByCategory: (s.approversByCategory ?? []).map((c) => ({
       approverIds: [...c.approverIds],
       categoryId: c.categoryId,
     })),
+    escalateAfterDays: s.escalateAfterDays ?? 0,
     groupUnits: (s.groupUnits ?? []).map((g) => ({
       ...g,
       memberUserIds: [...g.memberUserIds],
@@ -210,9 +314,9 @@ const stagesOf = (input: StageInput[]): WorkflowStage[] => {
     quorum: s.quorum,
     quorumN: s.quorumN ?? 0,
     rejectOnSlaBreach: s.rejectOnSlaBreach ?? false,
+    remindEveryDays: s.remindEveryDays ?? 0,
     slaDays: s.slaDays ?? null,
-    vetoApproverIds: [...(s.vetoApproverIds ?? [])],
-    vetoGroupIds: [...(s.vetoGroupIds ?? [])],
+    vetoUserIds: [...new Set(s.vetoUserIds)],
   }));
 };
 
@@ -333,6 +437,27 @@ const librarySubject = (kind: string, id: string, label: string) => ({
   label,
 });
 
+/**
+ * steward-gateway's validateCategoryOwners: every owner is a person, a user id the directory
+ * knows. A group, Everyone or any other subject (anything shaped like "kind:name") is refused, and
+ * so is an id with no user; a repeated id counts once.
+ */
+const validatedOwners = (owners: string[]): string[] => {
+  const seen = new Set<string>();
+  for (const owner of owners) {
+    if (seen.has(owner)) continue;
+    seen.add(owner);
+    if (owner === "" || owner.includes(":"))
+      throw refuse(
+        "BAD_USER_INPUT",
+        "category owners must be people: a group or Everyone cannot own a category",
+      );
+    if (!people().some((p) => p.id === owner))
+      throw refuse("BAD_USER_INPUT", `category owner ${owner} is not a user`);
+  }
+  return [...seen];
+};
+
 export const libraryResolvers: Resolvers = {
   Mutation: {
     archiveWorkflowDef: (_root, given: { id: string }, context: Context) => {
@@ -379,11 +504,13 @@ export const libraryResolvers: Resolvers = {
         id: newId("category"),
         idpGroupIds: null,
         name: given.name,
+        order: nextOrder(parentId),
         owners: [],
         parentId,
         reviewCadence: "NONE",
         reviewDate: null,
-        rules: [],
+        // Everyone: Read is the default on every new category (core#98).
+        rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
         slug: given.slug,
       };
       data().categories.push(created);
@@ -486,6 +613,7 @@ export const libraryResolvers: Resolvers = {
             .map((v) => v.versionNo),
         ) + 1;
       const version = {
+        createdAt: now(),
         id: newId("template-version"),
         sections: sectionsOf(given.sections),
         status: "draft",
@@ -517,7 +645,6 @@ export const libraryResolvers: Resolvers = {
         name: given.name,
         stages: stagesOf(given.stages),
         version: 1,
-        vetoEnabled: false,
       };
       data().workflowDefs.push(workflow);
       record(
@@ -538,6 +665,20 @@ export const libraryResolvers: Resolvers = {
         );
       data().categories = data().categories.filter((c) => !ids.has(c.id));
       record("category.deleted", admin, categorySubject(category));
+      return true;
+    },
+    /**
+     * core's DeleteContactBlock: deletes the block and the join tables cascade, so every policy
+     * version that linked to it is detached, never refused. No audit entry (core audits none).
+     */
+    deleteContactBlock: (_root, given: { id: string }, context: Context) => {
+      libraryAdmin(context);
+      const block = contactFor(given.id);
+      data().contactBlocks = data().contactBlocks.filter((b) => b !== block);
+      for (const links of Object.values(data().links))
+        links.contactBlockIds = links.contactBlockIds.filter(
+          (id) => id !== block.id,
+        );
       return true;
     },
     deleteDefinition: (_root, given: { id: string }, context: Context) => {
@@ -591,6 +732,49 @@ export const libraryResolvers: Resolvers = {
       );
       return true;
     },
+    deleteWorkflowDef: (_root, given: { id: string }, context: Context) => {
+      const admin = templateAdmin(context);
+      const store = data();
+      log.debug("deleteWorkflowDef: start", { id: given.id });
+      // The gateway checks core's category defaults before it asks the workflow service.
+      const categoryCount = store.categories.filter(
+        (c) => c.defaultWorkflowId === given.id,
+      ).length;
+      if (categoryCount > 0) {
+        log.info("deleteWorkflowDef refused: category default", {
+          categoryCount,
+          id: given.id,
+        });
+        throw workflowDefinitionInUseByCategory(given.id, categoryCount);
+      }
+      if (!store.workflowDefs.some((w) => w.id === given.id)) {
+        log.info("deleteWorkflowDef refused: not found", { id: given.id });
+        throw workflowDefinitionNotFound(given.id);
+      }
+      const runCount = store.runs.filter(
+        (r) => r.workflowDefId === given.id,
+      ).length;
+      const overrideCount = store.policies.filter(
+        (p) => p.workflowDefId === given.id,
+      ).length;
+      if (runCount > 0 || overrideCount > 0) {
+        log.info("deleteWorkflowDef refused: in use", {
+          id: given.id,
+          overrideCount,
+          runCount,
+        });
+        throw workflowDefinitionInUse(given.id, runCount, overrideCount);
+      }
+      // The mock keeps one record per definition, so this removes every version with it.
+      store.workflowDefs = store.workflowDefs.filter((w) => w.id !== given.id);
+      record(
+        "workflow_def.deleted",
+        admin,
+        librarySubject("workflow_def", given.id, given.id),
+      );
+      log.info("deleteWorkflowDef: deleted", { id: given.id });
+      return true;
+    },
     discardTemplateVersion: (
       _root,
       given: { id: string },
@@ -624,6 +808,7 @@ export const libraryResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           `Categories go at most ${String(MAX_DEPTH)} levels deep.`,
         );
+      category.order = nextOrder(parentId, category.id);
       category.parentId = parentId;
       record("category.moved", admin, categorySubject(category));
       return category;
@@ -635,7 +820,10 @@ export const libraryResolvers: Resolvers = {
     ) => {
       const admin = templateAdmin(context);
       const version = draftOnly(given.id);
+      // numbered against the highest published version before it, then published
+      numberTemplateForPublish(version);
       version.status = "published";
+      version.publishedAt = now();
       const template = templateFor(version.templateId);
       record(
         "template_version.published",
@@ -669,12 +857,47 @@ export const libraryResolvers: Resolvers = {
       const admin = templateAdmin(context);
       const template = templateFor(given.id);
       template.name = given.name;
+      template.renamedAt = now();
       record(
         "template.renamed",
         admin,
         librarySubject("template", template.id, template.name),
       );
       return template;
+    },
+    reorderCategories: (
+      _root,
+      given: { orderedIds: string[]; parentId?: null | string },
+      context: Context,
+    ) => {
+      const admin = siteAdmin(context);
+      const parentId = given.parentId ?? null;
+      const parent = parentId ? categoryFor(parentId) : null;
+      const siblings = childrenOf(parentId);
+      const listed = new Set(given.orderedIds);
+      // every child exactly once, else nothing changes
+      if (
+        given.orderedIds.length !== siblings.length ||
+        listed.size !== given.orderedIds.length ||
+        siblings.some((c) => !listed.has(c.id))
+      )
+        throw refuse(
+          "BAD_USER_INPUT",
+          "orderedIds must list every child of the parent exactly once.",
+        );
+      const byId = new Map(siblings.map((c) => [c.id, c]));
+      for (const [position, id] of given.orderedIds.entries()) {
+        const child = byId.get(id);
+        if (child) child.order = position;
+      }
+      record(
+        "category.reordered",
+        admin,
+        parent
+          ? categorySubject(parent)
+          : { id: "root", kind: "category", label: "Top level" },
+      );
+      return childrenOf(parentId);
     },
     retireTemplate: (_root, given: { id: string }, context: Context) => {
       const admin = templateAdmin(context);
@@ -745,11 +968,12 @@ export const libraryResolvers: Resolvers = {
     ) => {
       const admin = siteAdmin(context);
       const category = categoryFor(given.id);
+      const owners = validatedOwners(given.owners);
       Object.assign(category, {
         ackTriggers: given.ackTriggers,
         exclusionGroupIds: given.exclusionGroupIds ?? null,
         idpGroupIds: given.idpGroupIds ?? null,
-        owners: [...given.owners],
+        owners,
         reviewCadence: given.reviewCadence,
         reviewDate: given.reviewDate ?? null,
       });
@@ -815,21 +1039,6 @@ export const libraryResolvers: Resolvers = {
         librarySubject("reference", reference.id, reference.label),
       );
       return withReferenceUse(reference);
-    },
-    setWorkflowVetoEnabled: (
-      _root,
-      given: { enabled: boolean; id: string },
-      context: Context,
-    ) => {
-      const admin = templateAdmin(context);
-      const workflow = workflowFor(given.id);
-      workflow.vetoEnabled = given.enabled;
-      record(
-        "workflow_def.updated",
-        admin,
-        librarySubject("workflow_def", workflow.id, workflow.name),
-      );
-      return workflow;
     },
     updateContactBlock: (
       _root,
@@ -923,9 +1132,7 @@ export const libraryResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      return data().categories.filter(
-        (c) => c.parentId === (given.parentId ?? null),
-      );
+      return childrenOf(given.parentId ?? null);
     },
     categoryDocumentCounts: (
       _root,
@@ -942,9 +1149,10 @@ export const libraryResolvers: Resolvers = {
       context: Context,
     ) => {
       caller(context);
-      if (!given.rootId) return data().categories;
+      if (!given.rootId) return walkFrom(null);
       siteAdmin(context);
-      return subtreeOf(categoryFor(given.rootId).id);
+      const root = categoryFor(given.rootId);
+      return [root, ...walkFrom(root.id)];
     },
     contactBlocks: (
       _root,

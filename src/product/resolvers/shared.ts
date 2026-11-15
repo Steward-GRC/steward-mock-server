@@ -4,6 +4,7 @@
 // and the audit trail, which every domain change writes to and announces on liveEvents.
 
 import { GraphQLError } from "graphql";
+import { randomBytes } from "node:crypto";
 
 import type { AuditAction } from "#product/audit-actions.ts";
 
@@ -46,8 +47,149 @@ const GATEWAY_CODES: Record<RefusalCode, string> = {
   NOT_FOUND: "NotFound",
 };
 
-export const refuse = (code: RefusalCode, message: string): GraphQLError =>
-  new GraphQLError(message, { extensions: { code: GATEWAY_CODES[code] } });
+/**
+ * The ids the gateway puts on every error it answers (internal/server/errors.go withIDs): a request
+ * id and a trace id, so a report can name the exact call. Random per error here.
+ */
+export const errorIds = (): { requestId: string; traceId: string } => ({
+  requestId: randomBytes(12).toString("hex"),
+  traceId: randomBytes(16).toString("hex"),
+});
+
+export const refuse = (
+  code: RefusalCode,
+  message: string,
+  kind?: "business",
+): GraphQLError =>
+  new GraphQLError(message, {
+    extensions: {
+      code: GATEWAY_CODES[code],
+      // Every gateway error carries a kind: our own faults are reach, anything else is business.
+      kind: kind ?? (code === "INTERNAL" ? "reach" : "business"),
+      ...errorIds(),
+    },
+  });
+
+/**
+ * Core's refusal of a bad site work calendar, as the gateway relays it: a business error with
+ * core's symbol and number and its message "The work calendar is not valid: {reason}."
+ */
+export const invalidWorkCalendar = (reason: string): GraphQLError =>
+  new GraphQLError(`The work calendar is not valid: ${reason}.`, {
+    extensions: {
+      code: "INVALID_WORK_CALENDAR",
+      codeNum: 4009,
+      domain: "core",
+      kind: "business",
+      ...errorIds(),
+    },
+  });
+
+const businessRefusal = (
+  message: string,
+  code: string,
+  codeNumber: number,
+  domain: string,
+  extra: Record<string, string>,
+): GraphQLError =>
+  new GraphQLError(message, {
+    extensions: {
+      code,
+      codeNum: codeNumber,
+      domain,
+      kind: "business",
+      ...errorIds(),
+      ...extra,
+    },
+  });
+
+/**
+ * The gateway's refusal to delete a workflow a category defaults to (1247): the category count is
+ * a decimal string, as the gateway relays the metadata.
+ */
+export const workflowDefinitionInUseByCategory = (
+  id: string,
+  categoryCount: number,
+): GraphQLError =>
+  businessRefusal(
+    `This workflow cannot be deleted while categories use it as their default (categories using it: ${String(categoryCount)}). Change those categories first.`,
+    "WORKFLOW_DEF_IN_USE_BY_CATEGORY",
+    1247,
+    "gateway",
+    { category_count: String(categoryCount), id },
+  );
+
+/**
+ * steward-workflow's refusal to delete a workflow runs pinned or policies use (6013), with its
+ * message from internal/errcodes.
+ */
+export const workflowDefinitionInUse = (
+  id: string,
+  runCount: number,
+  overrideCount: number,
+): GraphQLError =>
+  businessRefusal(
+    `This workflow can't be deleted: ${String(runCount)} approval runs used it and ${String(overrideCount)} policies use it as their own workflow. Archive it instead.`,
+    "WORKFLOW_DEF_IN_USE",
+    6013,
+    "workflow",
+    { id, override_count: String(overrideCount), run_count: String(runCount) },
+  );
+
+/**
+ * steward-ai's refusal for a job id nobody has, or one someone else submitted (3010, user safe),
+ * as the gateway relays it: a business error with ai's symbol, number and message.
+ */
+export const aiJobNotFound = (): GraphQLError =>
+  businessRefusal(
+    "That AI job doesn't exist.",
+    "AI_JOB_NOT_FOUND",
+    3010,
+    "ai",
+    {},
+  );
+
+/**
+ * One of steward-workflow's coded refusals, as the gateway relays it: a business error with the
+ * symbol, number and user-safe message from workflow's internal/errcodes, and each metadata key as
+ * its own extension.
+ */
+export const workflowRefusal = (
+  symbol: string,
+  codeNumber: number,
+  message: string,
+  extra: Record<string, string> = {},
+): GraphQLError =>
+  businessRefusal(message, symbol, codeNumber, "workflow", extra);
+
+/** steward-workflow's refusal for an id no workflow has (6014). */
+export const workflowDefinitionNotFound = (id: string): GraphQLError =>
+  businessRefusal(
+    "This workflow no longer exists. Refresh and try again.",
+    "WORKFLOW_DEF_NOT_FOUND",
+    6014,
+    "workflow",
+    { id },
+  );
+
+/**
+ * A steward-reporting refusal, as the gateway relays it: a business error with reporting's symbol
+ * and number (internal/errcodes) and the message the gateway shows the user.
+ */
+export const reportingRefusal = (
+  symbol: string,
+  codeNumber: number,
+  message: string,
+): GraphQLError =>
+  new GraphQLError(message, {
+    extensions: {
+      code: symbol,
+      codeNum: codeNumber,
+      domain: "reporting",
+      kind: "business",
+      ...errorIds(),
+    },
+  });
 
 export const forbidden = (): GraphQLError =>
   refuse("FORBIDDEN", "You don't have permission to do that.");

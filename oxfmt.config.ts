@@ -17,5 +17,7 @@ export default {
     "src/product/schema-pending.graphql",
     // Byte-exact copies of steward-web's operations; the contract test sends them as they are.
     "src/product/web-operations/**",
+    // Byte-exact copy of go-authz's shared vectors; ordered.test.ts checks its hash.
+    "src/product/testdata/**",
   ],
 };

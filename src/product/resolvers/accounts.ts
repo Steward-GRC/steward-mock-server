@@ -12,7 +12,7 @@ import type { PolicyOverride, StewardPerson } from "#product/data/people.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
 import { createLogger } from "#core/log.ts";
-import { setRoot } from "#product/groups.ts";
+import { moveRoot } from "#product/groups.ts";
 import {
   impersonationOf,
   startImpersonating,
@@ -43,6 +43,52 @@ const log = createLogger("steward-accounts");
 /** A refusal the gateway presents with its registry symbol as the code (apperr). */
 const coded = (code: string, message: string) =>
   new GraphQLError(message, { extensions: { code } });
+
+/** Kratos's password policy has a minimum length of 8 (identity leaves the rest to Kratos). */
+const PASSWORD_MIN = 8;
+
+/**
+ * A few of the passwords a breach list always holds. Kratos asks Have I Been Pwned; the mock has no
+ * network, so a short fixed list stands for "breached".
+ */
+const BREACHED = new Set([
+  "11111111",
+  "12345678",
+  "123456789",
+  "1234567890",
+  "abc12345",
+  "football",
+  "iloveyou",
+  "letmein1",
+  "password",
+  "password1",
+  "password123",
+  "qwerty123",
+  "qwertyuiop",
+  "welcome1",
+]);
+
+/**
+ * identity's ChangePassword outcome for the password policy: too short, breached, or too similar
+ * to the identifier (the email), which the mock reads as the email, its mailbox part or the
+ * username, with any case, and a password that holds the whole email. Kratos scores similarity;
+ * the mock keeps the rule exact so a test can tell why.
+ */
+const weakPassword = (person: StewardPerson, next: string): boolean => {
+  const lower = next.toLowerCase();
+  const email = person.email.toLowerCase();
+  const identifiers = [
+    email,
+    email.split("@", 1)[0] ?? "",
+    person.username.toLowerCase(),
+  ];
+  return (
+    [...next].length < PASSWORD_MIN ||
+    BREACHED.has(lower) ||
+    identifiers.some((id) => id !== "" && lower === id) ||
+    (email !== "" && lower.includes(email))
+  );
+};
 
 const personFor = (userId: string) =>
   found(
@@ -75,7 +121,7 @@ const rootChange = (context: Context, otp: string) => {
   if (!isRoot(actor))
     throw coded(
       "ROOT_REQUIRED",
-      "Only a root administrator can grant the root permission.",
+      "Only a root administrator can transfer the root seat.",
     );
   verifyStepUp(actor, otp);
   return actor;
@@ -140,22 +186,63 @@ const impersonationView = (
 
 export const accountResolvers: Resolvers = {
   Mutation: {
-    grantRoot: (
+    /**
+     * identity's ChangeMyPassword (steward-identity#66) behind the gateway field proposed in
+     * steward-gateway#72: the signed-in person's own password, never one a request names. Refused
+     * while acting as someone (identity's ACT_AS_FORBIDDEN). Identity proves the current password
+     * before it applies the policy, so a wrong current answers first. An attempt is audited as
+     * user.password.changed or user.password.change_failed; no password goes in the trail or a log.
+     */
+    changeMyPassword: (
       _root,
-      given: { otp: string; userId: string },
+      given: { currentPassword: string; newPassword: string },
       context: Context,
     ) => {
-      const actor = rootChange(context, given.otp);
-      const person = personFor(given.userId);
-      if (person.deletedAt) throw refuse("NOT_FOUND", "user not found");
-      if (!isRoot(person)) {
-        setRoot(person, true);
-        person.disabled = false;
-        if (!person.roles.includes("site-admin"))
-          person.roles.push("site-admin");
-        record("root.granted", actor, userSubject(person));
+      const person = realCaller(context);
+      if (impersonationOf(context)) {
+        log.debug("change my password refused while acting as another", {
+          personId: person.id,
+        });
+        throw coded(
+          "ACT_AS_FORBIDDEN",
+          "This action isn't available while you're acting as another user. Stop acting as them first.",
+        );
       }
-      return asUser(person);
+      if (!given.currentPassword || !given.newPassword)
+        throw refuse(
+          "BAD_USER_INPUT",
+          "current_password and new_password required",
+        );
+      if (!person.localAccount) {
+        log.debug("change my password: no local password", {
+          personId: person.id,
+        });
+        throw coded(
+          "NO_LOCAL_PASSWORD",
+          "This account signs in through your organisation and has no Steward password to change.",
+        );
+      }
+      if (!person.password || given.currentPassword !== person.password) {
+        log.debug("change my password: wrong current password", {
+          personId: person.id,
+        });
+        record("user.password.change_failed", person, userSubject(person));
+        throw coded("CURRENT_PASSWORD_WRONG", "The current password is wrong.");
+      }
+      if (weakPassword(person, given.newPassword)) {
+        log.debug("change my password: refused by the password policy", {
+          personId: person.id,
+        });
+        record("user.password.change_failed", person, userSubject(person));
+        throw coded(
+          "PASSWORD_TOO_WEAK",
+          "That password doesn't meet the password rules. Choose a longer password that isn't common or easy to guess.",
+        );
+      }
+      person.password = given.newPassword;
+      record("user.password.changed", person, userSubject(person));
+      log.info("password changed by its owner", { personId: person.id });
+      return true;
     },
     /**
      * core's ReassignUserPolicies: every policy the first person owns, retired ones too, moves to
@@ -292,24 +379,6 @@ export const accountResolvers: Resolvers = {
       log.debug("password reset by an admin", { personId: person.id });
       return true;
     },
-    revokeRoot: (
-      _root,
-      given: { otp: string; userId: string },
-      context: Context,
-    ) => {
-      const actor = rootChange(context, given.otp);
-      const person = personFor(given.userId);
-      if (!isRoot(person))
-        throw refuse("BAD_USER_INPUT", "the user isn't a root admin");
-      if (people().filter((p) => isRoot(p)).length <= 1)
-        throw refuse(
-          "FAILED_PRECONDITION",
-          "cannot revoke root from the last root admin",
-        );
-      setRoot(person, false);
-      record("root.revoked", actor, userSubject(person));
-      return asUser(person);
-    },
     setUserPolicyOverride: (
       _root,
       given: {
@@ -397,6 +466,23 @@ export const accountResolvers: Resolvers = {
           record("impersonation.stopped", admin, userSubject(target));
       }
       return true;
+    },
+    transferRoot: (
+      _root,
+      given: { otp: string; userId: string },
+      context: Context,
+    ) => {
+      const actor = rootChange(context, given.otp);
+      const person = personFor(given.userId);
+      if (person.deletedAt) throw refuse("NOT_FOUND", "user not found");
+      if (person.id === actor.id)
+        throw refuse("BAD_USER_INPUT", "the user is already the root admin");
+      moveRoot(
+        people().filter((p) => isRoot(p)),
+        person,
+      );
+      record("root.transferred", actor, userSubject(person));
+      return asUser(person);
     },
   },
   Query: {

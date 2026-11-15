@@ -1,7 +1,7 @@
 // Copyright 2026 The Steward Authors
 // SPDX-License-Identifier: Apache-2.0
 // Policy governance (steward-web's A11): deletePolicy and retirePolicy at the effective-author
-// tier, setPolicyOwner and movePolicy for site admins (steward-gateway policy_resolver.go over
+// tier, setPolicyOwner for site admins, movePolicy and the bulk move for site admins or those the rules give Manage (steward-gateway policy_resolver.go over
 // steward-core's PolicyHandler), and the PDF export and magic links (steward-gateway
 // delivery_resolver.go over steward-delivery). The refusals, messages and audit entries are
 // theirs.
@@ -11,14 +11,18 @@ import { GraphQLError } from "graphql";
 import type { Category } from "#product/data/library.ts";
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
+import { can } from "#product/access-rules.ts";
 import { policyView, readEffect } from "#product/access.ts";
 import { accepts, refusesType } from "#product/category-types.ts";
 import {
   createMagicLink,
   createPdfJob,
   fingerprint,
+  issuedMagicLinks,
+  magicLinkStatus,
   PDF_LINK_MS,
   pdfJob,
+  removeMagicLink,
   revokeMagicLink,
   signedPdfUrl,
 } from "#product/delivery.ts";
@@ -33,13 +37,41 @@ import {
 import {
   caller,
   data,
+  forbidden,
   found,
+  isSiteAdmin,
   notFound,
   now,
   record,
   refuse,
   siteAdmin,
 } from "#product/resolvers/shared.ts";
+
+/**
+ * steward-gateway's authorizeMove: a site admin may move, and so may anyone the category rules
+ * give Manage in each document's own category and Author in the target (Manage implies Author;
+ * owners and root hold both). The site-admin gate stays beside the new one.
+ */
+const authorizeMove = (
+  context: Context,
+  policyIds: string[],
+  targetId: string,
+) => {
+  const person = caller(context);
+  if (isSiteAdmin(person)) return person;
+  if (
+    policyIds.length === 0 ||
+    targetId === "" ||
+    !can(person, targetId, "author")
+  )
+    throw forbidden();
+  for (const id of policyIds) {
+    const policy = found(policyById(id), "policy");
+    if (!policy.homeCategoryId || !can(person, policy.homeCategoryId, "manage"))
+      throw forbidden();
+  }
+  return person;
+};
 
 /** RFC 3339 to the second, as the gateway formats delivery's times. */
 const rfc3339 = (ms: number) =>
@@ -52,6 +84,21 @@ const delivery = (code: string, message: string) =>
 /** delivery's Required(field): INVALID_REQUEST, "{field} is required." */
 const required = (field: string) =>
   delivery("INVALID_REQUEST", `${field} is required.`);
+
+/** delivery's bad-field refusal: INVALID_REQUEST naming the request field. */
+const invalidField = (field: string, message: string) =>
+  new GraphQLError(message, { extensions: { code: "INVALID_REQUEST", field } });
+
+const DEFAULT_LINK_PAGE = 50;
+const MAX_LINK_PAGE = 200;
+
+/** The opaque page token is the offset into the newest-first list, as a non-negative integer. */
+const linkOffset = (token: null | string | undefined) => {
+  if (!token) return 0;
+  if (!/^\d+$/.test(token))
+    throw invalidField("page_token", "page_token is invalid.");
+  return Number(token);
+};
 
 /** The gateway's read check for delivery: the version must read in full (errObfuscatedContent). */
 const readableInFull = (context: Context, policyVersionId: string) => {
@@ -150,7 +197,11 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyIds: string[] },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      const admin = authorizeMove(
+        context,
+        given.policyIds,
+        given.homeCategoryId,
+      );
       if (given.policyIds.length === 0)
         throw refuse("BAD_USER_INPUT", "Pick at least one document to move.");
       const target = data().categories.find(
@@ -192,7 +243,11 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyId: string },
       context: Context,
     ) => {
-      const admin = siteAdmin(context);
+      const admin = authorizeMove(
+        context,
+        [given.policyId],
+        given.homeCategoryId,
+      );
       const policy = policyById(given.policyId);
       if (!policy) throw refuse("NOT_FOUND", "policy not found");
       if (policy.homeCategoryId === given.homeCategoryId)
@@ -208,6 +263,23 @@ export const governanceResolvers: Resolvers = {
       policy.updatedAt = now();
       record("policy.moved", admin, policySubject(policy));
       return policyView(admin, policy);
+    },
+    /** delivery's RemoveMagicLink: a revoked or expired link only; site admins. */
+    removeMagicLink: (_root, given: { token: string }, context: Context) => {
+      siteAdmin(context);
+      if (!given.token) throw required("token");
+      const outcome = removeMagicLink(given.token);
+      if (outcome === "missing")
+        throw delivery(
+          "MAGIC_LINK_NOT_FOUND",
+          "That magic link doesn't exist.",
+        );
+      if (outcome === "active")
+        throw delivery(
+          "MAGIC_LINK_ACTIVE",
+          "Revoke that magic link before removing it.",
+        );
+      return true;
     },
     requestPDFExport: (
       _root,
@@ -232,7 +304,7 @@ export const governanceResolvers: Resolvers = {
     revokeMagicLink: (_root, given: { token: string }, context: Context) => {
       const admin = siteAdmin(context);
       if (!given.token) throw required("token");
-      revokeMagicLink(given.token);
+      revokeMagicLink(given.token, admin.id);
       record("magic_link.revoked", admin, {
         id: fingerprint(given.token),
         kind: "magic_link",
@@ -255,6 +327,44 @@ export const governanceResolvers: Resolvers = {
     },
   },
   Query: {
+    /** delivery's ListMagicLinks: site admins; newest first; optional policy version filter. */
+    magicLinks: (
+      _root,
+      given: {
+        pageSize?: null | number;
+        pageToken?: null | string;
+        policyVersionIds?: null | string[];
+      },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      const size = given.pageSize ?? DEFAULT_LINK_PAGE;
+      if (size < 1 || size > MAX_LINK_PAGE)
+        throw invalidField("page_size", "page_size must be 1 to 200.");
+      const offset = linkOffset(given.pageToken);
+      const wanted = given.policyVersionIds?.length
+        ? new Set(given.policyVersionIds)
+        : undefined;
+      const matching = issuedMagicLinks().filter(
+        ({ link }) => !wanted || wanted.has(link.policyVersionId),
+      );
+      const end = offset + size;
+      return {
+        links: matching.slice(offset, end).map(({ link, token }) => ({
+          createdAt: rfc3339(link.createdAt),
+          createdByUserId: link.createdBy,
+          expiresAt: rfc3339(link.expiresAt),
+          fingerprint: fingerprint(token),
+          policyVersionId: link.policyVersionId,
+          revokedAt: link.revokedAt === null ? null : rfc3339(link.revokedAt),
+          revokedByUserId: link.revokedBy,
+          sensitive: link.sensitive,
+          status: magicLinkStatus(link),
+          token,
+        })),
+        nextPageToken: end < matching.length ? String(end) : null,
+      };
+    },
     /** delivery's GetPDFDownloadLink: the job's sample PDF, signed for PDF_LINK_MS. */
     pdfDownloadLink: (_root, given: { jobId: string }, context: Context) => {
       signedIn(context);
@@ -275,7 +385,7 @@ export const governanceResolvers: Resolvers = {
       given: { homeCategoryId: string; policyIds: string[] },
       context: Context,
     ) => {
-      siteAdmin(context);
+      authorizeMove(context, given.policyIds, given.homeCategoryId);
       const target = data().categories.find(
         (c) => c.id === given.homeCategoryId,
       );

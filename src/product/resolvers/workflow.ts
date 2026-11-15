@@ -8,13 +8,23 @@
 // version; a rejection is a vote, and the rejects reaching the quorum end the run, the other seats
 // and the version; a seat decides once.
 
-import type { WorkflowStage } from "#product/data/library.ts";
+import type { SiteWorkCalendar } from "#product/data/admin.ts";
+import type { Workflow, WorkflowStage } from "#product/data/library.ts";
 import type { StewardPerson } from "#product/data/people.ts";
-import type { Run, RunGroup, RunStage } from "#product/data/policies.ts";
+import type {
+  Policy,
+  Run,
+  RunGroup,
+  RunStage,
+  Seat,
+  SeatSource,
+} from "#product/data/policies.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { createLogger } from "#core/log.ts";
 import { canEdit, readEffect } from "#product/access.ts";
 import { hasContent } from "#product/content.ts";
+import { globalSettings } from "#product/data/admin.ts";
 import {
   cancelRuns,
   publishVersion,
@@ -31,16 +41,36 @@ import {
   personOf,
   record,
   refuse,
+  withAnyRole,
+  workflowRefusal,
 } from "#product/resolvers/shared.ts";
 import { markReviewed } from "#product/review-snapshots.ts";
+import { isChangeType } from "#product/semver.ts";
+import {
+  agreeLowering,
+  changeForSubmit,
+  numbersOf,
+} from "#product/version-numbers.ts";
+import { addWorkingDays } from "#product/workcal.ts";
+
+const log = createLogger("steward-workflow");
 
 const EMPTY_STATUS = {
   currentStageIdx: 0,
   runId: "",
   stageAssignees: [],
   stageNames: [],
+  stageProgress: [],
   stageUnitProgress: [],
   status: "APPROVAL_STATUS_UNSPECIFIED",
+  targetChangeType: null,
+  targetSemanticVersion: null,
+};
+
+/** The stepper's text for why a seat is held, as steward-gateway's seatRoleLabel words it. */
+const ROLE_LABELS: Record<SeatSource, string> = {
+  approver: "Approver",
+  "category-owner": "Category owner",
 };
 
 const IN_REVIEW = "APPROVAL_STATUS_IN_REVIEW";
@@ -110,6 +140,43 @@ const unitOf = (stage: RunStage, group: RunGroup) => {
   };
 };
 
+/** The individual approvals a stage has and needs; group units keep their own tally. */
+const individualProgress = (stage: RunStage) => {
+  const single = stage.seats.filter((s) => !s.groupId);
+  return {
+    approvals: single.filter((s) => s.state === "approved").length,
+    required: single.length === 0 ? 0 : required({ ...stage, seats: single }),
+  };
+};
+
+/**
+ * A stage's due date from the day it is entered: its SLA in working days on the run's calendar
+ * (the site calendar pinned at submit; the default Monday to Friday UTC without one), none
+ * without an SLA. The end of the Nth working day after the day of entry.
+ */
+const dueFrom = (
+  entered: string,
+  stage: RunStage,
+  calendar: SiteWorkCalendar = globalSettings().workCalendar,
+): null | string => {
+  if (!stage.slaDays) return null;
+  const due = addWorkingDays(
+    {
+      holidays: calendar.holidays.map((h) => h.date),
+      timezone: calendar.timezone,
+      weekdays: calendar.weekdays,
+    },
+    new Date(entered),
+    stage.slaDays,
+  ).toISOString();
+  log.trace("stage due date", {
+    due,
+    slaDays: stage.slaDays,
+    timezone: calendar.timezone,
+  });
+  return due;
+};
+
 /** The stage's own rule applies to its individual seats; each group needs its own quorum. */
 const stageMet = (stage: RunStage): boolean => {
   const single = stage.seats.filter((s) => !s.groupId);
@@ -157,8 +224,28 @@ const poolOf = (stage: WorkflowStage, lineage: string[]): string[] => {
   return stage.approvers;
 };
 
+/**
+ * The workflow a policy goes through: its own, else its home category's, and never an archived
+ * one (steward-workflow doesn't look at ancestors). submitWorkflow and effectiveWorkflow share it.
+ */
+const workflowOf = (policy: Policy) => {
+  const home = data().categories.find((c) => c.id === policy.homeCategoryId);
+  const workflowId = policy.workflowDefId ?? home?.defaultWorkflowId;
+  return data().workflowDefs.find((w) => w.id === workflowId && !w.archived);
+};
+
+/** The first stage of the workflow with neither an approver pool nor a group with members. */
+const unstaffedStageOf = (workflow: Workflow, policy: Policy) => {
+  const lineage = lineageOf(policy.homeCategoryId);
+  return workflow.stages.find(
+    (s) => poolOf(s, lineage).length === 0 && unitsWithMembers(s) === 0,
+  );
+};
+
 /** Who a stage seats: individuals, and each group unit's members by group. */
 interface StageSeating {
+  /** The stage's approver pool after the access filter: who a veto can belong to. */
+  approvers: string[];
   individuals: string[];
   members: Map<string, string[]>;
 }
@@ -181,10 +268,15 @@ const seatingOf = (
   );
   const votes =
     seated.length + [...members.values()].filter((m) => m.length > 0).length;
-  if (meetsQuorum(stage, votes)) return { individuals: seated, members };
+  if (meetsQuorum(stage, votes))
+    return { approvers: seated, individuals: seated, members };
   const owners =
     data().categories.find((c) => c.id === categoryId)?.owners ?? [];
-  return { individuals: [...new Set([...seated, ...owners])], members };
+  return {
+    approvers: seated,
+    individuals: [...new Set([...seated, ...owners])],
+    members,
+  };
 };
 
 /** A group's required approvals, as steward-workflow's requiredForQuorum. */
@@ -194,9 +286,10 @@ const requiredOf = (quorum: string, roster: number): number => {
   return 1;
 };
 
-const seatFor = (userId: string, groupId?: string) => ({
+const seatFor = (userId: string, source: SeatSource, groupId?: string) => ({
   comment: null,
   decidedAt: null,
+  source,
   state: "pending",
   taskId: newId("task"),
   userId,
@@ -207,11 +300,7 @@ const groupName = (id: string) =>
   data().platformGroups.find((g) => g.id === id)?.name ?? id;
 
 /** The run's stage: individual seats first, then each group unit with a seated member. */
-const runStageOf = (
-  stage: WorkflowStage,
-  seating: StageSeating,
-  vetoEnabled: boolean,
-): RunStage => {
+const runStageOf = (stage: WorkflowStage, seating: StageSeating): RunStage => {
   const membersOf = (groupId: string) => seating.members.get(groupId) ?? [];
   const units = stage.groupUnits.filter((g) => membersOf(g.groupId).length > 0);
   return {
@@ -228,12 +317,22 @@ const runStageOf = (
     quorum: stage.quorum,
     quorumN: stage.quorumN,
     seats: [
-      ...seating.individuals.map((userId) => seatFor(userId)),
+      // an owner who joined to meet the quorum holds the seat as the category owner; anyone the
+      // workflow names (or a group unit's member) as an approver
+      ...seating.individuals.map((userId) =>
+        seatFor(
+          userId,
+          seating.approvers.includes(userId) ? "approver" : "category-owner",
+        ),
+      ),
       ...units.flatMap((g) =>
-        membersOf(g.groupId).map((userId) => seatFor(userId, g.groupId)),
+        membersOf(g.groupId).map((userId) =>
+          seatFor(userId, "approver", g.groupId),
+        ),
       ),
     ],
-    vetoUserIds: vetoEnabled ? vetoHolders(stage) : [],
+    slaDays: stage.slaDays,
+    vetoUserIds: vetoHolders(stage, seating),
   };
 };
 
@@ -241,7 +340,7 @@ const runStageOf = (
 const closePending = (stages: RunStage[]) => {
   for (const stage of stages)
     for (const seat of stage.seats)
-      if (seat.state === "pending") seat.state = "cancelled";
+      if (seat.state === "pending") seat.state = "superseded";
 };
 
 const partsOf = (run: Run) => {
@@ -261,9 +360,24 @@ const advance = (run: Run, person: StewardPerson) => {
   const stage = run.stages[run.currentStageIdx];
   if (!stage) return;
   if (!stageMet(stage)) return;
+  // the first stage reviews the change itself: its quorum is what agrees to a lowered change type
+  if (run.currentStageIdx === 0) {
+    const { policy, version } = partsOf(run);
+    const agreedBy = stage.seats
+      .filter((s) => s.state === "approved")
+      .map((s) => s.userId);
+    if (agreeLowering(version, agreedBy))
+      record(
+        "workflow.change_type.agreed",
+        person,
+        versionSubject(policy, version.id),
+      );
+  }
   closePending([stage]);
   if (run.currentStageIdx < run.stages.length - 1) {
     run.currentStageIdx += 1;
+    const entered = run.stages[run.currentStageIdx]!;
+    entered.dueAt = dueFrom(now(), entered, run.workCalendar);
     return;
   }
   const { policy, version } = partsOf(run);
@@ -272,15 +386,26 @@ const advance = (run: Run, person: StewardPerson) => {
   record("policy.status_set", person, versionSubject(policy, version.id));
 };
 
-/** The users who hold a veto on a stage: those named, and the members of the group seats named. */
-const vetoHolders = (stage: WorkflowStage): string[] => [
-  ...new Set([
-    ...stage.vetoApproverIds,
-    ...stage.groupUnits
-      .filter((g) => stage.vetoGroupIds.includes(g.groupId))
-      .flatMap((g) => g.memberUserIds),
-  ]),
-];
+/**
+ * The people who hold a veto on a stage: those it names who are in its approver pool once the
+ * access filter has run (an individual approver, or a member of a group unit that is seated).
+ * Nobody else holds one, whatever their role: not an owner who joined to make up the quorum, not
+ * site admin or root, and not a named person the pool does not seat.
+ */
+const vetoHolders = (stage: WorkflowStage, seating: StageSeating): string[] => {
+  const pool = new Set([
+    ...seating.approvers,
+    ...stage.groupUnits.flatMap((g) => seating.members.get(g.groupId) ?? []),
+  ]);
+  const holders = [...new Set(stage.vetoUserIds)].filter((id) => pool.has(id));
+  const dropped = stage.vetoUserIds.filter((id) => !holders.includes(id));
+  if (dropped.length > 0)
+    log.debug("veto people not seated, so they hold no veto", {
+      count: dropped.length,
+      stage: stage.id,
+    });
+  return holders;
+};
 
 const reject = (run: Run) => {
   closePending(run.stages);
@@ -323,6 +448,40 @@ const openRunFor = (policyVersionId: string): Run => {
       "This approval is no longer active; refresh your inbox.",
     );
   return run;
+};
+
+/**
+ * The seat's pool, as steward-workflow's GetStageEligiblePool answers it: the individual approvers
+ * the workflow definition names for the stage, in its order (group units seat by group and are
+ * not swapped here). Empty when the stage names none.
+ */
+const poolFor = (run: Run, stageIndex: number): string[] =>
+  data().workflowDefs.find((w) => w.id === run.workflowDefId)?.stages[
+    stageIndex
+  ]?.approvers ?? [];
+
+/** The run a stage question is about, and the stage in it, or workflow's coded refusal. */
+const stageOf = (policyVersionId: string, stageIndex: number) => {
+  const run = runFor(policyVersionId);
+  if (!run)
+    throw workflowRefusal(
+      "APPROVAL_RUN_NOT_FOUND",
+      6012,
+      "This policy version has no approval run. Refresh and try again.",
+      { policy_version_id: policyVersionId },
+    );
+  const stage = run.stages[stageIndex];
+  if (!stage)
+    throw workflowRefusal(
+      "STAGE_INDEX_OUT_OF_RANGE",
+      6011,
+      `Stage ${String(stageIndex)} isn't part of this workflow. Refresh and try again.`,
+      {
+        stage: String(stageIndex),
+        stage_count: String(run.stages.length),
+      },
+    );
+  return { run, stage };
 };
 
 export const workflowResolvers: Resolvers = {
@@ -386,7 +545,12 @@ export const workflowResolvers: Resolvers = {
     },
     submitWorkflow: (
       _root,
-      given: { policyId: string; policyVersionId: string },
+      given: {
+        changeType?: null | string;
+        changeTypeReason?: null | string;
+        policyId: string;
+        policyVersionId: string;
+      },
       context: Context,
     ) => {
       const person = caller(context);
@@ -409,13 +573,7 @@ export const workflowResolvers: Resolvers = {
           "FAILED_PRECONDITION",
           "A document with no content can't be submitted.",
         );
-      const home = data().categories.find(
-        (c) => c.id === policy.homeCategoryId,
-      );
-      const workflowId = policy.workflowDefId ?? home?.defaultWorkflowId;
-      const workflow = data().workflowDefs.find(
-        (w) => w.id === workflowId && !w.archived,
-      );
+      const workflow = workflowOf(policy);
       if (!workflow)
         throw refuse(
           "FAILED_PRECONDITION",
@@ -425,9 +583,7 @@ export const workflowResolvers: Resolvers = {
       // and a stage with neither a pool nor group members would never finish
       const lineage = lineageOf(policy.homeCategoryId);
       const pools = workflow.stages.map((s) => poolOf(s, lineage));
-      const unstaffed = workflow.stages.find(
-        (s, index) => pools[index]!.length === 0 && unitsWithMembers(s) === 0,
-      );
+      const unstaffed = unstaffedStageOf(workflow, policy);
       if (unstaffed)
         throw refuse(
           "FAILED_PRECONDITION",
@@ -443,7 +599,17 @@ export const workflowResolvers: Resolvers = {
             `stage ${String(index)}: quorum_n=${String(s.quorumN)} exceeds pool size ${String(votes)}`,
           );
       }
+      // the author's pick of the change type: refused before anything changes when it is below the
+      // suggestion with no reason, so the version stays a draft
+      const change = changeForSubmit(
+        version,
+        isChangeType(given.changeType) ? given.changeType : null,
+        given.changeTypeReason ?? "",
+        person.id,
+      );
       cancelRuns(version.id);
+      if (change) version.change = change;
+      else delete version.change;
       const run: Run = {
         currentStageIdx: 0,
         id: newId("run"),
@@ -453,22 +619,232 @@ export const workflowResolvers: Resolvers = {
           runStageOf(
             stage,
             seatingOf(stage, pools[index]!, policy.homeCategoryId),
-            workflow.vetoEnabled,
           ),
         ),
         status: IN_REVIEW,
         submittedAt: now(),
         submittedBy: person.id,
+        workCalendar: structuredClone(data().settings.workCalendar),
         workflowDefId: workflow.id,
       };
+      const first = run.stages[0];
+      if (first)
+        first.dueAt = dueFrom(run.submittedAt, first, run.workCalendar);
       data().runs.push(run);
       version.status = "IN_REVIEW";
       policy.updatedAt = run.submittedAt;
       record("workflow.submitted", person, versionSubject(policy, version.id));
+      if (change?.requested)
+        record(
+          "workflow.change_type.requested",
+          person,
+          versionSubject(policy, version.id),
+        );
       return { runId: run.id };
+    },
+    // steward-gateway's SwapAssigneeResolver, then steward-workflow's SwapAssignee, check for
+    // check and in its order. The gateway's gate is workflow.manage (site admin or template
+    // admin), so the initiator is the seat's own holder (a delegation, which may only pick from
+    // the pool) or an admin (who may go outside it with the acknowledgement).
+    swapAssignee: (
+      _root,
+      given: {
+        input: {
+          currentUserId: string;
+          newUserId: string;
+          outOfEligibilityAck?: boolean | null;
+          policyVersionId: string;
+          reason: string;
+          stageIndex: number;
+        };
+      },
+      context: Context,
+    ) => {
+      const person = withAnyRole(context, "template-admin");
+      const input = given.input;
+      log.debug("swap assignee", {
+        ack: input.outOfEligibilityAck === true,
+        actor: person.id,
+        stage: input.stageIndex,
+        version: input.policyVersionId,
+      });
+      if (input.reason === "")
+        throw workflowRefusal(
+          "SWAP_REASON_REQUIRED",
+          6004,
+          "Give a reason for the reassignment.",
+        );
+      if (input.currentUserId === "" || input.newUserId === "")
+        throw workflowRefusal(
+          "SWAP_USERS_REQUIRED",
+          6005,
+          "Choose both the current approver and the person to reassign to.",
+        );
+      if (input.currentUserId === input.newUserId)
+        throw workflowRefusal(
+          "SWAP_SAME_USER",
+          6006,
+          "That person already holds this approval. Choose someone else.",
+        );
+      const { run, stage } = stageOf(input.policyVersionId, input.stageIndex);
+      const delegating = person.id === input.currentUserId;
+      const outOfEligibility = !poolFor(run, input.stageIndex).includes(
+        input.newUserId,
+      );
+      if (
+        outOfEligibility &&
+        (delegating || input.outOfEligibilityAck !== true)
+      ) {
+        log.debug("swap refused, not in the pool", {
+          delegating,
+          user: input.newUserId,
+        });
+        throw workflowRefusal(
+          "SWAP_ASSIGNEE_NOT_ELIGIBLE",
+          6010,
+          `That person isn't an eligible approver for stage ${String(input.stageIndex)} (${stage.name}).`,
+          {
+            new_user_id: input.newUserId,
+            stage: String(input.stageIndex),
+            stage_name: stage.name,
+          },
+        );
+      }
+      const index = stage.seats.findIndex(
+        (s) => s.userId === input.currentUserId && !s.groupId,
+      );
+      const old = stage.seats[index];
+      if (!old)
+        throw workflowRefusal(
+          "SWAP_ASSIGNMENT_NOT_FOUND",
+          6008,
+          `The person you're replacing isn't assigned to stage ${String(input.stageIndex)} any more. Refresh and try again.`,
+          {
+            current_user_id: input.currentUserId,
+            stage: String(input.stageIndex),
+          },
+        );
+      if (old.state !== "pending")
+        throw workflowRefusal(
+          "SWAP_ASSIGNMENT_NOT_PENDING",
+          6009,
+          `This approval is already ${old.state}, so it can't be reassigned.`,
+          {
+            current_user_id: input.currentUserId,
+            stage: String(input.stageIndex),
+            state: old.state,
+          },
+        );
+      // not in workflow's contract: one person holds one seat on a stage here
+      if (stage.seats.some((s) => s.userId === input.newUserId && !s.groupId))
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "That person already holds a seat on this stage.",
+        );
+      const seat: Seat = seatFor(input.newUserId, "approver");
+      // someone the workflow does not name has no reason on record
+      if (outOfEligibility) delete seat.source;
+      stage.seats[index] = seat;
+      // a veto belongs to the stage's named people: it leaves with the old holder and comes to
+      // the new one only if the stage names them
+      if (stage.vetoUserIds) {
+        const named = data().workflowDefs.find(
+          (w) => w.id === run.workflowDefId,
+        )?.stages[input.stageIndex]?.vetoUserIds;
+        stage.vetoUserIds = stage.vetoUserIds.filter(
+          (id) => id !== input.currentUserId,
+        );
+        if (named?.includes(input.newUserId))
+          stage.vetoUserIds.push(input.newUserId);
+      }
+      const { policy, version } = partsOf(run);
+      record(
+        outOfEligibility
+          ? "workflow.assignment.swapped.out_of_eligibility"
+          : "workflow.assignment.swapped",
+        person,
+        versionSubject(policy, version.id),
+      );
+      log.info("assignee swapped", {
+        actor: person.id,
+        outOfEligibility,
+        stage: input.stageIndex,
+        version: version.id,
+      });
+      return {
+        newAssignmentId: seat.taskId,
+        newSlaDeadlineAt: dueFrom(now(), stage, run.workCalendar) ?? now(),
+      };
     },
   },
   Query: {
+    // The caller's own approved or rejected seats on runs still in review (a request for changes
+    // leaves the seat pending, so it is not one): one entry per run, the newest decision, and
+    // none from before the run started. A policy the caller can no longer read is left out.
+    decidedApprovals: (_root, _given, context: Context) => {
+      const person = caller(context);
+      return openRuns()
+        .flatMap((run) => {
+          const policy = data().policies.find((p) => p.id === run.policyId);
+          if (!policy || readEffect(person, policy) === "deny") return [];
+          const newest = run.stages
+            .flatMap((stage) => stage.seats)
+            .filter(
+              (s) =>
+                s.userId === person.id &&
+                (s.state === "approved" || s.state === "rejected") &&
+                s.decidedAt !== null &&
+                s.decidedAt >= run.submittedAt,
+            )
+            .toSorted((a, b) =>
+              (b.decidedAt ?? "").localeCompare(a.decidedAt ?? ""),
+            )[0];
+          if (!newest?.decidedAt) return [];
+          return [
+            {
+              currentStageIdx: run.currentStageIdx,
+              decidedAt: newest.decidedAt,
+              decision: newest.state,
+              policyTitle: policy.title,
+              policyVersionId: run.policyVersionId,
+              runId: run.id,
+              stageCount: run.stages.length,
+            },
+          ];
+        })
+        .toSorted((a, b) => b.decidedAt.localeCompare(a.decidedAt));
+    },
+    // steward-gateway's gate runs first (the same one submit uses), then the answer is the
+    // workflow's name and whether it can run, never its stages.
+    effectiveWorkflow: (
+      _root,
+      given: { policyId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const policy = found(
+        data().policies.find((p) => p.id === given.policyId),
+        "policy",
+      );
+      if (!canEdit(person, policy)) throw forbidden();
+      const workflow = workflowOf(policy);
+      if (!workflow)
+        return {
+          firstUnstaffedStage: null,
+          hasWorkflow: false,
+          name: null,
+          usable: true,
+          workflowDefId: null,
+        };
+      const unstaffed = unstaffedStageOf(workflow, policy);
+      return {
+        firstUnstaffedStage: unstaffed?.name ?? null,
+        hasWorkflow: true,
+        name: workflow.name || null,
+        usable: !unstaffed,
+        workflowDefId: workflow.id,
+      };
+    },
     pendingTasks: (_root, _given, context: Context) => {
       const person = caller(context);
       return openRuns().flatMap((run) =>
@@ -483,6 +859,24 @@ export const workflowResolvers: Resolvers = {
             taskId: s.taskId,
           })),
       );
+    },
+    // steward-gateway's StageEligibleAssigneesResolver: the same gate as swapAssignee, workflow's
+    // pool resolved to labels (a person nobody knows keeps their id as the name).
+    stageEligibleAssignees: (
+      _root,
+      given: { policyVersionId: string; stageIndex: number },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const { run, stage } = stageOf(given.policyVersionId, given.stageIndex);
+      return {
+        assignees: poolFor(run, given.stageIndex).map((id) => {
+          const who = personOf(id);
+          return { email: who?.email ?? null, id, name: who?.name ?? id };
+        }),
+        stageIndex: given.stageIndex,
+        stageName: stage.name,
+      };
     },
     upcomingApprovals: (_root, _given, context: Context) => {
       const person = caller(context);
@@ -509,7 +903,21 @@ export const workflowResolvers: Resolvers = {
     ) => {
       const person = caller(context);
       const run = runFor(given.policyVersionId);
-      if (!run) return EMPTY_STATUS;
+      if (!run) {
+        log.debug("workflow status without a run, no target", {
+          policyVersionId: given.policyVersionId,
+        });
+        return EMPTY_STATUS;
+      }
+      // what the run publishes: the number and change type of the version it is on, as the
+      // gateway reads them from core's version (steward-gateway#240); null when none is known
+      const version = data().versions.find((v) => v.id === run.policyVersionId);
+      const target = version ? numbersOf(version) : undefined;
+      log.debug("workflow status target mapped", {
+        hasTargetChangeType: Boolean(target?.changeType),
+        hasTargetVersion: Boolean(target?.semanticVersion),
+        policyVersionId: run.policyVersionId,
+      });
       // a free-text comment about the content: a reader who sees the policy obfuscated gets none
       const obfuscatedReader =
         readEffect(person, partsOf(run).policy) === "obfuscate";
@@ -528,16 +936,27 @@ export const workflowResolvers: Resolvers = {
             decidedAt: s.decidedAt,
             groupId: s.groupId ?? null,
             name: personOf(s.userId)?.name ?? null,
+            roleLabel: s.source ? ROLE_LABELS[s.source] : null,
             state: s.state,
             userId: s.userId,
             veto: stage.vetoUserIds?.includes(s.userId) ?? false,
           })),
         ),
         stageNames: run.stages.map((stage) => stage.name),
+        stageProgress: run.stages.map((stage) => ({
+          ...individualProgress(stage),
+          dueAt: stage.dueAt ?? null,
+          quorum: stage.quorum,
+          quorumN: stage.quorum === "nofm" ? (stage.quorumN ?? 0) : 0,
+        })),
         stageUnitProgress: run.stages.map((stage) =>
           (stage.groups ?? []).map((g) => unitOf(stage, g)),
         ),
         status: run.status,
+        submittedAt: run.submittedAt,
+        submittedBy: run.submittedBy,
+        targetChangeType: target?.changeType ?? null,
+        targetSemanticVersion: target?.semanticVersion ?? null,
       };
     },
   },

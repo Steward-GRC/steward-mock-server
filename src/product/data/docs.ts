@@ -22,6 +22,7 @@ import {
   section,
   stage,
   type TemplateVersion,
+  withSiblingOrder,
   type Workflow,
 } from "#product/data/library.ts";
 import {
@@ -103,7 +104,7 @@ const docsCategories = (): Category[] => {
     parentId: "category-security",
     slug: "incident-response",
   };
-  return [
+  return withSiblingOrder([
     // Finance: the locked default template (admin-1, "Authors must use this template").
     patch("category-finance", {
       defaultTemplateLocked: true,
@@ -134,7 +135,7 @@ const docsCategories = (): Category[] => {
     }),
     patch("category-facilities", {}),
     patch("category-travel", { authorRule: [] }),
-  ];
+  ]);
 };
 
 const docsTemplateVersions = (): TemplateVersion[] => [
@@ -199,7 +200,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -221,7 +221,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -232,12 +231,14 @@ const docsWorkflows = (): Workflow[] => [
     stages: [
       stage({
         approvers: [CHARLIE, ALICE, DAVE],
+        escalateAfterDays: 2,
         id: "workflow-stage-4",
         name: "Committee review",
         quorum: "majority",
         rejectOnSlaBreach: false,
+        remindEveryDays: 1,
         slaDays: 7,
-        vetoApproverIds: [DAVE],
+        vetoUserIds: [DAVE],
       }),
       stage({
         approvers: [ALICE],
@@ -247,7 +248,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: true,
   },
   {
     archived: false,
@@ -283,7 +283,6 @@ const docsWorkflows = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
 ];
 
@@ -1273,6 +1272,8 @@ export const docsSeed = (): StewardData => {
   return {
     ...base,
     acknowledgements: docsAcknowledgements(),
+    aiLimitReached: false,
+    aiMonthlyLimit: 0,
     aiProviderOutage: null,
     aiSimulated: true,
     appendices,

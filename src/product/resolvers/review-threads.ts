@@ -16,6 +16,7 @@ import {
   found,
   isSiteAdmin,
   newId,
+  notFound,
   now,
   personOf,
   refuse,
@@ -93,6 +94,18 @@ const takesPart = (person: StewardPerson, version: PolicyVersion): boolean => {
 const readable = (person: StewardPerson, versionId: string): PolicyVersion => {
   const version = versionOf(versionId);
   if (!readableVersion(person, version)) throw forbidden();
+  return version;
+};
+
+/**
+ * The gateway's gate on the snapshot fields: the version read decision first (a version the caller
+ * cannot read is NotFound), then a seat on the version's run (PermissionDenied for the author and
+ * for anyone else). Returns the real version, not the obfuscated view of it.
+ */
+const seatedOn = (person: StewardPerson, versionId: string): PolicyVersion => {
+  const version = versionOf(versionId);
+  if (!readableVersion(person, version)) throw notFound("policy version");
+  if (!hasSeat(person.id, version.id)) throw forbidden();
   return version;
 };
 
@@ -354,9 +367,7 @@ export const reviewThreadResolvers: Resolvers = {
       context: Context,
     ) => {
       const person = caller(context);
-      readable(person, given.policyVersionId);
-      if (!hasSeat(person.id, given.policyVersionId)) throw forbidden();
-      markReviewed(person.id, versionOf(given.policyVersionId));
+      markReviewed(person.id, seatedOn(person, given.policyVersionId));
       return true;
     },
     replyReviewThread: (
@@ -406,9 +417,16 @@ export const reviewThreadResolvers: Resolvers = {
       context: Context,
     ) => {
       const person = caller(context);
-      const version = readable(person, given.policyVersionId);
-      if (!hasSeat(person.id, version.id)) throw forbidden();
-      return changesSinceReview(person.id, version);
+      const version = seatedOn(person, given.policyVersionId);
+      const policy = found(
+        data().policies.find((p) => p.id === version.policyId),
+        "policy",
+      );
+      return changesSinceReview(
+        person.id,
+        version,
+        readEffect(person, policy) !== "allow",
+      );
     },
   },
 };

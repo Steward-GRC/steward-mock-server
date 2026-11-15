@@ -318,7 +318,8 @@ describe("deciding an approval", () => {
     const policy = (await byNumber(author, TRAVEL_BOOKING_NUMBER)).policy;
     assert.equal(policy.currentPublishedVersionId, "version-4");
     assert.equal(policy.currentVersionStatus, "PUBLISHED");
-    assert.equal(policy.currentVersionNo, 1);
+    // the seeded procedure has two earlier editions, so this is its third
+    assert.equal(policy.currentVersionNo, 3);
   });
 
   it("ends the run as soon as the approvals still possible cannot reach the quorum", async () => {

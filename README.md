@@ -7,7 +7,7 @@ backend running, they talk to this instead: one Node process on port 5175 that a
 gateway's paths in the gateway's shapes (`/query`, `/auth/*`, `/setup/*`, the probes), from
 invented data that every client shares and anyone can put back with one click at `/_mock`. The
 schema is steward-gateway's own, pinned to one commit in `schema-refs.env`. Fields the clients
-need before the gateway ships them (for now `searchPolicies`, from steward-gateway#41, and the inline review threads, from steward-gateway#79) live apart
+need before the gateway ships them (for now `searchPolicies`, from steward-gateway#41, and the appendix life cycle) live apart
 in `src/product/schema-pending.graphql` and leave it once the pinned copy carries them.
 
 ## ✨ Highlights
@@ -73,7 +73,11 @@ with real headings: the Desk Booking Policy is the design's reader frame (Purpos
 desk with its "Changing a booking" sub-section, Responsibilities as a table, and Appendix A: Desk
 zones). Section keys are core's: a slug of each top-level heading (`booking-a-desk`), `-2`, `-3`
 for a repeated heading, and `body` for text before the first one. `diffVersions` answers one entry
-per section of the pinned template, keyed and word-diffed as core does.
+per section of the pinned template, keyed and word-diffed as core does. When either version has no
+template (a freeform version, or one compared with a templated one) it answers one entry per content
+block instead: a heading starts a block, text before the first heading is `body` ("Introduction"),
+a block only the older version has is `removed` right after the block it followed, and none is
+boilerplate.
 
 ### A new install
 
@@ -111,7 +115,7 @@ the controls page does the same once from any state, and leaves the chosen state
 | `charlie` | approver                          | Published policies, the Travel Booking Procedure approval waiting on them, the Finance team group. Has an authenticator app and a passkey ("MacBook Touch ID").                                        |
 | `dave`    | privacy officer, compliance admin | The report case queue and the compliance screens. Has to enrol a second factor first. Has a deny exception on the Lost Device Procedure.                                                               |
 | `erin`    | reader                            | Published, non-sensitive policies only. Owes acknowledgements for the Expense Claims and Visitor Sign-in policies; has acknowledged Desk Booking. Has an allow exception on the Archive Access Policy. |
-| `frank`   | none                              | Disabled: sign-in fails as the gateway's does.                                                                                                                                                         |
+| `frank`   | none                              | Disabled: sign-in fails as a wrong password does (401 `invalid_credentials`), as the gateway's does.                                                                                                   |
 | `grace`   | template admin                    | The templates. Signs in with no second factor.                                                                                                                                                         |
 | `heidi`   | group manager                     | Manages the Facilities team (My groups: Dave, Erin and Heidi), with no second factor.                                                                                                                  |
 
@@ -139,7 +143,7 @@ Both lists come from `src/product/users-card.ts`, which reads the same table the
   mock publishes this on `liveEvents`, so a signed-in app can refresh them:
   `{"type": "user.permissions_changed", "entityId": "user:<id>", "groupId": null, "actorUserId": null, "at": "<RFC 3339>"}`.
   `liveEvents` needs the audit log's read permission, as on the gateway.
-- Steward's own admin mutations (`grantRole`, `grantRoot`, `addUserToGroup` and the rest) keep the
+- Steward's own admin mutations (`grantRole`, `transferRoot`, `addUserToGroup` and the rest) keep the
   gateway's rules and audit, and write the same roles and groups, so either side's change shows on
   the other.
 
@@ -148,8 +152,8 @@ its editors', and the case queue is the officers' alone. A draft goes for review
 `submitWorkflow` on its home category's workflow; each approval that meets a stage's quorum moves
 the run on, the last one publishes the policy, and a rejection marks run and policy rejected. Ask is simulated: `searchAndAnswer` quotes and cites the
 published sections the signed-in person may read, `topPolicyQuestions` lists the questions asked, and `aiHealth` says available. The
-**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The **AI provider** buttons simulate the model provider failing while the service answers: `aiHealth` says `provider_unavailable` and `providerReason` is `auth_failed`, `provider_error`, `not_configured` or null (no reason); `providerReason` is null in every other state (a field the pinned gateway schema does not carry yet, so it sits in `schema-pending.graphql`). The AI jobs are
-simulated too (generate a draft, review, revise, enrichment suggestions): a submit returns a job id, the job runs for about
+**Simulated AI off** button on `/_mock` brings back the down service: `aiHealth` says `ai_service_unavailable`. The **AI provider** buttons simulate the model provider failing while the service answers: `aiHealth` says `provider_unavailable` and `providerReason` is `auth_failed`, `provider_error`, `not_configured`, `jobs_unavailable` (the ai service has no Kubernetes API, so the job submits fail too) or null (no reason); `providerReason` is null in every other state. **AI limit reached** simulates the organisation's monthly or the person's daily limit: `aiHealth` says `limit_reached` and the submits are refused with `FailedPrecondition`; a provider outage or the service being down is reported in its place. With the simulation on, `aiConfig` and `aiRetrievalConfig` answer a default config for a site admin (`monthlyLimit` 0, no limit; `setAIMonthlyLimit(limit)` keeps a limit for a site admin, refuses a negative one with `InvalidArgument` and answers the limit in force, and nothing counts usage against it; the other settings changes still fail as the unreachable service). The AI jobs are
+simulated too (generate a draft, review, revise, enrichment suggestions, and `summarizeChanges` / `regenerateVersionSummary`, which read the version first: NotFound for one the caller cannot read, PermissionDenied for an obfuscated read, PermissionDenied also for a caller without Author on the policy when replacing a summary (`regenerateVersionSummary`, or `summarizeChanges` with `regenerate`), FailedPrecondition for no differences or no text; `regenerateVersionSummary` stores its summary and `policyVersionSummary` serves it to anyone who reads the version in full, else null; a repeat `summarizeChanges` answers `cached: true` unless `regenerate` is set): a submit returns a job id, the job runs for about
 2.5 seconds (`MOCK_AI_JOB_MS` changes it), `aiJob` and the `aiJobResult` subscription report it, and `aiJobResultContent` returns a
 made-up result marked as simulated: sections, review findings, a change set. With the simulation off they fail as the gateway does while the ai
 service is down. The admin AI settings answer that way on both settings.
@@ -213,7 +217,8 @@ An appendix belongs to a policy or procedure, never to one of its versions, and 
 own: `createPolicyAppendix` makes a draft, `saveAppendixDraft` autosaves into it, `publishAppendix`
 (authors and above) makes it the version readers see, and a later edit is a new draft beside the
 published row. `retireAppendix` keeps it (hidden from readers, restorable with `restoreAppendix`);
-only a site admin deletes one for good (`deleteAppendixForever`). Every version of a policy shows
+only a site admin deletes a retired one for good (`deleteAppendixForever`; a live one answers a failed
+precondition). Every version of a policy shows
 the latest published appendices as its `appendices`. `appendixDiff` (draft against published) is for
 authors, site admins and compliance only. Appendices take no part in an approval and nobody
 comments on them. The older version-bound mutations (`addAppendix`, `updateAppendix`,
@@ -301,14 +306,20 @@ Saving a workflow refuses an N below one, an N on another quorum and an N above 
 members. Approvers who cannot read the policy are not seated, and when the votes left cannot meet the
 quorum the home category's owners are seated as individuals. `nofm.test.ts` is the reference.
 
-An approver who sends comments back (`REQUEST_CHANGES`) keeps the seat pending with `comment` null, and the seat shows `changesRequested` (the latest comment) and `changesRequestedAt`, which stay after the seat decides and are null for a reader who sees the policy obfuscated (also in `schema-pending.graphql`). `changes-requested.test.ts` is the reference.
+An approver who sends comments back (`REQUEST_CHANGES`) keeps the seat pending with `comment` null, and the seat shows `changesRequested` (the latest comment) and `changesRequestedAt`, which stay after the seat decides and are null for a reader who sees the policy obfuscated. `changes-requested.test.ts` is the reference.
+
+`workflowStatus` also says what the run publishes, as steward-gateway does (steward-gateway#240): `targetSemanticVersion` and `targetChangeType` are the semantic version and change type of the policy version the run is on (the same values as that version's `semanticVersion` and `changeType`), and null when there is no run or no change type is known, as on a first version. The seeded Travel Booking Procedure is in review as its third edition, so its run shows 3.0.0 and MAJOR. `target-version.test.ts` is the reference.
+
+Each `stageAssignees` seat also says why the person holds it, as steward-gateway does (steward-gateway#242): `roleLabel` is "Approver" for a seat the workflow names (an individual approver or a member of a group unit), "Category owner" for a seat the home category's owner took through the quorum backstop, and null when the seat does not record where it came from. The seeded Travel Booking Procedure's run in review shows both: Charlie is an Approver and Alice, Travel's owner, a Category owner. `role-label.test.ts` is the reference.
+
+A site admin or template admin can reassign a pending seat, as steward-gateway#69 describes (the gateway and steward-workflow carry the rules; `swap-assignee.test.ts` is the reference). `stageEligibleAssignees(policyVersionId, stageIndex)` lists the stage's pool as labels: the individual approvers the workflow definition names for it, in its order (the group units are not part of it). `swapAssignee(input)` replaces the holder of a pending seat, in the same place on the stage, with a new seat and task, and audits it as `workflow.assignment.swapped`. It refuses, with workflow's symbol, number and metadata as extensions: a blank reason (SWAP_REASON_REQUIRED, 6004), a missing person (SWAP_USERS_REQUIRED, 6005), the same person (SWAP_SAME_USER, 6006), a seat the person does not hold (SWAP_ASSIGNMENT_NOT_FOUND, 6008) or one already acted on (SWAP_ASSIGNMENT_NOT_PENDING, 6009), someone outside the pool (SWAP_ASSIGNEE_NOT_ELIGIBLE, 6010), a stage past the run (STAGE_INDEX_OUT_OF_RANGE, 6011) and a version with no run (APPROVAL_RUN_NOT_FOUND, 6012). Someone outside the pool is accepted only from an admin who sets `outOfEligibilityAck`, never from the seat's own holder delegating it, and is audited as `workflow.assignment.swapped.out_of_eligibility`; that seat has no `roleLabel`. Anyone else is refused PermissionDenied before anything is read. One mock-only rule: a person who already holds a seat on the stage is refused FailedPrecondition. The seeded run in review has two pending seats on its first stage (Charlie and Alice) and the definition also names Dave, who holds none, so Charlie's seat can go to him. `bulkDecide` and `assignmentHistory` are still not answered.
 
 While a version is in review the author keeps editing it (`saveDraft` and the co-editing checkpoints
 are accepted) and its status stays In review. Each approver is shown what changed since the text they
-last reviewed: `versionChangesSinceReview` returns the section diff, and the snapshot moves forward
+last reviewed: `versionChangesSinceReview` returns the sections that changed (an empty list when none did), and the snapshot moves forward
 when that approver comments, replies, votes, sends comments (`SIGNAL_TYPE_REQUEST_CHANGES`: the seat
 stays open and no status changes) or calls `markVersionReviewed`. The author has no such view, and
-someone with no seat on the run is refused.
+someone with no seat on the run is refused with `PermissionDenied`.
 
 ## 🎛️ Controls
 
@@ -317,13 +328,13 @@ on, `GET /_mock/state` the whole state, and `GET /_mock/people` the people who c
 ever includes a password: a person shows `hasPassword` instead, so a dev quick-login widget can
 read the list live and offer exactly those people.
 
-| Kind             | Body                                   | What it does                                                                                                                                                                           |
-| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sign-in`        | `personId`, `token`                    | A sign-in in one step with the person's own password, skipping the second factor, for a dev quick-login widget; `token: true` returns a bearer token. A refusal says why in `message`. |
-| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                                                                                                                      |
-| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                                                                                                                        |
-| `reset`          |                                        | The sample data back; everyone stays signed in.                                                                                                                                        |
-| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true.                                                                                                  |
+| Kind             | Body                                   | What it does                                                                                                                                                                                                                                                         |
+| ---------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sign-in`        | `personId`, `token`                    | A sign-in in one step with the person's own password, skipping the second factor, for a dev quick-login widget; `token: true` returns a bearer token. A refusal says why in `message`; a disabled account is 403 `account_disabled` here, unlike a password sign-in. |
+| `fail-next`      | `mode` (`graphql` or `http`), `status` | The next GraphQL call fails once.                                                                                                                                                                                                                                    |
+| `expire-session` | `personId` (optional)                  | Ends sessions; open websockets close with 4401.                                                                                                                                                                                                                      |
+| `reset`          |                                        | The sample data back; everyone stays signed in.                                                                                                                                                                                                                      |
+| `fresh`          | `firstRun`                             | Back to first boot: everyone signed out, and first-run setup when `firstRun` is true.                                                                                                                                                                                |
 
 The maintenance cycle has its own kinds, and its own card on the page:
 
@@ -384,9 +395,20 @@ The admin user screens answer as steward-gateway and steward-identity do:
 - **Password and welcome email:** `resetUserPassword` answers true for a local account and
   replaces its password; `resendWelcomeEmail` answers true and sends
   nothing.
+- **Changing your own password:** `changeMyPassword(currentPassword, newPassword)` (in
+  `schema-pending.graphql` until the gateway carries it, steward-gateway#72) changes the
+  signed-in person's password, as steward-identity's ChangeMyPassword does. The seed password is
+  `<username>-password`, so a wrong current one is testable. Refusals carry the registry symbol
+  as the code: `CURRENT_PASSWORD_WRONG` (checked first), `PASSWORD_TOO_WEAK` (under 8
+  characters, on a short breached list, or equal to the email, its mailbox part or the username),
+  `NO_LOCAL_PASSWORD` (an SSO-only account) and `ACT_AS_FORBIDDEN` (while acting as someone). An
+  attempt is audited as `user.password.changed` or `user.password.change_failed`, never with a
+  password. `PASSWORD_CHANGE_UNAVAILABLE` is not answered. `change-password.test.ts` is the
+  reference.
 - **Root admins:** `requestStepUpOtp` "emails" the caller a code, which is any six digits but
-  `000000` and works once; `grantRoot` and `revokeRoot` take it, from a root admin only, and the
-  last root admin can't lose it.
+  `000000` and works once; `transferRoot` takes it, from the root admin only. There is exactly one
+  root: the transfer moves the seat to the target (enabled, with site-admin), and the old holder
+  stays a normal site admin with their sessions open.
 - **Acting as someone:** `startImpersonation` makes every request on that admin's session (only
   that one) run as the target for 30 minutes, until `stopImpersonation`. `impersonationStatus`
   reports it, `diagnostics` names the real admin with the target as `actingAs`, the start and stop
@@ -417,7 +439,10 @@ steward-identity and steward-obligations:
   obligations' taxonomy classifies. `setCategoryCadence`, `setTypeCadence`, `setDigestWindow` and
   `setNotificationChannels` save the caller's choices; turning off a compliance, security or
   transactional category or type is refused with `NOTIFY_PREF_MANDATORY_OFF`, and an unknown type
-  or a digest hour or day out of range with `NOTIFY_PREF_INVALID`.
+  or a digest hour or day out of range with `NOTIFY_PREF_INVALID`. Quiet hours hold email and push
+  but never an in-app notice; security and transactional kinds and any critical-severity kind
+  (`policy-escalation`, `otp`, `kratos-recovery`, `break-glass-alert`, `break-glass-read-alert`)
+  go out regardless, while `ack-required`, `policy-ack-reminder` and `review-due` are held.
 
 ### Acknowledgement activity
 
@@ -486,7 +511,7 @@ Start fresh forgets them.
 - **Read** serves the bytes with the stored type. A cookie session needs no CSRF token, so an
   `<img src>` loads it. An unknown id answers 404 `Asset not found`.
 - **Controls** (the Image uploads section of `/_mock`): `{"kind":"asset-upload","mode":"fail"}`
-  makes uploads answer 503 `Failed to store image` until `"mode":"ok"`, and
+  makes uploads answer 503 `Uploads are unavailable right now.` with code `uploads_unavailable` until `"mode":"ok"`, and
   `{"kind":"asset-limit","limit":"small"}` lowers the cap to 100 KB so the too-large error shows
   without a huge file (`"limit":"real"` puts 10 MB back).
 
@@ -494,21 +519,60 @@ Start fresh forgets them.
 
 Each category keeps its own access rules (`categoryRuleset`, `setCategoryRuleset`), as
 steward-core stores them; the admin console shows an ancestor's rules by reading that category's.
+A rule is a row: a subject (a user, a group by its exact, case-sensitive name, or Everyone) and a
+cell, blank, allow or deny, for each of Read, Author, Approve, Manage and Ack. The mock decides
+them the way steward-gateway does, with the ordered engine of go-authz (`src/product/ordered.ts`,
+the one evaluator; `src/product/access-rules.ts` maps the categories onto it):
+
+- Each action is decided on its own, top-down: the first row that matches the person and has a
+  non-blank cell for that action wins, the category's own rows first and then each parent's.
+- Owners (people only, inherited, several allowed) always hold Read, Author, Approve and Manage,
+  whatever a row says, and not Ack. `setCategoryGovernance` refuses an owner that is a group,
+  Everyone or an unknown id (`InvalidArgument`).
+- Manage lets a person move and reorder documents; it implies Read and Author only. An allowed
+  Author, Approve or Manage gives Read even over a Read deny, and Ack needs Read.
+- The root account (the one with the root flag) always holds Read, Author and Manage, sensitive
+  documents included, and is never obfuscated. A deny against root on those three is saved and
+  the simulator lists it in `configuredBlock`, but it never applies. Approve and Ack follow the
+  rows for root. A site admin who is not root follows the rows like everyone, so a deny blocks
+  them (a policy the rows exclude reaches them obfuscated, with break glass on offer).
+- A new category starts with the rule Everyone: Read; so do the seed's top-level categories.
+- `simulateCategory` answers each action with a flag, a reason ("allowed by group Facilities team
+  in Facilities", "allowed: owner of the category or a parent", "denied: requires read", "denied:
+  no rule decides") and a code (`ENTRY`, `DEFAULT_DENY`, `OWNER`, `ROOT`, `REQUIRES`); an empty
+  `userId` is the baseline for no one in particular. `categoryApprovers` lists the approver pool
+  (owners first, then everyone whose Approve allows) and `viewerIsApprover` asks whether the
+  caller holds Approve anywhere. Each action also has a structured `readVerdict` (and `ackVerdict`,
+  `approveVerdict`, `authorVerdict`, `manageVerdict`): a `RaciVerdictCode` and, when a row decided,
+  that rule's category, depth, row number, subject and action. `groupName` simulates the members of
+  one directory group (a subject whose only membership is that group); with a `userId` it is
+  `InvalidArgument`.
+- `idpGroupNames(prefix, limit)` lists the directory group names a group rule can match: the names
+  in people's group claims, byte-sorted, no duplicates, prefix matched case-insensitively, 50 by
+  default and 200 at most, with `truncated` when more matched.
+- `searchPlatformGroups(query, limit)` is the group typeahead of the access picker: groups at any
+  depth whose name contains the query (case aside), by name, for group.manage or template.manage.
+  The query is trimmed and needs two characters (`InvalidArgument`); the limit is 20 by default
+  and 50 at most.
+- Policies follow the same rows: `viewerCan.manage`, the read gate, edit and approve (together
+  with the scoped author and approver grants) all come from the engine. Moving documents
+  (`movePolicy`, `movePolicies`, `previewMovePolicies`) needs a site admin, or Manage on each
+  document's category and Author on the target.
+- `src/product/testdata/ordered.json` is go-authz's shared vector file, run through the engine by
+  `ordered.test.ts`; `ordered.SOURCE` names its commit, and `task vectors:refresh` refreshes it.
+
 The seed follows the design's A5 frame:
 
 - **Workplace:** Everyone may read.
-- **Workplace › Facilities:** the Facilities team may do everything; All staff may read and
-  acknowledge, and may not author.
+- **Workplace › Facilities:** the Facilities team may do everything, Manage included; All staff
+  may read and acknowledge, and may not author.
 - **Finance:** Everyone may read. Alice owns it.
-- **Finance › Expenses:** the Finance team may do everything; Erin may not approve or author; All
-  staff may read.
+- **Finance › Expenses:** the Finance team may do everything, Manage included; Erin may not
+  approve or author; All staff may read.
+- **People** and **Information:** Everyone may read. Charlie owns Information.
 
 Group rules match a person's IdP groups: Bob is in All staff, Charlie in the Finance team and All
-staff, and Erin in All staff and the Facilities team. `simulateCategory` evaluates the chain as
-steward-authz does, with its reasons ("rule #2 deny group All staff", "↳ Workplace #1 allow
-everyone", "owner (auto read/approve/author)", "no rule → default deny"); an empty `userId` is the
-baseline for no one in particular. The rules drive the simulator only: who reads, approves and
-authors elsewhere in the mock still follows each category's owners and approve and author lists.
+staff, and Erin in All staff and the Facilities team. Alice is the root account.
 
 ### Onboarding
 
@@ -518,6 +582,13 @@ page (G10). `completeOnboarding` clears it the gateway's way: the terms must be 
 first or last name sets the name (derived as "first last"), a sent non-empty email replaces the
 email, and a sent username must be non-empty (`InvalidArgument`) and free (`AlreadyExists`). The
 "Erin owes onboarding" button on `/_mock` marks Erin. A reset clears it.
+
+### Acknowledgement due dates
+
+`dueAt` on `myObligations`, the roster's pending entries and every overdue entry of the completion
+report is the version's publish time plus the due days (steward-obligations' `ACK_DUE_DAYS`): 14 by
+default, or the `ACK_DUE_DAYS` environment variable. `ack-due-days` with `days` sets it from the
+controls; 0 turns due dates off, so every `dueAt` is null. A reset brings back the default.
 
 ### Sign-in methods
 

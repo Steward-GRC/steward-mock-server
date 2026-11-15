@@ -98,23 +98,36 @@ const findPerson = (username: string) => {
 const goodCode = (code: string | undefined) =>
   !!code && /^\d{6}$/.test(code) && code !== WRONG_CODE;
 
+/** Options for checkCredentials. */
+export interface CredentialOptions {
+  /**
+   * Answer a disabled account with 403 account_disabled, for the dev quick login, which names
+   * the reason. The gateway has no such answer on a password sign-in, so leave it off there.
+   */
+  revealDisabled?: boolean;
+}
+
+const wrongCredentials = () =>
+  refuse(401, "invalid_credentials", "The username or password is wrong.");
+
 /**
  * The person a username and password sign in, or the gateway's refusal. The core's /auth/login
- * uses it, and a product whose sign-in is its own route calls it for the same check.
+ * uses it, and a product whose sign-in is its own route calls it for the same check. The
+ * gateway answers a disabled account as it answers a wrong password (401 invalid_credentials),
+ * so sign-in does not reveal that the account exists; only the dev quick login asks to see it.
  */
 export const checkCredentials = (
   username: string,
   password: string,
+  options: CredentialOptions = {},
 ): Person | Response => {
   const person = findPerson(username);
   if (!person?.password || password !== person.password)
-    return refuse(
-      401,
-      "invalid_credentials",
-      "The username or password is wrong.",
-    );
+    return wrongCredentials();
   if (person.disabled)
-    return refuse(403, "account_disabled", "This account is disabled.");
+    return options.revealDisabled
+      ? refuse(403, "account_disabled", "This account is disabled.")
+      : wrongCredentials();
   return person;
 };
 

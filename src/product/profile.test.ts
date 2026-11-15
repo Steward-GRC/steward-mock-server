@@ -113,6 +113,24 @@ describe("myWebauthnCredentials", () => {
   });
 });
 
+describe("listUserSessions", () => {
+  const SESSIONS = `query ($userId: ID!) { listUserSessions(userId: $userId) { active current sessionId } }`;
+
+  it("answers a live session's current flag: true for the caller's own session, false for another's", async () => {
+    const admin = await signInAs(base, "user-alice");
+    await signInAs(base, "user-erin");
+    const erin = (await ok(SESSIONS, admin, { userId: "user-erin" }))
+      .listUserSessions as { active: boolean; current: boolean }[];
+    const live = erin.filter((s) => s.active);
+    assert.ok(live.length > 0);
+    assert.ok(live.every((s) => s.current === false));
+
+    const own = (await ok(SESSIONS, admin, { userId: "user-alice" }))
+      .listUserSessions as { active: boolean; current: boolean }[];
+    assert.equal(own.filter((s) => s.active && s.current).length, 1);
+  });
+});
+
 describe("revokeMySessions", () => {
   const SESSIONS = `query ($userId: ID!) { listUserSessions(userId: $userId) { active } }`;
 

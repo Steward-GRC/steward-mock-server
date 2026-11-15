@@ -101,11 +101,16 @@ const cases: Record<string, Case> = {
     as: ADMIN,
     variables: { groupId: "group-2", userId: READER },
   },
-  // AI isn't mocked: the settings answer as the gateway does with the ai service down.
-  AiConfig: { as: ADMIN, refused: AI_DOWN },
+  // the settings read answers a default config while the AI simulation is on (the simulation off is
+  // covered in ai-provider-reason.test.ts); the changes below stay refused as the ai service down
+  AiConfig: { as: ADMIN },
   AiHealth: { as: READER },
-  // a job that was never submitted is not found (the submits are covered in ai-jobs.test.ts)
-  AiJob: { as: AUTHOR, refused: "NotFound", variables: { jobId: "ai-job-0" } },
+  // a job that was never submitted is AI_JOB_NOT_FOUND, a result ref nobody holds a plain NotFound (the submits are covered in ai-jobs.test.ts)
+  AiJob: {
+    as: AUTHOR,
+    refused: "AI_JOB_NOT_FOUND",
+    variables: { jobId: "ai-job-0" },
+  },
   AiJobResultContent: {
     as: AUTHOR,
     refused: "NotFound",
@@ -296,12 +301,6 @@ const cases: Record<string, Case> = {
   ForceRotateSpCertificate: { as: ADMIN },
   GlobalSettings: { as: READER },
   GrantRole: { as: ADMIN, variables: { role: "author", userId: READER } },
-  // Without a step-up code asked for first, identity refuses it; the one-step case can't ask.
-  GrantRoot: {
-    as: ADMIN,
-    refused: "InvalidArgument",
-    variables: { otp: "123456", userId: AUTHOR },
-  },
   GroupMappings: { as: ADMIN, variables: { connectionId: "connection-1" } },
   ImpersonationStatus: { answersNull: true, as: ADMIN },
   IssueCollabToken: {
@@ -697,6 +696,12 @@ const cases: Record<string, Case> = {
   Templates: { as: AUTHOR, variables: {} },
   TemplateVersions: { as: ADMIN, variables: { templateId: "template-1" } },
   TopPolicyQuestions: { as: READER, variables: { limit: 6 } },
+  // Only the root can transfer it, and a one-step case never holds the root seat to try it.
+  TransferRoot: {
+    as: READER,
+    refused: "ROOT_REQUIRED",
+    variables: { otp: "123456", userId: AUTHOR },
+  },
   UpcomingApprovals: { as: ADMIN },
   UpdateAppendix: {
     as: AUTHOR,
@@ -811,7 +816,7 @@ const cases: Record<string, Case> = {
 const SUBSCRIPTIONS: Record<string, Case> = {
   AiJobResult: {
     as: AUTHOR,
-    refused: "NotFound",
+    refused: "AI_JOB_NOT_FOUND",
     variables: { jobId: "ai-job-0" },
   },
   // liveEvents needs the audit log's read permission; a reader is refused at subscribe time.

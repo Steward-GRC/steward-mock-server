@@ -283,6 +283,12 @@ export const appendixResolvers: Resolvers = {
       const person = caller(context);
       const appendix = appendixById(given.id);
       if (!isSiteAdmin(person)) throw forbidden();
+      // Core refuses a live appendix (FAILED_PRECONDITION): retire it first.
+      if (appendix.retiredAt === null)
+        throw refuse(
+          "FAILED_PRECONDITION",
+          "Retire the appendix before deleting it for good.",
+        );
       const all = data().appendices;
       all.splice(all.indexOf(appendix), 1);
       renumber(all, appendix.policyId);

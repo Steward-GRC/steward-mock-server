@@ -7,6 +7,8 @@
 // policies, a sensitive draft, a draft in review waiting on an approver, a retired policy, a
 // withdrawn draft, a published procedure and a rejected one.
 
+import type { SiteWorkCalendar } from "#product/data/admin.ts";
+import type { ChangeState, Semver } from "#product/semver.ts";
 export interface Acknowledgement {
   ackedAt: string;
   policyVersionId: string;
@@ -53,11 +55,19 @@ export interface PolicyLinks {
 
 export interface PolicyVersion {
   appendices: Appendix[];
+  /**
+   * The change type: suggested at submit, the author's pick, who agreed to a lowering (steward-core
+   * ChangeState). Absent before a submit, and for a first version, which takes none. A published
+   * version's is final (version-numbers.ts).
+   */
+  change?: ChangeState;
   contentJson: string;
   createdAt: string;
   id: string;
   policyId: string;
   publishedAt: null | string;
+  /** MAJOR.MINOR.FIX, written when the version is published; versionNo stays the ordinal. */
+  semver?: Semver;
   /** DRAFT, IN_REVIEW, APPROVED, PUBLISHED, SUPERSEDED, REJECTED or WITHDRAWN. */
   status: string;
   templateVersionId: string;
@@ -76,6 +86,11 @@ export interface Run {
   status: string;
   submittedAt: string;
   submittedBy: string;
+  /**
+   * The site work calendar as it was when the run was submitted, which counts every stage's SLA
+   * (steward-mock-server#227); absent on a seeded run, which uses the default calendar.
+   */
+  workCalendar?: SiteWorkCalendar;
   workflowDefId: string;
 }
 
@@ -88,6 +103,8 @@ export interface RunGroup {
 }
 
 export interface RunStage {
+  /** When the stage is due: fixed from the day it is entered; absent until then or with no SLA. */
+  dueAt?: null | string;
   /** Approve-as-group units on the stage; their members are the seats with that `groupId`. */
   groups?: RunGroup[];
   name: string;
@@ -96,7 +113,9 @@ export interface RunStage {
   /** The approvals an nofm stage needs; absent or zero on every other quorum. */
   quorumN?: number;
   seats: Seat[];
-  /** Seat holders whose single reject ends the run (the workflow opted in to vetoes). */
+  /** The workflow stage's SLA in days, kept to fix `dueAt` when the stage is entered. */
+  slaDays?: null | number;
+  /** Seat holders whose single reject ends the run (the stage's veto people who are seated). */
   vetoUserIds?: string[];
 }
 
@@ -108,11 +127,16 @@ export interface Seat {
   decidedAt: null | string;
   /** The group whose seat this is; absent or null for an individual seat. */
   groupId?: null | string;
-  /** pending, approved, rejected, or cancelled once the run ends without them. */
+  /** Absent on a seat that does not record it; `roleLabel` is then null. */
+  source?: SeatSource;
+  /** pending, approved, rejected, superseded (a settled stage no longer needs it) or withdrawn (the run was withdrawn). */
   state: string;
   taskId: string;
   userId: string;
 }
+
+/** Why a person holds a seat: the workflow names them, or the category owner joined for quorum. */
+export type SeatSource = "approver" | "category-owner";
 
 /** steward-core's rendered number for the seeded Expense Claims Policy. */
 export const EXPENSE_CLAIMS_NUMBER = "POL-EXPENSES-000002";
@@ -584,6 +608,39 @@ export const versions = (): PolicyVersion[] => [
     templateVersionId: "template-version-1",
     versionNo: 1,
   }),
+  // The travel booking procedure's two earlier editions, both since superseded and none current:
+  // the draft in review (version-4) follows 2.0.0, and a changed number makes each edition a
+  // major change, so its run shows 3.0.0, Major.
+  version({
+    contentJson: lexical(
+      [
+        "Steps",
+        "Book trains, flights and hotels on the travel booking site at least 21 days ahead.",
+      ],
+      ["Afterwards", "Economy fares only."],
+    ),
+    createdAt: "2025-03-03T09:00:00Z",
+    id: "version-travel-1",
+    policyId: "policy-3",
+    publishedAt: "2025-03-17T00:00:00Z",
+    status: "SUPERSEDED",
+    versionNo: 1,
+  }),
+  version({
+    contentJson: lexical(
+      [
+        "Steps",
+        "Book trains, flights and hotels on the travel booking site at least 7 days ahead.",
+      ],
+      ["Afterwards", "Economy fares only."],
+    ),
+    createdAt: "2026-02-02T09:00:00Z",
+    id: "version-travel-2",
+    policyId: "policy-3",
+    publishedAt: "2026-02-16T00:00:00Z",
+    status: "SUPERSEDED",
+    versionNo: 2,
+  }),
 ];
 
 export const links = (): Record<string, PolicyLinks> => ({
@@ -615,6 +672,9 @@ export const seat = (
   userId,
 });
 
+/** A seat that records why its holder has it (a seat made before that was kept does not). */
+const named = (source: SeatSource, held: Seat): Seat => ({ ...held, source });
+
 export const runs = (): Run[] => [
   {
     currentStageIdx: 0,
@@ -623,14 +683,19 @@ export const runs = (): Run[] => [
     policyVersionId: "version-4",
     stages: [
       {
+        dueAt: "2026-09-25T00:00:00Z",
         name: "Review",
         quorum: "majority",
-        seats: [seat("task-1", "user-charlie"), seat("task-2", "user-alice")],
+        seats: [
+          named("approver", seat("task-1", "user-charlie")),
+          // Travel's owner holds this seat through the owner backstop, not the workflow
+          named("category-owner", seat("task-2", "user-alice")),
+        ],
       },
       {
         name: "Final approval",
         quorum: "one",
-        seats: [seat("task-3", "user-alice")],
+        seats: [named("approver", seat("task-3", "user-alice"))],
       },
     ],
     status: "APPROVAL_STATUS_IN_REVIEW",

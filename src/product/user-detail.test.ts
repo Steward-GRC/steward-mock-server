@@ -67,8 +67,11 @@ const RENAME_FACTOR = `mutation ($userId: ID!, $methodId: ID!, $label: String!) 
 const RESET = `mutation ($userId: ID!, $newPassword: String!) { resetUserPassword(userId: $userId, newPassword: $newPassword) }`;
 const WELCOME = `mutation ($userId: ID!) { resendWelcomeEmail(userId: $userId) }`;
 const STEP_UP = `mutation { requestStepUpOtp }`;
-const GRANT_ROOT = `mutation ($userId: ID!, $otp: String!) { grantRoot(userId: $userId, otp: $otp) { userId isRoot roles } }`;
-const REVOKE_ROOT = `mutation ($userId: ID!, $otp: String!) { revokeRoot(userId: $userId, otp: $otp) { userId isRoot roles } }`;
+const TRANSFER_ROOT = `mutation ($userId: ID!, $otp: String!) { transferRoot(userId: $userId, otp: $otp) { userId isRoot roles } }`;
+const ROOT_HOLDERS = () =>
+  stewardData()
+    .people.filter((p) => p.roles.includes("root"))
+    .map((p) => p.id);
 const START = `mutation ($userId: ID!, $reason: String!) {
   startImpersonation(userId: $userId, reason: $reason) { targetUserId targetName reason startedAt expiresAt }
 }`;
@@ -309,81 +312,140 @@ describe("password and welcome email", () => {
 });
 
 describe("root admins", () => {
-  it("grants root with the emailed code, which works once", async () => {
+  it("transfers the single root with the emailed code", async () => {
     const signed = await admin();
+    assert.deepEqual(ROOT_HOLDERS(), ["user-alice"]);
     assert.deepEqual((await ask(signed, STEP_UP)).data, {
       requestStepUpOtp: true,
     });
-    const granted = await ask(signed, GRANT_ROOT, {
+    const moved = await ask(signed, TRANSFER_ROOT, {
       otp: GOOD_CODE,
       userId: "user-bob",
     });
-    assert.deepEqual(granted.data, {
-      grantRoot: {
+    assert.deepEqual(moved.data, {
+      transferRoot: {
         isRoot: true,
         roles: ["author", "site-admin"],
         userId: "user-bob",
       },
     });
-    assert.equal(stewardData().audit.at(-1)?.action, "root.granted");
-    const again = await ask(signed, GRANT_ROOT, {
+    assert.deepEqual(ROOT_HOLDERS(), ["user-bob"]);
+    const events = stewardData().audit.filter((a) =>
+      a.action.startsWith("root."),
+    );
+    assert.deepEqual(
+      events.map((a) => [a.action, a.actorUserId, a.subject]),
+      [["root.transferred", "user-alice", "user:user-bob"]],
+    );
+    // The old holder is no longer root, so the seat can't be moved again from that session.
+    await ask(signed, STEP_UP);
+    const again = await ask(signed, TRANSFER_ROOT, {
       otp: GOOD_CODE,
       userId: "user-erin",
     });
-    assert.equal(again.code, "InvalidArgument");
+    assert.equal(again.code, "ROOT_REQUIRED");
+    assert.deepEqual(ROOT_HOLDERS(), ["user-bob"]);
+  });
+
+  it("leaves the old holder a site admin who is no longer root", async () => {
+    const signed = await admin();
+    await ask(signed, STEP_UP);
+    await ask(signed, TRANSFER_ROOT, { otp: GOOD_CODE, userId: "user-bob" });
+    const alice = stewardData().people.find((p) => p.id === "user-alice");
+    assert.ok(alice?.roles.includes("site-admin"));
+    assert.ok(!alice?.roles.includes("root"));
+  });
+
+  it("enables a disabled target and never leaves two roots", async () => {
+    const signed = await admin();
+    const frank = stewardData().people.find((p) => p.id === "user-frank");
+    assert.ok(frank);
+    frank.disabled = true;
+    await ask(signed, STEP_UP);
+    const moved = await ask(signed, TRANSFER_ROOT, {
+      otp: GOOD_CODE,
+      userId: "user-frank",
+    });
+    assert.equal((moved.data.transferRoot as { isRoot: boolean }).isRoot, true);
+    assert.equal(frank.disabled, false);
+    assert.ok(frank.roles.includes("site-admin"));
+    assert.deepEqual(ROOT_HOLDERS(), ["user-frank"]);
+  });
+
+  it("takes a code that works once", async () => {
+    const signed = await admin();
+    await ask(signed, STEP_UP);
+    const self = await ask(signed, TRANSFER_ROOT, {
+      otp: GOOD_CODE,
+      userId: "user-alice",
+    });
+    assert.equal(self.code, "InvalidArgument");
+    const again = await ask(signed, TRANSFER_ROOT, {
+      otp: GOOD_CODE,
+      userId: "user-bob",
+    });
     assert.equal(again.message, "invalid or expired confirmation code");
+    assert.deepEqual(ROOT_HOLDERS(), ["user-alice"]);
   });
 
   it("refuses a wrong code, a missing request and a non-root caller", async () => {
     const signed = await admin();
     assert.equal(
-      (await ask(signed, GRANT_ROOT, { otp: GOOD_CODE, userId: "user-bob" }))
-        .code,
+      (
+        await ask(signed, TRANSFER_ROOT, {
+          otp: GOOD_CODE,
+          userId: "user-bob",
+        })
+      ).code,
       "InvalidArgument",
     );
     await ask(signed, STEP_UP);
     assert.equal(
-      (await ask(signed, GRANT_ROOT, { otp: WRONG_CODE, userId: "user-bob" }))
-        .code,
+      (
+        await ask(signed, TRANSFER_ROOT, {
+          otp: WRONG_CODE,
+          userId: "user-bob",
+        })
+      ).code,
       "InvalidArgument",
     );
     const erin = await reader();
     await ask(erin, STEP_UP);
     assert.equal(
-      (await ask(erin, GRANT_ROOT, { otp: GOOD_CODE, userId: "user-erin" }))
-        .code,
+      (
+        await ask(erin, TRANSFER_ROOT, {
+          otp: GOOD_CODE,
+          userId: "user-erin",
+        })
+      ).code,
       "ROOT_REQUIRED",
     );
+    assert.deepEqual(ROOT_HOLDERS(), ["user-alice"]);
   });
 
-  it("revokes root, keeping site admin, but never from the last root admin", async () => {
+  it("refuses a transfer to yourself or to someone who does not exist", async () => {
     const signed = await admin();
     await ask(signed, STEP_UP);
-    let answer = await ask(signed, REVOKE_ROOT, {
-      otp: GOOD_CODE,
-      userId: "user-alice",
-    });
-    assert.equal(answer.code, "FailedPrecondition");
+    assert.equal(
+      (
+        await ask(signed, TRANSFER_ROOT, {
+          otp: GOOD_CODE,
+          userId: "user-alice",
+        })
+      ).code,
+      "InvalidArgument",
+    );
     await ask(signed, STEP_UP);
-    await ask(signed, GRANT_ROOT, { otp: GOOD_CODE, userId: "user-bob" });
-    await ask(signed, STEP_UP);
-    answer = await ask(signed, REVOKE_ROOT, {
-      otp: GOOD_CODE,
-      userId: "user-bob",
-    });
-    assert.deepEqual(answer.data, {
-      revokeRoot: {
-        isRoot: false,
-        roles: ["author", "site-admin"],
-        userId: "user-bob",
-      },
-    });
-    await ask(signed, STEP_UP);
-    answer = await ask(signed, REVOKE_ROOT, {
-      otp: GOOD_CODE,
-      userId: "user-erin",
-    });
-    assert.equal(answer.code, "InvalidArgument");
+    assert.equal(
+      (
+        await ask(signed, TRANSFER_ROOT, {
+          otp: GOOD_CODE,
+          userId: "user-nobody",
+        })
+      ).code,
+      "NotFound",
+    );
+    assert.deepEqual(ROOT_HOLDERS(), ["user-alice"]);
   });
 });
 

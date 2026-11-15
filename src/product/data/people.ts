@@ -101,7 +101,7 @@ const person = (
 
 /**
  * One person per Steward role, Heidi the group manager and Grace the template admin; reader is
- * implicit and never listed, as in steward-authz.
+ * implicit and never listed, as in the gateway's permission catalog.
  */
 export const people = (): StewardPerson[] => [
   person({

@@ -1,0 +1,5 @@
+mutation TransferRoot($userId: ID!, $otp: String!) {
+  transferRoot(userId: $userId, otp: $otp) {
+    ...UserFields
+  }
+}

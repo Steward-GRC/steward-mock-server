@@ -21,6 +21,7 @@ import { factorResolvers } from "#product/resolvers/factors.ts";
 import { governanceResolvers } from "#product/resolvers/governance.ts";
 import { libraryResolvers } from "#product/resolvers/library.ts";
 import { linkResolvers } from "#product/resolvers/links.ts";
+import { moduleResolvers } from "#product/resolvers/module.ts";
 import { notificationResolvers } from "#product/resolvers/notifications.ts";
 import { policyResolvers } from "#product/resolvers/policies.ts";
 import { raciResolvers } from "#product/resolvers/raci.ts";
@@ -32,12 +33,13 @@ import {
   refuse,
 } from "#product/resolvers/shared.ts";
 import { userResolvers } from "#product/resolvers/users.ts";
+import { versionResolvers } from "#product/resolvers/versions.ts";
 import { workflowResolvers } from "#product/resolvers/workflow.ts";
 
 export { announce, type LiveEvent } from "#product/resolvers/shared.ts";
 export { asUser, permissionsOf } from "#product/resolvers/users.ts";
 
-/** The roles steward-authz grants audit.read, which liveEvents needs. */
+/** The roles the gateway's permission catalog grants audit.read, which liveEvents needs. */
 const AUDIT_READERS = new Set(["compliance-admin", "site-admin"]);
 
 const liveResolvers: Resolvers = {
@@ -84,12 +86,14 @@ const domains: Resolvers[] = [
   libraryResolvers,
   linkResolvers,
   liveResolvers,
+  moduleResolvers,
   notificationResolvers,
   policyResolvers,
   raciResolvers,
   reviewThreadResolvers,
   searchResolvers,
   userResolvers,
+  versionResolvers,
   workflowResolvers,
 ];
 

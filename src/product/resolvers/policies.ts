@@ -16,6 +16,7 @@ import {
   policyView,
   readableVersion,
   readEffect,
+  scrambled,
   visible,
 } from "#product/access.ts";
 import { syncAppendices } from "#product/appendices.ts";
@@ -41,7 +42,12 @@ import {
   record,
   refuse,
 } from "#product/resolvers/shared.ts";
-import { diffVersions } from "#product/sections.ts";
+import {
+  diffBlocks,
+  diffVersions,
+  type SectionDiff,
+} from "#product/sections.ts";
+import { numberForPublish } from "#product/version-numbers.ts";
 
 /** How long a break-glass grant lasts. */
 const BREAK_GLASS_MS = 5 * 60 * 1000;
@@ -251,7 +257,7 @@ export const cancelRuns = (versionId: string): void => {
     run.status = "APPROVAL_STATUS_WITHDRAWN";
     for (const stage of run.stages)
       for (const seat of stage.seats)
-        if (seat.state === "pending") seat.state = "cancelled";
+        if (seat.state === "pending") seat.state = "withdrawn";
   }
 };
 
@@ -263,6 +269,8 @@ export const publishVersion = (
   const at = now();
   const previous = versionById(policy.currentPublishedVersionId);
   if (previous) previous.status = "SUPERSEDED";
+  // numbered against the highest numbered version before it gets its own ordinal
+  numberForPublish(version);
   version.versionNo =
     Math.max(
       0,
@@ -278,32 +286,40 @@ export const publishVersion = (
   policy.updatedAt = at;
 };
 
-/** The gateway's scrambleText, for a section title an obfuscated read gets. */
-const SCRAMBLE = "xqzjvbkwflgncmdptrhsyuoaei";
-const scrambled = (value: string) =>
-  value.replaceAll(/[a-zA-Z]/g, (ch) => {
-    const lower = ch.toLowerCase();
-    const swap = SCRAMBLE[(lower.codePointAt(0) ?? 97) - 97] ?? lower;
-    return ch === lower ? swap : swap.toUpperCase();
-  });
-
 /**
- * core's DiffVersions over the "to" version's pinned template sections, keyed as core keys them
- * (src/product/sections.ts). A version with no pinned template has no sections to diff, which
- * core refuses as an internal fault. The gateway drops the word diff and scrambles the titles for
- * an obfuscated read.
+ * core's DiffVersions. When both versions pin a template version, one entry per section of the
+ * "to" version's template (src/product/sections.ts keys them as core does). When either has none
+ * (a freeform version, or a freeform one against a templated one), one entry per content block of
+ * the two texts instead. The gateway drops the word diff and scrambles the titles for an
+ * obfuscated read.
  */
-const diff = (from: PolicyVersion, to: PolicyVersion, obscured: boolean) => {
-  const template = data().templateVersions.find(
-    (t) => t.id === to.templateVersionId,
-  );
-  if (!template) throw refuse("INTERNAL", "fetch template version: not found");
-  const diffs = diffVersions(
-    from.contentJson,
-    to.contentJson,
-    template.sections.toSorted((a, b) => a.order - b.order),
-    from.templateVersionId !== to.templateVersionId,
-  );
+export const diff = (
+  from: PolicyVersion,
+  to: PolicyVersion,
+  obscured: boolean,
+) => {
+  let diffs: SectionDiff[] | undefined;
+  if (from.templateVersionId === "" || to.templateVersionId === "") {
+    const blocks = diffBlocks(from.contentJson, to.contentJson);
+    if ("badSide" in blocks)
+      throw refuse(
+        "INTERNAL",
+        `diff: ${blocks.badSide} content: parse content`,
+      );
+    diffs = blocks.diffs;
+  } else {
+    const template = data().templateVersions.find(
+      (t) => t.id === to.templateVersionId,
+    );
+    if (!template)
+      throw refuse("INTERNAL", "fetch template version: not found");
+    diffs = diffVersions(
+      from.contentJson,
+      to.contentJson,
+      template.sections.toSorted((a, b) => a.order - b.order),
+      from.templateVersionId !== to.templateVersionId,
+    );
+  }
   if (!diffs) throw refuse("INTERNAL", "diff: parse content");
   return diffs.map((d) => ({
     ...d,

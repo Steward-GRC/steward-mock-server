@@ -89,7 +89,10 @@ export const query = async (
   return {
     body: (await answer.json()) as {
       data?: Record<string, unknown>;
-      errors?: { extensions: { code: string } }[];
+      errors?: {
+        extensions: { code: string; kind?: string };
+        message: string;
+      }[];
     },
     status: answer.status,
   };

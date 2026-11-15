@@ -4,6 +4,7 @@
 // sessions, deletion and merging, and diagnostics. The people are the core's sign-in records, so
 // disabling, deleting or changing roles here changes who can sign in and what they may do.
 
+import { GraphQLError } from "graphql";
 import { createHash } from "node:crypto";
 
 import type { AuditAction } from "#product/audit-actions.ts";
@@ -29,11 +30,13 @@ import {
   found,
   isSiteAdmin,
   newId,
+  notFound,
   people,
   realCaller,
   record,
   refuse,
   siteAdmin,
+  withAnyRole,
 } from "#product/resolvers/shared.ts";
 
 const firstAndLast = (name: string) => {
@@ -42,7 +45,7 @@ const firstAndLast = (name: string) => {
 };
 
 /**
- * steward-authz's role grants, as steward-web mirrors them (packages/auth/src/catalog.ts).
+ * The gateway's permission catalog, as steward-web mirrors it (packages/auth/src/catalog.ts).
  * Reader is implicit: everyone who can sign in may read.
  */
 const ALL_PERMISSIONS = [
@@ -87,7 +90,7 @@ const approverScopes = (person: StewardPerson): string[] =>
     )
     .map((c) => c.name);
 
-/** A root admin; identity makes the first site admin one, and grantRoot others. */
+/** A root admin; identity keeps exactly one, and transferRoot moves the seat. */
 export { isRoot } from "#product/groups.ts";
 
 /** A person as the gateway's User type. */
@@ -129,6 +132,34 @@ const personFor = (userId: string): StewardPerson =>
     "user",
   );
 
+/** gateway: language[-Script][-REGION], e.g. en, en-US, zh-Hant-TW, es-419. */
+const LOCALE_TAG =
+  /^[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|\d{3}))?$/;
+
+/** The locale as the gateway stores it: trimmed and cased, "" for blank, PROFILE_LOCALE_INVALID if malformed. */
+const normalizedLocale = (input: string): string => {
+  const tag = input.trim();
+  if (!tag) return "";
+  if (!LOCALE_TAG.test(tag))
+    throw new GraphQLError("The language isn't a valid locale tag.", {
+      extensions: {
+        code: "PROFILE_LOCALE_INVALID",
+        codeNum: 1241,
+        domain: "gateway",
+        kind: "business",
+      },
+    });
+  return tag
+    .split("-")
+    .map((part, index) => {
+      if (index === 0) return part.toLowerCase();
+      if (part.length === 4)
+        return part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase();
+      return part.toUpperCase();
+    })
+    .join("-");
+};
+
 const groupFor = (groupId: string) =>
   found(
     data().platformGroups.find((g) => g.id === groupId),
@@ -143,19 +174,23 @@ const managerOf = (context: Context, groupId: string): StewardPerson => {
   throw forbidden();
 };
 
+/** The fewest characters the people typeahead searches on. */
+const SEARCH_MIN = 2;
+
 const matches = (person: StewardPerson, needle: string) =>
   [person.email, person.name, person.username].some((field) =>
     field.toLowerCase().includes(needle),
   );
 
 /** A session the core holds, as the admin console lists it. Its id is never the cookie value. */
-const liveSessions = (userId: string) =>
+const liveSessions = (userId: string, currentSessionId?: string) =>
   [...mockState.sessions.values()]
     .filter((s) => s.personId === userId)
     .map((s) => ({
       active: true,
       authenticatedAt: new Date(s.startedAt).toISOString(),
       clientIp: null,
+      current: s.id === currentSessionId,
       expiresAt: new Date(s.startedAt + 8 * 60 * 60 * 1000).toISOString(),
       issuedAt: new Date(s.startedAt).toISOString(),
       lastSeenAt: null,
@@ -383,6 +418,13 @@ const mergePreview = (source: StewardPerson, target: StewardPerson) => {
   };
 };
 
+/** The group typeahead's limits: two characters, 20 groups unless asked, never more than 50. */
+const SEARCH_GROUPS_MIN_QUERY = 2;
+const SEARCH_GROUPS_DEFAULT_LIMIT = 20;
+const IDP_GROUP_NAMES_DEFAULT_LIMIT = 50;
+const IDP_GROUP_NAMES_MAX_LIMIT = 200;
+const SEARCH_GROUPS_MAX_LIMIT = 50;
+
 export const userResolvers: Resolvers = {
   Mutation: {
     addUserToGroup: (
@@ -585,7 +627,10 @@ export const userResolvers: Resolvers = {
       const membership = membershipsOf(person).find(
         (m: Membership) => m.groupId === given.groupId,
       );
-      if (membership?.source === "idp-sync" && !isSiteAdmin(actor))
+      // identity's Store.RemoveUserFromGroup is idempotent: a missing membership (a group that
+      // does not exist, or one the person is not in) is a no-op that returns the user, unaudited.
+      if (!membership) return asUser(person);
+      if (membership.source === "idp-sync" && !isSiteAdmin(actor))
         throw refuse(
           "FAILED_PRECONDITION",
           "A membership synced from the identity provider can't be removed here.",
@@ -639,6 +684,18 @@ export const userResolvers: Resolvers = {
       person.name = [first, last].filter(Boolean).join(" ") || person.name;
       if (given.locale) person.locale = given.locale;
       audit("user.profile.updated", person, person);
+      return asUser(person);
+    },
+    updateUserPreferences: (
+      _root,
+      given: { locale?: null | string; userId: string },
+      context: Context,
+    ) => {
+      siteAdmin(context);
+      const person = personFor(given.userId);
+      if (person.deletedAt) throw notFound("user");
+      // The gateway validates before it forwards, so a malformed tag writes nothing.
+      if (given.locale != null) person.locale = normalizedLocale(given.locale);
       return asUser(person);
     },
     updateUserProfile: (
@@ -700,12 +757,44 @@ export const userResolvers: Resolvers = {
         traceId: newId("trace"),
       };
     },
+    /**
+     * IdentityReadService.SearchGroups behind the access picker: the groups, at any depth, whose
+     * name contains the query, by name. Open to whoever edits category access (group.manage or
+     * template.manage). The query is trimmed and needs two characters; the limit is 20 unless
+     * asked, never more than 50.
+     */
+    /**
+     * The directory (IdP) group names a category group rule can match (steward-gateway
+     * idpGroupNames): the names in people's group claims, byte-sorted, no duplicates, names only.
+     * `prefix` is trimmed and matched case-insensitively; `limit` defaults to 50, capped at 200.
+     */
+    idpGroupNames: (
+      _root,
+      given: { limit?: null | number; prefix?: null | string },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const needle = (given.prefix ?? "").trim().toLowerCase();
+      const limit =
+        given.limit && given.limit > 0
+          ? Math.min(given.limit, IDP_GROUP_NAMES_MAX_LIMIT)
+          : IDP_GROUP_NAMES_DEFAULT_LIMIT;
+      const names = [
+        ...new Set(people().flatMap((person) => idpGroupsOf(person))),
+      ]
+        .filter((name) => name.toLowerCase().startsWith(needle))
+        .toSorted((a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b)));
+      return { names: names.slice(0, limit), truncated: names.length > limit };
+    },
     listUserSessions: (_root, given: { userId: string }, context: Context) => {
       siteAdmin(context);
       const person = personFor(given.userId);
       return [
-        ...liveSessions(person.id),
-        ...data().pastSessions.filter((s) => s.userId === person.id),
+        ...liveSessions(person.id, context.session?.id),
+        // A session that already ended is never the one asking.
+        ...data()
+          .pastSessions.filter((s) => s.userId === person.id)
+          .map((s) => ({ ...s, current: false })),
       ];
     },
     managedGroupMembers: (
@@ -757,6 +846,27 @@ export const userResolvers: Resolvers = {
       siteAdmin(context);
       return deletionPreview(personFor(given.userId));
     },
+    searchPlatformGroups: (
+      _root,
+      given: { limit?: null | number; query: string },
+      context: Context,
+    ) => {
+      withAnyRole(context, "template-admin");
+      const needle = given.query.trim().toLowerCase();
+      if ([...needle].length < SEARCH_GROUPS_MIN_QUERY)
+        throw refuse(
+          "BAD_USER_INPUT",
+          `type at least ${String(SEARCH_GROUPS_MIN_QUERY)} characters to search groups`,
+        );
+      const limit =
+        given.limit && given.limit > 0
+          ? Math.min(given.limit, SEARCH_GROUPS_MAX_LIMIT)
+          : SEARCH_GROUPS_DEFAULT_LIMIT;
+      return data()
+        .platformGroups.filter((g) => g.name.toLowerCase().includes(needle))
+        .toSorted((a, b) => a.name.localeCompare(b.name))
+        .slice(0, limit);
+    },
     searchUsers: (
       _root,
       given: { limit?: null | number; query: string },
@@ -764,8 +874,20 @@ export const userResolvers: Resolvers = {
     ) => {
       caller(context);
       const needle = given.query.trim().toLowerCase();
-      return people()
-        .filter((p) => !p.deletedAt && p.email.toLowerCase().includes(needle))
+      // Two characters at least, as the picker and the gateway hold the line: a shorter query
+      // would list the whole directory.
+      if (needle.length < SEARCH_MIN) return [];
+      // Name, email and username, as identity matches them. A deleted account is never offered;
+      // a disabled one still is, as in identity.
+      const found = people().filter((p) => !p.deletedAt && matches(p, needle));
+      // Someone whose name or email starts with the words typed comes before one that only
+      // contains them; each group keeps the directory's order.
+      const starts = (p: StewardPerson) =>
+        [p.name, p.email].some((f) => f.toLowerCase().startsWith(needle));
+      return [
+        ...found.filter((p) => starts(p)),
+        ...found.filter((p) => !starts(p)),
+      ]
         .slice(0, given.limit ?? 20)
         .map((p) => ({ email: p.email, id: p.id, name: p.name }));
     },

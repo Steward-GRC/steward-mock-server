@@ -7,9 +7,21 @@
 // result. Everything else, and all of it with the simulation off, answers the way steward-gateway
 // does when the ai service is unreachable.
 // aiHealth says so; the reads that swallow an ai error (topPolicyQuestions,
-// relatedPolicySuggestions, policyVersionSummary) answer empty; everything else checks the caller as
+// relatedPolicySuggestions, policyVersionSummary) answer empty (policyVersionSummary otherwise serves
+// the summary regenerateVersionSummary stored, see resolvers/ai-summaries.ts); everything else checks the caller as
 // the gateway does, then fails as a transport fault, which the gateway presents as INTERNAL with
 // its generic message.
+// The settings reads (aiConfig, aiRetrievalConfig) answer a default config for a site admin while
+// the simulation is on; the settings changes are not stored and stay refused as the unreachable
+// service, except setAIMonthlyLimit, which is kept (aiConfig.monthlyLimit reads it back; 0 means no
+// limit). It is a number only: nothing counts usage against it, so reaching it is the ai-limit
+// control's limit_reached. The reasons aiHealth gives while the service answers: provider_unavailable with ai's
+// providerReason (auth_failed, provider_error, not_configured, or jobs_unavailable when ai has no
+// Kubernetes API, which also fails the job submits as a transport fault), and limit_reached when
+// the organisation's monthly limit or the caller's daily limit is hit (the submits then refuse
+// with FailedPrecondition). The /_mock controls ai-provider and ai-limit switch them.
+
+import type { GraphQLError } from "graphql";
 
 import { type Context, type Resolvers, signedIn } from "#core/graphql.ts";
 import { canAuthorIn } from "#product/access.ts";
@@ -20,6 +32,12 @@ import {
   jobStatus,
   submitJob,
 } from "#product/resolvers/ai-jobs.ts";
+import {
+  regenerateVersionSummary,
+  storedVersionSummary,
+  summarizeChanges,
+  type Summary,
+} from "#product/resolvers/ai-summaries.ts";
 import { simulatedAnswer, topQuestions } from "#product/resolvers/ask.ts";
 import {
   caller,
@@ -61,19 +79,146 @@ const submitDown = (
   throw unreachable();
 };
 
+/** The default settings a site admin reads while the simulation is on; nothing changes them. */
+const DEFAULT_TOP_K = 50;
+const defaultConfig = () => ({
+  baseUrl: "",
+  credentialLast4: "",
+  credentialSet: false,
+  dataNotice: {
+    acceptedAt: null,
+    acceptedBy: null,
+    acceptedVersion: "",
+    currentVersion: "1",
+  },
+  deployment: "",
+  enabled: true,
+  model: "",
+  monthlyLimit: data().aiMonthlyLimit,
+  provider: null,
+  region: "",
+  topK: DEFAULT_TOP_K,
+});
+
+/**
+ * setAIMonthlyLimit: site admin only. While simulated the limit is kept and the limit in force is
+ * answered; a negative one is InvalidArgument (the gateway refuses it before ai is asked), 0 clears
+ * it. With the simulation off it is the unreachable service, like the other settings changes.
+ */
+const setMonthlyLimit = (
+  root: unknown,
+  given: { limit: number },
+  context: Context,
+): number => {
+  if (!data().aiSimulated) return adminDown(root, given, context);
+  siteAdmin(context);
+  if (given.limit < 0)
+    throw refuse("BAD_USER_INPUT", "The monthly limit cannot be negative.");
+  data().aiMonthlyLimit = given.limit;
+  return data().aiMonthlyLimit;
+};
+
+/** A settings read: the default config for a site admin while simulated, else the service is down. */
+const settingsRead =
+  <Result>(read: () => Result) =>
+  (root: unknown, given: unknown, context: Context): Result => {
+    if (!data().aiSimulated) return adminDown(root, given, context);
+    siteAdmin(context);
+    return read();
+  };
+
+/**
+ * Why a job submit fails before its category check, when ai is up but cannot take it: no
+ * Kubernetes API for jobs (ai's reach fault, so the gateway's generic INTERNAL), or a usage limit
+ * (a FailedPrecondition the person is told about).
+ */
+const submitBlocked = (): GraphQLError | null => {
+  if (data().aiProviderOutage === "jobs_unavailable") return unreachable();
+  if (data().aiLimitReached)
+    return refuse(
+      "FAILED_PRECONDITION",
+      "The AI usage limit has been reached. Try again later.",
+    );
+  return null;
+};
+
+/** The longest CUSTOM framing wording, in characters (steward-gateway internal/resolvers/framing.go). */
+const MAX_CUSTOM_FRAMING = 500;
+
+/**
+ * The draft and revision submits take a framing and, for CUSTOM, the author's own wording. The
+ * gateway checks it after the category check and before it asks ai for a job: CUSTOM needs
+ * wording that is not blank and at most 500 characters once trimmed; wording sent with another
+ * framing, or none, is dropped. A bad one is a coded refusal (steward-gateway#210): code
+ * InvalidArgument, kind business, and a message the client shows. A value outside the list is
+ * refused with the value echoed after trim and upper-casing; the schema's enum stops one before
+ * the resolver runs, so that branch only keeps the rule. The framing changes nothing in the
+ * made-up result.
+ */
+export const checkFraming = (input: {
+  customFraming?: null | string;
+  framing?: null | string;
+}): void => {
+  if (input.framing == null) return;
+  const framing = input.framing.trim().toUpperCase();
+  if (framing === "CUSTOM") {
+    const wording = (input.customFraming ?? "").trim();
+    if (wording === "")
+      throw refuse(
+        "BAD_USER_INPUT",
+        "Custom framing needs wording.",
+        "business",
+      );
+    const count = [...wording].length;
+    if (count > MAX_CUSTOM_FRAMING)
+      throw refuse(
+        "BAD_USER_INPUT",
+        `Custom wording is ${count} characters; the limit is ${MAX_CUSTOM_FRAMING}.`,
+        "business",
+      );
+    return;
+  }
+  if (!["FORMAL", "PLAIN", "PROFESSIONAL"].includes(framing))
+    throw refuse("BAD_USER_INPUT", `Unknown framing "${framing}".`, "business");
+};
+
 /** A job submission: simulated while the simulation is on, and checked the same way either way. */
 const submitting =
   (operation: JobOperation) =>
   (
     root: unknown,
-    given: { input: { categoryId?: null | string } },
+    given: {
+      input: {
+        categoryId?: null | string;
+        customFraming?: null | string;
+        framing?: null | string;
+      };
+    },
     context: Context,
   ) => {
     if (!data().aiSimulated) return submitDown(root, given, context);
     const person = caller(context);
     const categoryId = given.input.categoryId;
     if (categoryId && !canAuthorIn(person, categoryId)) throw forbidden();
+    checkFraming(given.input);
+    const blocked = submitBlocked();
+    if (blocked) throw blocked;
     return submitJob(operation, given.input, context);
+  };
+
+/**
+ * A summary submit: the gateway checks the read first (NotFound, PermissionDenied, then nothing to
+ * summarise), then submits the job, which fails when AI is off or cannot take it.
+ */
+const summarising =
+  <Given>(plan: (person: ReturnType<typeof caller>, given: Given) => Summary) =>
+  (_root: unknown, given: Given, context: Context) => {
+    const summary = plan(caller(context), given);
+    if (!data().aiSimulated) throw unreachable();
+    const blocked = submitBlocked();
+    if (blocked) throw blocked;
+    summary.remember();
+    return submitJob("SUMMARIZE", { result: summary.result }, context);
   };
 
 /** A read of a job: simulated while the simulation is on. */
@@ -85,7 +230,9 @@ const reading =
 export const aiResolvers: Resolvers = {
   Mutation: {
     acceptAIDataNotice: adminDown,
+    regenerateVersionSummary: summarising(regenerateVersionSummary),
     setAIEnabled: adminDown,
+    setAIMonthlyLimit: setMonthlyLimit,
     setAIProviderConfig: adminDown,
     setAIProviderCredential: adminDown,
     setAIRetrievalConfig: adminDown,
@@ -94,10 +241,11 @@ export const aiResolvers: Resolvers = {
     submitEnrichmentSuggestions: submitting("SUGGEST_ENRICHMENTS"),
     submitPolicyReview: submitting("REVIEW"),
     submitPolicyRevision: submitting("REVISE"),
+    summarizeChanges: summarising(summarizeChanges),
     testAIProvider: adminDown,
   },
   Query: {
-    aiConfig: adminDown,
+    aiConfig: settingsRead(defaultConfig),
     aiEnabled: down,
     aiHealth: () => {
       if (!data().aiSimulated)
@@ -114,19 +262,34 @@ export const aiResolvers: Resolvers = {
           providerReason: outage || null,
           reason: "provider_unavailable",
         };
+      // a usage limit holds while ai and its provider are otherwise fine
+      if (data().aiLimitReached)
+        return {
+          available: false,
+          providerReason: null,
+          reason: "limit_reached",
+        };
       return { available: true, providerReason: null, reason: null };
     },
     aiJob: reading((given: { jobId: string }, context) =>
       jobStatus(given.jobId, context),
     ),
-    aiJobResultContent: reading((given: { resultRef: string }, context) =>
-      jobContent(given.resultRef, context),
+    aiJobResultContent: reading(
+      (given: { jobId?: null | string; resultRef: string }, context) =>
+        jobContent(given.resultRef, context, given.jobId),
     ),
-    aiRetrievalConfig: adminDown,
+    aiRetrievalConfig: settingsRead(() => ({ topK: DEFAULT_TOP_K })),
     authoringAssist: down,
-    policyVersionSummary: (_root, _given, context: Context) => {
-      signedIn(context);
-      return null;
+    policyVersionSummary: (
+      _root,
+      given: { versionId: string },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      // With the ai service unreachable the gateway swallows the error and answers null.
+      return data().aiSimulated
+        ? storedVersionSummary(person, given.versionId)
+        : null;
     },
     relatedPolicySuggestions: (_root, _given, context: Context) => {
       signedIn(context);

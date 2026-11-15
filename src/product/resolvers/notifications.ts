@@ -7,13 +7,15 @@
 
 import { GraphQLError } from "graphql";
 
+import type { Notice } from "#product/data/notices.ts";
 import type {
   NotifCadence,
   NotificationPrefs,
 } from "#product/data/notifications.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
-import { caller, data } from "#product/resolvers/shared.ts";
+import { knownTimezone } from "#product/notification-delivery.ts";
+import { caller, data, notFound, refuse } from "#product/resolvers/shared.ts";
 
 type NotifCategory =
   | "COMPLIANCE"
@@ -27,6 +29,8 @@ type NotifDelivery =
   | "IMMEDIATE_ONLY"
   | "IMMEDIATE_OR_DIGEST"
   | "REMINDER_SCHEDULE";
+
+type NotifSeverity = "critical" | "high" | "low" | "normal";
 
 /** notifpolicy's AllCategories, in its order. */
 const CATEGORIES: NotifCategory[] = [
@@ -44,42 +48,53 @@ const MANDATORY = new Set<NotifCategory>([
   "TRANSACTIONAL",
 ]);
 
-/** notifpolicy's taxonomy (internal/notifpolicy/taxonomy.go): each kind's category and delivery. */
-const TAXONOMY: Record<string, [NotifCategory, NotifDelivery]> = {
-  "access-granted": ["INFORMATIONAL", "DIGEST_PREFERRED"],
-  "ack-required": ["COMPLIANCE", "IMMEDIATE_ONLY"],
-  "assigned-as-owner": ["WORKFLOW", "IMMEDIATE_OR_DIGEST"],
-  "break-glass-alert": ["SECURITY", "IMMEDIATE_ONLY"],
-  "break-glass-read-alert": ["SECURITY", "IMMEDIATE_ONLY"],
-  "domain-verification-instructions": ["TRANSACTIONAL", "IMMEDIATE_ONLY"],
-  "domain-verified": ["TRANSACTIONAL", "IMMEDIATE_ONLY"],
-  "email-verification": ["TRANSACTIONAL", "IMMEDIATE_ONLY"],
-  "idp-test-failed": ["INFORMATIONAL", "IMMEDIATE_OR_DIGEST"],
-  "kratos-recovery": ["SECURITY", "IMMEDIATE_ONLY"],
-  "mfa-setup": ["SECURITY", "IMMEDIATE_ONLY"],
-  otp: ["SECURITY", "IMMEDIATE_ONLY"],
-  "policy-ack-reminder": ["COMPLIANCE", "REMINDER_SCHEDULE"],
-  "policy-escalation": ["COMPLIANCE", "IMMEDIATE_ONLY"],
-  "policy-published": ["INFORMATIONAL", "DIGEST_PREFERRED"],
-  "policy-retired": ["INFORMATIONAL", "DIGEST_PREFERRED"],
-  "raci-permission-granted": ["INFORMATIONAL", "DIGEST_PREFERRED"],
-  "review-due": ["COMPLIANCE", "REMINDER_SCHEDULE"],
-  "sp-cert-rotated": ["SECURITY", "IMMEDIATE_ONLY"],
-  "sso-account-welcome": ["TRANSACTIONAL", "IMMEDIATE_ONLY"],
-  "sso-activated": ["INFORMATIONAL", "IMMEDIATE_OR_DIGEST"],
-  "sso-disabled": ["INFORMATIONAL", "IMMEDIATE_OR_DIGEST"],
-  "welcome-account": ["TRANSACTIONAL", "IMMEDIATE_ONLY"],
-  "workflow-assigned": ["WORKFLOW", "IMMEDIATE_OR_DIGEST"],
-  "workflow-awaiting-approval": ["WORKFLOW", "IMMEDIATE_OR_DIGEST"],
-  "workflow-denied": ["WORKFLOW", "IMMEDIATE_OR_DIGEST"],
-  "workflow-started": ["WORKFLOW", "DIGEST_PREFERRED"],
-};
+/** notifpolicy's taxonomy (internal/notifpolicy/taxonomy.go): each kind's category, severity and delivery. */
+const TAXONOMY: Record<string, [NotifCategory, NotifSeverity, NotifDelivery]> =
+  {
+    "access-granted": ["INFORMATIONAL", "normal", "DIGEST_PREFERRED"],
+    "ack-required": ["COMPLIANCE", "high", "IMMEDIATE_ONLY"],
+    "assigned-as-owner": ["WORKFLOW", "high", "IMMEDIATE_OR_DIGEST"],
+    "break-glass-alert": ["SECURITY", "critical", "IMMEDIATE_ONLY"],
+    "break-glass-read-alert": ["SECURITY", "critical", "IMMEDIATE_ONLY"],
+    "domain-verification-instructions": [
+      "TRANSACTIONAL",
+      "normal",
+      "IMMEDIATE_ONLY",
+    ],
+    "domain-verified": ["TRANSACTIONAL", "normal", "IMMEDIATE_ONLY"],
+    "email-verification": ["TRANSACTIONAL", "high", "IMMEDIATE_ONLY"],
+    "idp-test-failed": ["INFORMATIONAL", "high", "IMMEDIATE_OR_DIGEST"],
+    "kratos-recovery": ["SECURITY", "critical", "IMMEDIATE_ONLY"],
+    "mfa-setup": ["SECURITY", "high", "IMMEDIATE_ONLY"],
+    otp: ["SECURITY", "critical", "IMMEDIATE_ONLY"],
+    "policy-ack-reminder": ["COMPLIANCE", "high", "REMINDER_SCHEDULE"],
+    "policy-escalation": ["COMPLIANCE", "critical", "IMMEDIATE_ONLY"],
+    "policy-published": ["INFORMATIONAL", "normal", "DIGEST_PREFERRED"],
+    "policy-retired": ["INFORMATIONAL", "normal", "DIGEST_PREFERRED"],
+    "raci-permission-granted": ["INFORMATIONAL", "normal", "DIGEST_PREFERRED"],
+    "review-due": ["COMPLIANCE", "high", "REMINDER_SCHEDULE"],
+    "sp-cert-rotated": ["SECURITY", "high", "IMMEDIATE_ONLY"],
+    "sso-account-welcome": ["TRANSACTIONAL", "high", "IMMEDIATE_ONLY"],
+    "sso-activated": ["INFORMATIONAL", "normal", "IMMEDIATE_OR_DIGEST"],
+    "sso-disabled": ["INFORMATIONAL", "normal", "IMMEDIATE_OR_DIGEST"],
+    "welcome-account": ["TRANSACTIONAL", "high", "IMMEDIATE_ONLY"],
+    "workflow-assigned": ["WORKFLOW", "high", "IMMEDIATE_OR_DIGEST"],
+    "workflow-awaiting-approval": ["WORKFLOW", "high", "IMMEDIATE_OR_DIGEST"],
+    "workflow-denied": ["WORKFLOW", "high", "IMMEDIATE_OR_DIGEST"],
+    "workflow-started": ["WORKFLOW", "normal", "DIGEST_PREFERRED"],
+  };
 
-const classOf = (kind: string) => {
+export const classOf = (kind: string) => {
   const entry = TAXONOMY[kind];
   if (!entry) return;
-  const [category, delivery] = entry;
-  return { category, delivery, kind, mandatory: MANDATORY.has(category) };
+  const [category, severity, delivery] = entry;
+  return {
+    category,
+    delivery,
+    kind,
+    mandatory: MANDATORY.has(category),
+    severity,
+  };
 };
 
 /** notifpolicy's AllClasses: by category, then kind. */
@@ -134,11 +149,60 @@ const settingsOf = (userId: string) => {
     overrides: Object.entries(prefs?.overrides ?? {}).map(
       ([kind, cadence]) => ({ ...classOf(kind), cadence, kind }),
     ),
+    quietHours: prefs?.quietHours ?? null,
   };
 };
 
+const DEFAULT_PAGE = 20;
+
+const validHour = (h: null | number | undefined): h is number =>
+  Number.isInteger(h) && (h as number) >= 0 && (h as number) <= 23;
+
+interface NoticeFilter {
+  category?: NotifCategory | null;
+  needsAction?: boolean | null;
+  unread?: boolean | null;
+}
+
+/** A notice as the gateway answers it: the kind's category comes from the catalog. */
+const present = (notice: Notice) => ({
+  ...notice,
+  category: classOf(notice.kind)?.category ?? "INFORMATIONAL",
+});
+
+/** The caller's notices, newest first (the id breaks a tie, later made first). */
+const noticesOf = (userId: string) =>
+  data()
+    .notices.filter((n) => n.userId === userId)
+    .toSorted(
+      (a, b) =>
+        b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+    );
+
+const unreadOf = (userId: string) =>
+  noticesOf(userId).filter((n) => n.readAt === null);
+
+const badPage = () =>
+  refuse("BAD_USER_INPUT", "That page isn't valid — check first and after.");
+
 export const notificationResolvers: Resolvers = {
   Mutation: {
+    markAllNotificationsRead: (_root, _given, context: Context) => {
+      const person = caller(context);
+      const unread = unreadOf(person.id);
+      const at = new Date().toISOString();
+      for (const notice of unread) notice.readAt = at;
+      return unread.length;
+    },
+    markNotificationRead: (_root, given: { id: string }, context: Context) => {
+      const person = caller(context);
+      const notice = data().notices.find(
+        (n) => n.id === given.id && n.userId === person.id,
+      );
+      if (!notice) throw notFound("Notification");
+      notice.readAt ??= new Date().toISOString();
+      return present(notice);
+    },
     setCategoryCadence: (
       _root,
       given: { cadence: NotifCadence; category: NotifCategory },
@@ -172,6 +236,32 @@ export const notificationResolvers: Resolvers = {
       prefsOf(person.id).channels = { email, inApp, push };
       return settingsOf(person.id);
     },
+    setQuietHours: (
+      _root,
+      given: {
+        end?: null | number;
+        start?: null | number;
+        timezone?: null | string;
+      },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const { end, start } = given;
+      if (start == null && end == null) {
+        delete prefsOf(person.id).quietHours;
+        return settingsOf(person.id);
+      }
+      const timezone = given.timezone ?? "UTC";
+      if (
+        !validHour(start) ||
+        !validHour(end) ||
+        start === end ||
+        !knownTimezone(timezone)
+      )
+        throw INVALID();
+      prefsOf(person.id).quietHours = { end, start, timezone };
+      return settingsOf(person.id);
+    },
     setTypeCadence: (
       _root,
       given: { cadence: NotifCadence; kind: string },
@@ -186,6 +276,43 @@ export const notificationResolvers: Resolvers = {
     },
   },
   Query: {
+    myNotifications: (
+      _root,
+      given: {
+        after?: null | string;
+        filter?: NoticeFilter | null;
+        first?: null | number;
+      },
+      context: Context,
+    ) => {
+      const person = caller(context);
+      const first = given.first ?? DEFAULT_PAGE;
+      if (!Number.isInteger(first) || first < 1) throw badPage();
+      let offset = 0;
+      if (given.after != null) {
+        if (!/^\d+$/.test(given.after)) throw badPage();
+        offset = Number(given.after);
+      }
+      const filter = given.filter ?? {};
+      const matching = noticesOf(person.id)
+        .map((n) => present(n))
+        .filter(
+          (n) =>
+            (filter.needsAction == null ||
+              n.needsAction === filter.needsAction) &&
+            (!filter.unread || n.readAt === null) &&
+            (filter.category == null || n.category === filter.category),
+        );
+      const items = matching.slice(offset, offset + first);
+      const hasMore = offset + first < matching.length;
+      return {
+        endCursor: hasMore ? String(offset + first) : null,
+        hasMore,
+        items,
+      };
+    },
+    myUnreadNotificationCount: (_root, _given, context: Context) =>
+      unreadOf(caller(context).id).length,
     notificationSettings: (_root, _given, context: Context) =>
       settingsOf(caller(context).id),
     notificationTypeCatalog: (_root, _given, context: Context) => {

@@ -5,20 +5,28 @@
 // runs for a moment (aiJob reads Pending, then Running, then Succeeded; the aiJobResult
 // subscription delivers the end), and aiJobResultContent returns a made-up result in the shape
 // steward-ai writes: sections for a draft, findings for a review, a change set for a revision,
-// proposals for enrichment. Every text says it is simulated. The simulation control that turns
+// proposals for enrichment, a summary for a changes or version summary. Every text says it is simulated. The simulation control that turns
 // Ask off turns the jobs off with it (resolvers/ai.ts).
 
 import type { Context } from "#core/graphql.ts";
 
-import { caller, notFound, now } from "#product/resolvers/shared.ts";
+import {
+  aiJobNotFound,
+  caller,
+  notFound,
+  now,
+} from "#product/resolvers/shared.ts";
 
 export type JobOperation =
   | "DRAFT"
   | "REVIEW"
   | "REVISE"
-  | "SUGGEST_ENRICHMENTS";
+  | "SUGGEST_ENRICHMENTS"
+  | "SUMMARIZE";
 
 interface Job {
+  /** The cached content has expired, as after the gateway's result cache ages out (about 24 h). */
+  expired?: boolean;
   id: string;
   operation: JobOperation;
   owner: string;
@@ -135,6 +143,8 @@ const BUILDERS: Record<JobOperation, (input: never) => unknown> = {
   REVIEW: reviewResult,
   REVISE: reviseResult,
   SUGGEST_ENRICHMENTS: enrichResult,
+  // The summary is made by the resolver, which has already checked the read (resolvers/ai-summaries.ts).
+  SUMMARIZE: (input: { result: unknown }) => input.result,
 };
 
 /** Starts a job for the caller and returns its id. */
@@ -158,7 +168,7 @@ export const submitJob = (
 
 const jobOf = (jobId: string, context: Context): Job => {
   const job = jobs.get(jobId);
-  if (!job || job.owner !== caller(context).id) throw notFound("The job");
+  if (!job || job.owner !== caller(context).id) throw aiJobNotFound();
   return job;
 };
 
@@ -190,18 +200,37 @@ export const jobStatus = (jobId: string, context: Context) => {
   };
 };
 
-/** aiJobResultContent: what the job produced, once it has succeeded. */
-export const jobContent = (resultReference: string, context: Context) => {
-  const job = [...jobs.values()].find(
+/** Test helper: ages the job's cached content out, as the gateway's result cache does after about 24 h. */
+export const expireJobContent = (jobId: string): void => {
+  const job = jobs.get(jobId);
+  if (job) job.expired = true;
+};
+
+/**
+ * aiJobResultContent: what the job produced, once it has succeeded. A ref whose content is cached
+ * is served to its own submitter and is a plain NotFound to anyone else (the gateway's one refusal
+ * for a ref that reveals nothing). A ref nobody holds, or whose content has expired, is a plain
+ * NotFound, unless the caller also names the job: then the gateway falls back to the job's stored
+ * result, and a foreign, unknown or unfinished job is AI_JOB_NOT_FOUND.
+ */
+export const jobContent = (
+  resultReference: string,
+  context: Context,
+  jobId?: null | string,
+) => {
+  const owner = caller(context).id;
+  const cached = [...jobs.values()].find(
     (candidate) => referenceOf(candidate) === resultReference,
   );
-  if (
-    !job ||
-    job.owner !== caller(context).id ||
-    phaseOf(job) !== "AI_JOB_PHASE_SUCCEEDED"
-  )
-    throw notFound("The result");
-  return { operation: job.operation, resultJson: job.result };
+  if (cached && !cached.expired) {
+    if (cached.owner !== owner || phaseOf(cached) !== "AI_JOB_PHASE_SUCCEEDED")
+      throw notFound("The result");
+    return { operation: cached.operation, resultJson: cached.result };
+  }
+  if (!jobId) throw notFound("The result");
+  const stored = jobOf(jobId, context);
+  if (phaseOf(stored) !== "AI_JOB_PHASE_SUCCEEDED") throw aiJobNotFound();
+  return { operation: stored.operation, resultJson: stored.result };
 };
 
 /** The aiJobResult stream: the job's end, sent once it has run. An unknown job is refused at once. */

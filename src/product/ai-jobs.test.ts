@@ -10,10 +10,14 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { setJobDuration } from "#product/resolvers/ai-jobs.ts";
+import {
+  expireJobContent,
+  setJobDuration,
+} from "#product/resolvers/ai-jobs.ts";
 import {
   control,
   openSocket,
+  query,
   type Signed,
   startForTests,
   startFresh,
@@ -91,14 +95,30 @@ describe("a review job on the mock", () => {
     assert.equal(status.resultRef, null);
   });
 
-  it("is the submitter's own: someone else does not find it", async () => {
+  it("is the submitter's own: someone else gets AI_JOB_NOT_FOUND", async () => {
     const { jobId } = (await review(bob)).data.submitPolicyReview as {
       jobId: string;
     };
-    assert.equal(
-      (await call(base, erin, "AiJob", { jobId })).refused,
-      "NotFound",
+    const answer = await call(base, erin, "AiJob", { jobId });
+    assert.equal(answer.refused, "AI_JOB_NOT_FOUND");
+    assert.equal(answer.error?.message, "That AI job doesn't exist.");
+    assert.equal(answer.error?.kind, "business");
+  });
+
+  it("refuses an unknown job id with AI_JOB_NOT_FOUND and its code number", async () => {
+    const { body } = await query(
+      base,
+      "query($jobId: ID!) { aiJob(jobId: $jobId) { jobId } }",
+      bob,
+      { jobId: "ai-job-9999" },
     );
+    const extensions = body.errors?.[0]?.extensions as unknown as Record<
+      string,
+      unknown
+    >;
+    assert.equal(extensions.code, "AI_JOB_NOT_FOUND");
+    assert.equal(extensions.codeNum, 3010);
+    assert.equal(extensions.domain, "ai");
   });
 });
 
@@ -123,6 +143,29 @@ describe("the aiJobResult subscription on the mock", () => {
     ).data.aiJobResult;
     assert.equal(result.phase, "AI_JOB_PHASE_SUCCEEDED");
     assert.equal(result.resultRef, `mock-ai-result:${jobId}`);
+  });
+
+  it("refuses a job that is not the caller's with AI_JOB_NOT_FOUND at once", async () => {
+    const { jobId } = (await review(bob)).data.submitPolicyReview as {
+      jobId: string;
+    };
+    const ws = await openSocket(base, "graphql-transport-ws");
+    ws.send({ payload: { authToken: erin.token }, type: "connection_init" });
+    await ws.next("connection_ack");
+    ws.send({
+      id: "1",
+      payload: { query: documentOf("AiJobResult"), variables: { jobId } },
+      type: "subscribe",
+    });
+    const refused = await ws.next("next");
+    ws.socket.close();
+    const [first] = (
+      refused.payload as {
+        errors: { extensions: { code: string }; message: string }[];
+      }
+    ).errors;
+    assert.equal(first?.extensions.code, "AI_JOB_NOT_FOUND");
+    assert.equal(first?.message, "That AI job doesn't exist.");
   });
 });
 
@@ -198,5 +241,72 @@ describe("the jobs with the simulation off", () => {
       available: boolean;
     };
     assert.equal(health.available, false);
+  });
+});
+
+const submit = async (signed: Signed) => {
+  const { jobId } = (await review(signed)).data.submitPolicyReview as {
+    jobId: string;
+  };
+  return { jobId, ref: `mock-ai-result:${jobId}` };
+};
+
+describe("aiJobResultContent with a jobId, after the cached content has expired", () => {
+  const CONTENT = `query ContentByJob($resultRef: String!, $jobId: ID) {
+    aiJobResultContent(resultRef: $resultRef, jobId: $jobId) { operation resultJson }
+  }`;
+  const read = async (
+    signed: Signed,
+    resultReference: string,
+    jobId?: string,
+  ): Promise<{ code?: string; operation?: string }> => {
+    const { body } = await query(base, CONTENT, signed, {
+      jobId,
+      resultRef: resultReference,
+    });
+    const data = body.data?.aiJobResultContent as
+      | { operation: string }
+      | undefined;
+    return {
+      code: body.errors?.[0]?.extensions.code,
+      operation: data?.operation,
+    };
+  };
+  it("is not found without a jobId", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref)).code, "NotFound");
+  });
+
+  it("gives the stored result for the submitter's finished job", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref, jobId)).operation, "REVIEW");
+  });
+
+  it("does not find a foreign or unknown job", async () => {
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(erin, ref, jobId)).code, "AI_JOB_NOT_FOUND");
+    assert.equal((await read(bob, ref, "ai-job-0")).code, "AI_JOB_NOT_FOUND");
+  });
+
+  it("keeps a plain NotFound for an unknown ref with no jobId, and for a foreign cached ref", async () => {
+    const { ref } = await submit(bob);
+    assert.equal((await read(bob, "mock-ai-result:ai-job-0")).code, "NotFound");
+    assert.equal((await read(erin, ref)).code, "NotFound");
+    assert.equal((await read(erin, ref, "ai-job-0")).code, "NotFound");
+  });
+
+  it("still refuses a job that has not finished, as having no stored result", async () => {
+    setJobDuration(60_000);
+    const { jobId, ref } = await submit(bob);
+    expireJobContent(jobId);
+    assert.equal((await read(bob, ref, jobId)).code, "AI_JOB_NOT_FOUND");
+  });
+
+  it("ignores the jobId on a cache hit", async () => {
+    const { ref } = await submit(bob);
+    assert.equal((await read(bob, ref, "ai-job-0")).operation, "REVIEW");
   });
 });

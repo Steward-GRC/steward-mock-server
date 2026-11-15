@@ -13,16 +13,17 @@ import type {
 } from "#product/data/cases.ts";
 
 import { type Context, type Resolvers } from "#core/graphql.ts";
+import { requireModuleOn } from "#product/resolvers/module.ts";
 import {
   caller,
   data,
-  forbidden,
   found,
   newId,
   now,
   personOf,
   record,
   refuse,
+  reportingRefusal,
 } from "#product/resolvers/shared.ts";
 
 const OFFICER = "privacy-officer";
@@ -46,9 +47,16 @@ const NOTICE_DEFAULTS: Record<string, { label: string; method: string }> = {
   REGULATOR: { label: "Regulator", method: "Letter" },
 };
 
+/** Every case call passes the module switch first, ahead of the role check. */
 const officer = (context: Context) => {
+  requireModuleOn("CaseService");
   const person = caller(context);
-  if (!person.roles.includes(OFFICER)) throw forbidden();
+  if (!person.roles.includes(OFFICER))
+    throw reportingRefusal(
+      "CASE_ACCESS_DENIED",
+      8105,
+      "Only privacy officers can open cases.",
+    );
   return person;
 };
 

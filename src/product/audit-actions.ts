@@ -21,6 +21,7 @@ export const AUDIT_ACTIONS = {
     "category.deleted",
     "category.governance_updated",
     "category.moved",
+    "category.reordered",
     "category.renamed",
     "category_rule.created",
     "category_rule.deleted",
@@ -60,6 +61,7 @@ export const AUDIT_ACTIONS = {
     // steward-core/internal/grpcsvc/settings_handler.go
     "email_service_config.updated",
     "global_settings.updated",
+    "global_settings.work_calendar_updated",
     // steward-core/internal/grpcsvc/template_handler.go
     "template.created",
     "template.deleted",
@@ -86,6 +88,9 @@ export const AUDIT_ACTIONS = {
     // steward-identity/internal/handlers/admin_delete.go
     "user.category_rules_purged",
     "user.credential_revoked",
+    // steward-identity/internal/handlers/change_password.go
+    "user.password.change_failed",
+    "user.password.changed",
     // steward-identity/internal/handlers/admin_sso.go
     "security.break_glass.login",
     // steward-identity/internal/server/callers.go
@@ -127,8 +132,7 @@ export const AUDIT_ACTIONS = {
     // steward-identity/internal/store/roles.go
     "role.granted",
     "role.revoked",
-    "root.granted",
-    "root.revoked",
+    "root.transferred",
     "user.created",
     // steward-identity/internal/store/users.go
     "user.adopted",
@@ -183,6 +187,12 @@ export const AUDIT_ACTIONS = {
     "report.replied",
     "report.submitted",
     "report.viewed",
+    // steward-reporting/internal/grpcsvc/module.go
+    "module.access_refused",
+    "module.disabled",
+    "module.enabled",
+    "module.hard_reset",
+    "module.hard_reset_refused",
     // steward-reporting/internal/grpcsvc/settings.go
     "settings.access_refused",
     "settings.read",
@@ -198,6 +208,8 @@ export const AUDIT_ACTIONS = {
     "workflow.assignment.swapped.out_of_eligibility",
     "workflow.bulk.approved",
     "workflow.bulk.rejected",
+    "workflow.change_type.agreed",
+    "workflow.change_type.requested",
     "workflow.decision.approved",
     "workflow.decision.rejected",
     "workflow.gc.failed",
@@ -218,6 +230,7 @@ export const AUDIT_ACTIONS = {
     // steward-workflow/internal/grpcsvc/workflow_def.go
     "workflow_def.archived",
     "workflow_def.created",
+    "workflow_def.deleted",
     "workflow_def.updated",
     // steward-workflow/internal/outage/reconciler.go
     "workflow.run.paused",

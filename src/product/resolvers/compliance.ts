@@ -24,9 +24,19 @@ import {
   withAnyRole,
 } from "#product/resolvers/shared.ts";
 
-/** A pending acknowledgement counts as overdue this long after publishing. */
-const OVERDUE_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * steward-obligations' dueAt: the version's publish time plus the configured days, as ISO-8601;
+ * null when due dates are off (0 days) or the version has no publish time.
+ */
+const dueAtOf = (version: { publishedAt: null | string }): null | string => {
+  const days = data().ackDueDays;
+  if (days === 0 || !version.publishedAt) return null;
+  return new Date(
+    Date.parse(version.publishedAt) + days * DAY_MS,
+  ).toISOString();
+};
 
 const versionFor = (id: string) =>
   found(
@@ -45,9 +55,31 @@ const audience = (groupId?: null | string): StewardPerson[] =>
       (!groupId || membershipsOf(p).some((m) => m.groupId === groupId)),
   );
 
-const entry = (p: StewardPerson, ackedAt: null | string) => ({
+/** Case-insensitive first, then exact, so "ops" and "Ops" always fall in the same order. */
+const byName = (a: string, b: string) => {
+  const folded = a.toLowerCase().localeCompare(b.toLowerCase(), "en");
+  if (folded !== 0) return folded;
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+};
+
+/** The platform group names the person belongs to (identity's ListUserGroupNames), sorted. */
+const groupNamesOf = (person: StewardPerson): string[] =>
+  membershipsOf(person)
+    .flatMap(
+      (m) => data().platformGroups.find((g) => g.id === m.groupId)?.name ?? [],
+    )
+    .toSorted(byName);
+
+const entry = (
+  p: StewardPerson,
+  ackedAt: null | string,
+  dueAt: null | string = null,
+) => ({
   ackedAt,
+  dueAt,
   email: p.email,
+  groups: groupNamesOf(p),
   userId: p.id,
   userName: p.name,
 });
@@ -56,14 +88,51 @@ const roster = (policyVersionId: string, groupId?: null | string) => {
   const acks = data().acknowledgements.filter(
     (a) => a.policyVersionId === policyVersionId,
   );
+  const dueAt = dueAtOf(versionFor(policyVersionId));
   const acked = [];
   const pending = [];
   for (const person of audience(groupId)) {
     const ack = acks.find((a) => a.userId === person.id);
     if (ack) acked.push(entry(person, ack.ackedAt));
-    else pending.push(entry(person, null));
+    else pending.push(entry(person, null, dueAt));
   }
   return { acked, pending };
+};
+
+/** myAcknowledgments' default page, and the most it ever answers (steward-gateway#56). */
+const RECENT_DEFAULT = 10;
+const RECENT_MAX = 100;
+
+/**
+ * The person's own acknowledgements, newest first, each named by its policy and version. A
+ * missing, zero or negative limit is the default; a large one is cut to the maximum.
+ */
+const recentAcknowledgments = (
+  person: StewardPerson,
+  limit?: null | number,
+) => {
+  const size =
+    limit && limit > 0 ? Math.min(limit, RECENT_MAX) : RECENT_DEFAULT;
+  return data()
+    .acknowledgements.filter((a) => a.userId === person.id)
+    .toSorted((a, b) => Date.parse(b.ackedAt) - Date.parse(a.ackedAt))
+    .flatMap((a) => {
+      const version = data().versions.find((v) => v.id === a.policyVersionId);
+      const policy = data().policies.find((p) => p.id === version?.policyId);
+      return version && policy
+        ? [
+            {
+              ackedAt: a.ackedAt,
+              number: policy.number,
+              policyId: policy.id,
+              policyVersionId: version.id,
+              title: policy.title,
+              versionNo: version.versionNo,
+            },
+          ]
+        : [];
+    })
+    .slice(0, size);
 };
 
 /** May the person read the audit log, and for which groups (null for all)? */
@@ -111,6 +180,7 @@ const obligationsOf = (person: StewardPerson) =>
       return {
         cleared,
         obligation: {
+          dueAt: dueAtOf(published),
           number: policy.number,
           policyId: policy.id,
           policyVersionId: published.id,
@@ -322,7 +392,6 @@ export const complianceResolvers: Resolvers = {
       const days = acked.map(
         (a) => (Date.parse(a.ackedAt ?? "") - published) / DAY_MS,
       );
-      const overdue = Date.now() - published > OVERDUE_DAYS * DAY_MS;
       return {
         avgDaysToAck:
           days.length === 0
@@ -331,13 +400,14 @@ export const complianceResolvers: Resolvers = {
               10,
         completionPct:
           total === 0 ? 0 : Math.round((acked.length / total) * 100),
-        overdue: overdue
-          ? pending.map(({ email, userId, userName }) => ({
-              email,
-              userId,
-              userName,
-            }))
-          : [],
+        // As steward-obligations lists it: every audience member without an acknowledgement,
+        // whatever the version's age. The due date, not a mock-side age gate, says who is late.
+        overdue: pending.map(({ dueAt, email, userId, userName }) => ({
+          dueAt,
+          email,
+          userId,
+          userName,
+        })),
         totalAcked: acked.length,
         totalAudience: total,
         viewedNotAckedCount: viewedNotAcked(version.id),
@@ -364,6 +434,11 @@ export const complianceResolvers: Resolvers = {
         filename: `acknowledgements-${newId("export")}.csv`,
       };
     },
+    myAcknowledgments: (
+      _root,
+      given: { limit?: null | number },
+      context: Context,
+    ) => recentAcknowledgments(caller(context), given.limit),
     myAckSummary: (_root, _given, context: Context) => {
       const all = obligationsOf(caller(context));
       return {

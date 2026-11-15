@@ -77,12 +77,20 @@ export const leaveGroup = (person: StewardPerson, groupName: string): void => {
   person.groups = groupsOf(person).filter((g) => !same(g, groupName));
 };
 
-/** Make the person a root admin or not (Steward's grantRoot and revokeRoot). */
-export const setRoot = (person: StewardPerson, root: boolean): void => {
-  const others = person.roles.filter((role) => role !== ROOT_ROLE);
-  person.roles = root
-    ? [...person.roles.filter((r) => r !== ROOT_ROLE), ROOT_ROLE]
-    : others;
+/**
+ * Hand the single root seat to the target (Steward's transferRoot). Every other holder loses the
+ * marker and keeps their other roles, so there is never more than one root; the target is enabled
+ * and gets site-admin.
+ */
+export const moveRoot = (
+  holders: StewardPerson[],
+  target: StewardPerson,
+): void => {
+  for (const person of holders)
+    person.roles = person.roles.filter((role) => role !== ROOT_ROLE);
+  target.disabled = false;
+  target.roles.push(ROOT_ROLE);
+  if (!target.roles.includes("site-admin")) target.roles.push("site-admin");
 };
 
 /** The fields whose change alters who someone is or what they may do. */

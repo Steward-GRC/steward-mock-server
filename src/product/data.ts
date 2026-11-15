@@ -9,6 +9,7 @@ import type { Person } from "#core/state.ts";
 import type { PolicyAppendix } from "#product/appendices.ts";
 import type { AssetSettings, StoredAsset } from "#product/assets.ts";
 import type { MagicLink, PdfJob } from "#product/delivery.ts";
+import type { HardResetRow } from "#product/resolvers/module.ts";
 import type { ReviewThread } from "#product/resolvers/review-threads.ts";
 import type { ReviewSnapshot } from "#product/review-snapshots.ts";
 
@@ -58,6 +59,7 @@ import {
   type Workflow,
   workflowDefs,
 } from "#product/data/library.ts";
+import { type Notice, notices } from "#product/data/notices.ts";
 import {
   type NotificationPrefs,
   notificationPrefs,
@@ -78,7 +80,11 @@ import {
 } from "#product/data/policies.ts";
 import { migrateLinks, type VersionLinks } from "#product/links.ts";
 
-export type { Announcement, GlobalSettings } from "#product/data/admin.ts";
+export type {
+  Announcement,
+  GlobalSettings,
+  SiteWorkCalendar,
+} from "#product/data/admin.ts";
 
 /** A break-glass grant: one person may read one sensitive policy's real content until a time. */
 export interface BreakGlassGrant {
@@ -100,14 +106,41 @@ export interface SignInMethods {
 }
 
 export interface StewardData extends ProductData {
+  /**
+   * Days after a version is published that its acknowledgement is due (steward-obligations'
+   * ACK_DUE_DAYS): 14 unless ACK_DUE_DAYS or the controls say otherwise; 0 turns due dates off.
+   */
+  ackDueDays: number;
   acknowledgements: Acknowledgement[];
   /**
+   * Whether the organisation's monthly AI limit or the caller's daily one is reached: aiHealth
+   * says limit_reached and the job submits are refused.
+   */
+  aiLimitReached: boolean;
+  /**
+   * The organisation's monthly limit on provider requests, as aiConfig.monthlyLimit gives it and
+   * setAIMonthlyLimit sets it; 0 means no limit. Nothing counts usage against it: the ai-limit
+   * control is what puts the mock in the limit_reached state.
+   */
+  aiMonthlyLimit: number;
+  /**
    * The model provider's outage while the ai service answers: null when it is healthy, else ai's
-   * reason (auth_failed, provider_error, not_configured), or "" for an outage with no reason.
+   * reason (auth_failed, provider_error, not_configured, jobs_unavailable), or "" for an outage
+   * with no reason.
    */
   aiProviderOutage: null | string;
   /** Whether Ask and the AI health answer from the simulation (the controls switch it). */
   aiSimulated: boolean;
+  /**
+   * The summaries the AI has made and stored, by key (summarizeChanges keys a pair of versions and
+   * their diff), so a repeat request is answered as cached; nothing else reads them.
+   */
+  aiSummaries: string[];
+  /**
+   * The stored summary of each version, by version id, as regenerateVersionSummary last made it:
+   * what policyVersionSummary serves. Nothing else writes it.
+   */
+  aiVersionSummaries: Record<string, StoredVersionSummary>;
   /** The appendices of policies and procedures, each with its own version table. */
   appendices: PolicyAppendix[];
   /** Every question put to Ask, oldest first, behind topPolicyQuestions. */
@@ -121,10 +154,14 @@ export interface StewardData extends ProductData {
   categories: Category[];
   /** A draft's last co-editing checkpoint: its Yjs state (base64), which starts the next room. */
   collabStates: Record<string, string>;
+  /** The Compliance module switch (steward-reporting's settings); off refuses every case call. */
+  complianceModuleEnabled: boolean;
   contactBlocks: ContactBlock[];
   definitions: Definition[];
   emailServiceConfig: EmailServiceConfig;
   groupMappings: GroupMapping[];
+  /** identity's four-eyes hard reset requests, oldest first. */
+  hardResets: HardResetRow[];
   /** Whether the next IdP test passes or fails (the controls set it). */
   idpTestOutcome: "fail" | "pass";
   /** What each policy version links to in the libraries, by version id. */
@@ -133,6 +170,8 @@ export interface StewardData extends ProductData {
   magicLinks: Record<string, MagicLink>;
   /** The next number each kind of new record takes, so a new id never repeats a seeded one. */
   next: Record<string, number>;
+  /** steward-obligations' in-app notices, for every person, in the order they were made. */
+  notices: Notice[];
   /** steward-obligations' saved notification choices, by person id. */
   notificationPrefs: Record<string, NotificationPrefs>;
   organizations: Organization[];
@@ -169,14 +208,31 @@ export interface StewardData extends ProductData {
   workflowDefs: Workflow[];
 }
 
+/** The summary the AI stored for a version (PolicySummaryResult). */
+export interface StoredVersionSummary {
+  generatedAt: string;
+  summaryText: string;
+}
+
+/** ACK_DUE_DAYS when it is a whole number of 0 or more, else 14 (steward-obligations' default). */
+const defaultAckDueDays = (): number => {
+  const given = process.env.ACK_DUE_DAYS?.trim();
+  return given && /^\d+$/.test(given) ? Number(given) : 14;
+};
+
 export const seed = (): StewardData => {
   const allVersions = [...versions(), ...extraVersions()];
   const appendices = [...migrateAppendices(allVersions), ...travelAppendices()];
   syncAppendices(appendices, allVersions, "policy-3");
   return {
+    ackDueDays: defaultAckDueDays(),
     acknowledgements: acknowledgements(),
+    aiLimitReached: false,
+    aiMonthlyLimit: 0,
     aiProviderOutage: null,
     aiSimulated: true,
+    aiSummaries: [],
+    aiVersionSummaries: {},
     appendices,
     askedQuestions: [],
     assets: seedAssets(),
@@ -185,14 +241,17 @@ export const seed = (): StewardData => {
     breakGlass: [],
     categories: categories(),
     collabStates: {},
+    complianceModuleEnabled: true,
     contactBlocks: contactBlocks(),
     definitions: definitions(),
     emailServiceConfig: emailServiceConfig(),
     groupMappings: groupMappings(),
+    hardResets: [],
     idpTestOutcome: "pass",
     links: migrateLinks(links(), policies()),
     magicLinks: {},
     next: {},
+    notices: notices(),
     notificationPrefs: notificationPrefs(),
     organizations: organizations(),
     passwordResets: [],
@@ -290,6 +349,7 @@ export const installSeed = (): StewardData => {
       owners: [],
       rules: category.rules.filter((rule) => rule.subjectKind !== "USER"),
     })),
+    notices: [],
     notificationPrefs: {},
     people: [],
     workflowDefs: base.workflowDefs.map((workflow) => ({
@@ -297,7 +357,7 @@ export const installSeed = (): StewardData => {
       stages: workflow.stages.map((stage) => ({
         ...stage,
         approvers: [],
-        vetoApproverIds: [],
+        vetoUserIds: [],
       })),
     })),
   };

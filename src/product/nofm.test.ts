@@ -198,7 +198,6 @@ const workflowOf = (stages: Workflow["stages"]): Workflow => ({
   name: "N of m",
   stages,
   version: 1,
-  vetoEnabled: false,
 });
 
 const nofm = (given: Partial<Workflow["stages"][number]>) =>
@@ -355,7 +354,7 @@ describe("the tally of an n-of-m stage", () => {
     assert.equal((await statusOf()).status, "APPROVAL_STATUS_PUBLISHED");
     assert.deepEqual(
       run.stages[0]?.seats.map((s) => s.state),
-      ["approved", "approved", "cancelled"],
+      ["approved", "approved", "superseded"],
     );
   });
 

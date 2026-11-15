@@ -208,23 +208,19 @@ describe("Steward's own admin mutations", () => {
       admin,
     );
     assert.equal(stepUp.errors, undefined);
-    const { body: revoked } = await query(
-      base,
-      'mutation { revokeRoot(userId: "user-alice", otp: "123456") { isRoot } }',
-      admin,
-    );
-    assert.equal(revoked.errors?.[0]?.extensions.code, "FailedPrecondition");
-    await query(base, "mutation { requestStepUpOtp }", admin);
     const { body: granted } = await query(
       base,
-      'mutation { grantRoot(userId: "user-grace", otp: "123456") { isRoot roles } }',
+      'mutation { transferRoot(userId: "user-grace", otp: "123456") { isRoot roles } }',
       admin,
     );
-    assert.deepEqual(granted.data?.grantRoot, {
+    assert.deepEqual(granted.data?.transferRoot, {
       isRoot: true,
       roles: ["template-admin", "site-admin"],
     });
     const grace = stewardData().people.find((p) => p.id === "user-grace");
     assert.deepEqual(grace?.roles, ["template-admin", "root", "site-admin"]);
+    const alice = stewardData().people.find((p) => p.id === "user-alice");
+    assert.ok(alice?.roles.includes("site-admin"));
+    assert.ok(!alice?.roles.includes("root"));
   });
 });

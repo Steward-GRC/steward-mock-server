@@ -3,13 +3,15 @@
 // The policy library's structure: the category tree, templates and their versions, the approval
 // workflows, and the reusable contact, reference and definition libraries.
 
+import type { ChangeType, Semver } from "#product/semver.ts";
+
 export interface Category {
   ackEveryone: boolean;
   ackEveryoneSet: boolean;
   ackTriggers: "NONE" | "ON_CHANGE" | "ON_PUBLISH";
-  /** RACI rules: who the category's approve rule names. Descendants inherit them. */
+  /** Scoped approver grants: who holds the approver role in this category and below. */
   approverRule: string[];
-  /** RACI rules: who the category's author rule names. Descendants inherit them. */
+  /** Scoped author grants: who holds the author role in this category and below. */
   authorRule: string[];
   /** steward-core's stored number code; a category without one derives it from its slug. */
   code?: string;
@@ -23,6 +25,11 @@ export interface Category {
   id: string;
   idpGroupIds: null | string[];
   name: string;
+  /**
+   * Position among the siblings under the same parent, from zero; lower comes first. Gaps are
+   * possible after a delete, so only the relative order counts (steward-core's order_index).
+   */
+  order: number;
   owners: string[];
   parentId: null | string;
   reviewCadence: "ANNUAL" | "BIENNIAL" | "NONE" | "ON_DATE";
@@ -43,6 +50,8 @@ export interface RaciRule {
   ack: RaciGrant;
   approve: RaciGrant;
   author: RaciGrant;
+  /** Move and reorder documents; implies Read and Author only. Defaults to BLANK. */
+  manage: RaciGrant;
   read: RaciGrant;
   subjectKind: "EVERYONE" | "GROUP" | "USER";
   /** A group's IdP name, a user's id, or empty for everyone. */
@@ -52,12 +61,13 @@ export interface RaciRule {
 export const raci = (
   subjectKind: RaciRule["subjectKind"],
   subjectReference: string,
-  [read, ack, approve, author]: RaciGrant[],
+  [read, ack, approve, author, manage = "BLANK"]: RaciGrant[],
 ): RaciRule =>
   ({
     ack,
     approve,
     author,
+    manage,
     read,
     subjectKind,
     subjectRef: subjectReference,
@@ -110,12 +120,22 @@ export interface Template {
   id: string;
   name: string;
   ownerCategoryId: null | string;
+  /** When it was last renamed; its updatedAt is the latest of this and its versions' times. */
+  renamedAt?: string;
   retiredAt: null | string;
 }
 
 export interface TemplateVersion {
+  /** What a publish settled on against the published version before; null for the first. */
+  changeType?: ChangeType | null;
+  /** When it was made; a seeded version has none and reads as the seed time. */
+  createdAt?: string;
   id: string;
+  /** When it was published; a seeded one has none and reads as the seed time. */
+  publishedAt?: string;
   sections: Section[];
+  /** MAJOR.MINOR.FIX, written at publish. */
+  semver?: Semver;
   /** "draft" until published, then "published". */
   status: string;
   templateId: string;
@@ -129,13 +149,16 @@ export interface Workflow {
   name: string;
   stages: WorkflowStage[];
   version: number;
-  /** Opted in: a veto approver's single reject ends the version. Off by default. */
-  vetoEnabled: boolean;
 }
 
 export interface WorkflowStage {
   approvers: string[];
   approversByCategory: { approverIds: string[]; categoryId: string }[];
+  /**
+   * Whole working days after due when the category owners are told once, 0 for off. Needs
+   * slaDays and a stage that does not reject at due (steward-mock-server#245).
+   */
+  escalateAfterDays: number;
   groupUnits: {
     groupId: string;
     internalQuorum: string;
@@ -149,11 +172,17 @@ export interface WorkflowStage {
   /** The approvals an nofm stage needs; zero on every other quorum. */
   quorumN: number;
   rejectOnSlaBreach: boolean;
+  /**
+   * Whole working days between reminders to the approvers still pending once the stage is past
+   * due, 0 for off. Same rules as escalateAfterDays.
+   */
+  remindEveryDays: number;
   slaDays: null | number;
-  /** Users who hold a veto on this stage. */
-  vetoApproverIds: string[];
-  /** Group seats (by the unit's groupId) whose members hold a veto on this stage. */
-  vetoGroupIds: string[];
+  /**
+   * People whose single reject ends the run, each one of the stage's approvers. At submit only
+   * those who are seated hold the veto.
+   */
+  vetoUserIds: string[];
 }
 
 export const category = (
@@ -171,6 +200,7 @@ export const category = (
   documentTypes: "BOTH",
   exclusionGroupIds: null,
   idpGroupIds: null,
+  order: 0,
   owners: [],
   parentId: null,
   reviewCadence: "NONE",
@@ -179,147 +209,173 @@ export const category = (
   ...given,
 });
 
+/** Give each category its position among the siblings that come before it in the list, from zero. */
+export const withSiblingOrder = (list: Category[]): Category[] => {
+  const seen = new Map<null | string, number>();
+  return list.map((c) => {
+    const order = seen.get(c.parentId) ?? 0;
+    seen.set(c.parentId, order + 1);
+    return { ...c, order };
+  });
+};
+
 /**
  * The design brief's four top-level categories, two subcategories each; Devices goes a third level
  * deep. Each carries the stored code its document numbers use, as steward-core keeps one per
  * category, so numbers read POL-FACILITIES-000001 rather than a six-letter cut of the slug.
  */
-export const categories = (): Category[] => [
-  category({
-    ackEveryone: true,
-    ackEveryoneSet: true,
-    ackTriggers: "ON_PUBLISH",
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "FINANCE",
-    defaultTemplateId: "template-1",
-    defaultWorkflowId: "workflow-1",
-    id: "category-finance",
-    name: "Finance",
-    owners: ["user-alice"],
-    reviewCadence: "ANNUAL",
-    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
-    slug: "finance",
-  }),
-  category({
-    code: "EXPENSES",
-    defaultWorkflowId: "workflow-1",
-    documentTypes: "POLICIES",
-    id: "category-expenses",
-    name: "Expenses",
-    parentId: "category-finance",
-    rules: [
-      raci("GROUP", "Finance team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
-      raci("USER", "user-erin", ["BLANK", "BLANK", "DENY", "DENY"]),
-      raci("GROUP", "All staff", ["ALLOW", "BLANK", "BLANK", "BLANK"]),
-    ],
-    slug: "expenses",
-  }),
-  category({
-    code: "PURCHASING",
-    defaultWorkflowId: "workflow-1",
-    id: "category-purchasing",
-    name: "Purchasing",
-    parentId: "category-finance",
-    slug: "purchasing",
-  }),
-  category({
-    ackTriggers: "ON_CHANGE",
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "PEOPLE",
-    defaultWorkflowId: "workflow-1",
-    id: "category-people",
-    name: "People",
-    slug: "people",
-  }),
-  category({
-    code: "LEAVE",
-    defaultWorkflowId: "workflow-1",
-    id: "category-leave",
-    name: "Leave",
-    parentId: "category-people",
-    slug: "leave",
-  }),
-  category({
-    code: "CONDUCT",
-    defaultWorkflowId: "workflow-1",
-    documentTypes: "PROCEDURES",
-    id: "category-conduct",
-    name: "Conduct",
-    parentId: "category-people",
-    slug: "conduct",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "INFORMATION",
-    defaultTemplateId: "template-1",
-    defaultWorkflowId: "workflow-1",
-    id: "category-information",
-    idpGroupIds: ["information-staff"],
-    name: "Information",
-    owners: ["user-charlie"],
-    reviewCadence: "BIENNIAL",
-    slug: "information",
-  }),
-  category({
-    code: "RECORDS",
-    defaultWorkflowId: "workflow-1",
-    id: "category-records",
-    name: "Records",
-    parentId: "category-information",
-    slug: "records",
-  }),
-  category({
-    code: "DEVICES",
-    defaultTemplateId: "template-2",
-    defaultWorkflowId: "workflow-1",
-    id: "category-devices",
-    name: "Devices",
-    parentId: "category-information",
-    slug: "devices",
-  }),
-  category({
-    code: "PHONES",
-    defaultTemplateNone: true,
-    exclusionGroupIds: [],
-    id: "category-phones",
-    name: "Phones",
-    parentId: "category-devices",
-    slug: "phones",
-  }),
-  category({
-    approverRule: ["user-charlie"],
-    authorRule: ["user-bob"],
-    code: "WORKPLACE",
-    documentTypes: "NONE",
-    id: "category-workplace",
-    name: "Workplace",
-    rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
-    slug: "workplace",
-  }),
-  category({
-    code: "FACILITIES",
-    defaultWorkflowId: "workflow-2",
-    id: "category-facilities",
-    name: "Facilities",
-    parentId: "category-workplace",
-    rules: [
-      raci("GROUP", "Facilities team", ["ALLOW", "ALLOW", "ALLOW", "ALLOW"]),
-      raci("GROUP", "All staff", ["ALLOW", "ALLOW", "BLANK", "DENY"]),
-    ],
-    slug: "facilities",
-  }),
-  category({
-    authorRule: ["user-jon"],
-    code: "TRAVEL",
-    id: "category-travel",
-    name: "Travel",
-    parentId: "category-workplace",
-    slug: "travel",
-  }),
-];
+export const categories = (): Category[] =>
+  withSiblingOrder([
+    category({
+      ackEveryone: true,
+      ackEveryoneSet: true,
+      ackTriggers: "ON_PUBLISH",
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "FINANCE",
+      defaultTemplateId: "template-1",
+      defaultWorkflowId: "workflow-1",
+      id: "category-finance",
+      name: "Finance",
+      owners: ["user-alice"],
+      reviewCadence: "ANNUAL",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "finance",
+    }),
+    category({
+      code: "EXPENSES",
+      defaultWorkflowId: "workflow-1",
+      documentTypes: "POLICIES",
+      id: "category-expenses",
+      name: "Expenses",
+      parentId: "category-finance",
+      rules: [
+        raci("GROUP", "Finance team", [
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+        ]),
+        raci("USER", "user-erin", ["BLANK", "BLANK", "DENY", "DENY"]),
+        raci("GROUP", "All staff", ["ALLOW", "BLANK", "BLANK", "BLANK"]),
+      ],
+      slug: "expenses",
+    }),
+    category({
+      code: "PURCHASING",
+      defaultWorkflowId: "workflow-1",
+      id: "category-purchasing",
+      name: "Purchasing",
+      parentId: "category-finance",
+      slug: "purchasing",
+    }),
+    category({
+      ackTriggers: "ON_CHANGE",
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "PEOPLE",
+      defaultWorkflowId: "workflow-1",
+      id: "category-people",
+      name: "People",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "people",
+    }),
+    category({
+      code: "LEAVE",
+      defaultWorkflowId: "workflow-1",
+      id: "category-leave",
+      name: "Leave",
+      parentId: "category-people",
+      slug: "leave",
+    }),
+    category({
+      code: "CONDUCT",
+      defaultWorkflowId: "workflow-1",
+      documentTypes: "PROCEDURES",
+      id: "category-conduct",
+      name: "Conduct",
+      parentId: "category-people",
+      slug: "conduct",
+    }),
+    category({
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "INFORMATION",
+      defaultTemplateId: "template-1",
+      defaultWorkflowId: "workflow-1",
+      id: "category-information",
+      idpGroupIds: ["information-staff"],
+      name: "Information",
+      owners: ["user-charlie"],
+      reviewCadence: "BIENNIAL",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "information",
+    }),
+    category({
+      code: "RECORDS",
+      defaultWorkflowId: "workflow-1",
+      id: "category-records",
+      name: "Records",
+      parentId: "category-information",
+      slug: "records",
+    }),
+    category({
+      code: "DEVICES",
+      defaultTemplateId: "template-2",
+      defaultWorkflowId: "workflow-1",
+      id: "category-devices",
+      name: "Devices",
+      parentId: "category-information",
+      slug: "devices",
+    }),
+    category({
+      code: "PHONES",
+      defaultTemplateNone: true,
+      exclusionGroupIds: [],
+      id: "category-phones",
+      name: "Phones",
+      parentId: "category-devices",
+      slug: "phones",
+    }),
+    category({
+      approverRule: ["user-charlie"],
+      authorRule: ["user-bob"],
+      code: "WORKPLACE",
+      documentTypes: "NONE",
+      id: "category-workplace",
+      name: "Workplace",
+      rules: [raci("EVERYONE", "", ["ALLOW", "BLANK", "BLANK", "BLANK"])],
+      slug: "workplace",
+    }),
+    category({
+      code: "FACILITIES",
+      defaultWorkflowId: "workflow-2",
+      id: "category-facilities",
+      name: "Facilities",
+      parentId: "category-workplace",
+      rules: [
+        raci("GROUP", "Facilities team", [
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+          "ALLOW",
+        ]),
+        raci("GROUP", "All staff", ["ALLOW", "ALLOW", "BLANK", "DENY"]),
+      ],
+      slug: "facilities",
+    }),
+    category({
+      authorRule: ["user-jon"],
+      code: "TRAVEL",
+      id: "category-travel",
+      name: "Travel",
+      owners: ["user-alice"],
+      parentId: "category-workplace",
+      slug: "travel",
+    }),
+  ]);
 
 export const templates = (): Template[] => [
   {
@@ -400,14 +456,15 @@ export const stage = (
     Pick<WorkflowStage, "approvers" | "id" | "name">,
 ): WorkflowStage => ({
   approversByCategory: [],
+  escalateAfterDays: 0,
   groupUnits: [],
   pinnedLast: false,
   quorum: "one",
   quorumN: 0,
   rejectOnSlaBreach: false,
+  remindEveryDays: 0,
   slaDays: null,
-  vetoApproverIds: [],
-  vetoGroupIds: [],
+  vetoUserIds: [],
   ...given,
 });
 
@@ -425,7 +482,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -434,7 +490,7 @@ export const workflowDefs = (): Workflow[] => [
     name: "Standard 2-stage",
     stages: [
       stage({
-        approvers: ["user-charlie", "user-alice"],
+        approvers: ["user-charlie", "user-alice", "user-dave"],
         id: "workflow-stage-2",
         name: "Review",
         quorum: "majority",
@@ -449,7 +505,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 1,
-    vetoEnabled: false,
   },
   {
     archived: false,
@@ -464,7 +519,6 @@ export const workflowDefs = (): Workflow[] => [
       }),
     ],
     version: 2,
-    vetoEnabled: false,
   },
 ];
 

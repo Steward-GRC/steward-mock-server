@@ -89,7 +89,8 @@ subscription. Replace it; don't build around it.
    `/setup` routes, so a sign-in path the core doesn't know reaches them, but never in place of
    the health probes, the controls or the GraphQL path. `sessionOf(request)` from
    `src/core/auth.ts` gives the signed-in session, `checkCredentials(username, password)` checks a
-   password against the people as `/auth/login` does (the person, or the refusal to return), and
+   password against the people as `/auth/login` does (the person, or the refusal to return; a
+   disabled account is refused as a wrong password, `401 invalid_credentials`), and
    `json` and `refuse` from `src/core/http.ts` build the answers.
 
    When the gateway also proxies websockets of its own (an editor's collaboration relay, say),

@@ -1,0 +1,5 @@
+repo: Bugs5382/go-authz
+commit: 28a16d9c1832334ee5ee7378fa17bd5d123b4007
+path: testdata/ordered.json
+sha256: f484c0e4df5ebda875aa715c37169d7ab441e0be76a9c3c59514b7a1f0f70157
+note: the shared ordered-model vectors, byte for byte (go-authz refreshed them from node-raci-editor afa13cc0ed115fed1d94842d74385e0b9fbe7041). ordered.test.ts runs every case and pool through the mock's evaluator in src/product/ordered.ts. Refresh with `task vectors:refresh` (scripts/vectors-copy.sh) after changing commit here, and commit both files together.

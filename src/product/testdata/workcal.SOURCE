@@ -1,0 +1,5 @@
+repo: Steward-GRC/steward-workflow
+commit: fc332b2e54d1bcfaafe1ef5e749a4cf3d2a539a8
+path: internal/workcal/testdata/workcal_cases.json
+sha256: 824dc7c48744f782dbfa0daf0ba89440683e95ebbf201830d3c31e774adc3871
+note: the shared working-day cases, byte for byte (steward-workflow#65, internal/workcal). workcal.test.ts runs every add_working_days and is_working_day case through the mock's port in src/product/workcal.ts. Refresh with `task workcal:refresh` (scripts/workcal-copy.sh) after changing commit here, and commit both files together.

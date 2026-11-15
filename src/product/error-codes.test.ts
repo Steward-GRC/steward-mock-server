@@ -9,7 +9,11 @@ import { after, before, beforeEach, describe, it } from "node:test";
 
 import type { RunningMockServer } from "#core/server.ts";
 
-import { refuse } from "#product/resolvers/shared.ts";
+import {
+  refuse,
+  reportingRefusal,
+  workflowDefinitionInUse,
+} from "#product/resolvers/shared.ts";
 import {
   query,
   signIn,
@@ -41,6 +45,32 @@ describe("error codes", () => {
     assert.equal(codeOf("FORBIDDEN"), "PermissionDenied");
     assert.equal(codeOf("INTERNAL"), "INTERNAL");
     assert.equal(codeOf("NOT_FOUND"), "NotFound");
+  });
+
+  it("gives every refusal the kind, requestId and traceId the gateway puts on each error", () => {
+    const hex = /^[0-9a-f]+$/;
+    for (const error of [
+      refuse("FORBIDDEN", "x"),
+      refuse("NOT_FOUND", "x"),
+      refuse("INTERNAL", "x"),
+      reportingRefusal("CASE_NOT_FOUND", 8106, "x"),
+      workflowDefinitionInUse("id", 1, 0),
+    ]) {
+      const keys = Object.keys(error.extensions);
+      for (const key of ["code", "kind", "requestId", "traceId"])
+        assert.ok(
+          keys.includes(key),
+          `${String(error.extensions.code)} has ${key}`,
+        );
+      assert.match(String(error.extensions.requestId), hex);
+      assert.match(String(error.extensions.traceId), hex);
+    }
+    assert.equal(refuse("FORBIDDEN", "x").extensions.kind, "business");
+    assert.equal(refuse("INTERNAL", "x").extensions.kind, "reach");
+    assert.notEqual(
+      refuse("FORBIDDEN", "x").extensions.requestId,
+      refuse("FORBIDDEN", "x").extensions.requestId,
+    );
   });
 
   it("refuses a reader the audit log with PermissionDenied", async () => {

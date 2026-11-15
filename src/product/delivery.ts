@@ -17,12 +17,16 @@ export const MAGIC_LINK_MS = 30 * 24 * 3_600_000;
 export const SENSITIVE_MAGIC_LINK_MS = 48 * 3_600_000;
 
 export interface MagicLink {
+  createdAt: number;
   createdBy: string;
   expiresAt: number;
   policyVersionId: string;
   revokedAt: null | number;
+  revokedBy: null | string;
   sensitive: boolean;
 }
+
+export type MagicLinkStatus = "active" | "expired" | "revoked";
 
 export interface PdfJob {
   policyVersionId: string;
@@ -62,19 +66,50 @@ export const createMagicLink = (
   const expiresAt =
     Date.now() + (sensitive ? SENSITIVE_MAGIC_LINK_MS : MAGIC_LINK_MS);
   links()[token] = {
+    createdAt: Date.now(),
     createdBy,
     expiresAt,
     policyVersionId,
     revokedAt: null,
+    revokedBy: null,
     sensitive,
   };
   return { expiresAt, token };
 };
 
 /** delivery's Revoke: marks a live token revoked; an unknown one changes nothing. */
-export const revokeMagicLink = (token: string) => {
+export const revokeMagicLink = (token: string, revokedBy: string) => {
   const link = links()[token];
-  if (link && link.revokedAt === null) link.revokedAt = Date.now();
+  if (link && link.revokedAt === null) {
+    link.revokedAt = Date.now();
+    link.revokedBy = revokedBy;
+  }
+};
+
+/** delivery's status: revoked wins over expired, which wins over active. */
+export const magicLinkStatus = (link: MagicLink): MagicLinkStatus => {
+  if (link.revokedAt !== null) return "revoked";
+  return link.expiresAt <= Date.now() ? "expired" : "active";
+};
+
+/** Every issued link with its token, newest first (the later insertion first on a tie). */
+export const issuedMagicLinks = () =>
+  Object.entries(links())
+    .map(([token, link], order) => ({ link, order, token }))
+    .toSorted(
+      (a, b) => b.link.createdAt - a.link.createdAt || b.order - a.order,
+    )
+    .map(({ link, token }) => ({ link, token }));
+
+/** delivery's Remove: drops a revoked or expired link; "active" or "missing" changes nothing. */
+export const removeMagicLink = (
+  token: string,
+): "active" | "missing" | "removed" => {
+  const link = links()[token];
+  if (!link) return "missing";
+  if (magicLinkStatus(link) === "active") return "active";
+  delete links()[token];
+  return "removed";
 };
 
 /** delivery's Fingerprint: the first 8 bytes of the token's SHA-256, as hex. */

@@ -132,7 +132,9 @@ const CORE_KINDS: Record<string, (body: ControlBody) => Response | unknown> = {
         "no_password",
         `${person.name} has no password set on /_mock.`,
       );
-    const checked = checkCredentials(person.username, person.password);
+    const checked = checkCredentials(person.username, person.password, {
+      revealDisabled: true,
+    });
     if (checked instanceof Response) return checked;
     return issueSession(person, body.token === true);
   },
